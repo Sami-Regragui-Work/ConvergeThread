@@ -11,11 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('roles', function (Blueprint $table) {
+        Schema::create('tenant_roles', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('group_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('tenant_id')->constrained()->cascadeOnDelete();
             $table->string('name', 100);
             $table->json('permissions');
+            $table->unique(['tenant_id', 'name']);
             $table->timestamps();
         });
     }
