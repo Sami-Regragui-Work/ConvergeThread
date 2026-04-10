@@ -16,7 +16,6 @@ return new class extends Migration
             $table->foreignId('group_id')->constrained()->cascadeOnDelete();
             $table->foreignId('tenant_role_id')->constrained('tenant_roles')->cascadeOnDelete();
             $table->json('permissions')->nullable();
-            $table->unique(['group_id', 'tenant_role_id']);
             $table->timestamps();
         });
     }
