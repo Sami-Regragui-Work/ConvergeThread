@@ -4,18 +4,13 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class MergeSession extends Model
 {
-    use HasFactory;
-
-    protected $fillable = [];
-
-    protected function casts(): array
+   protected function casts(): array
     {
         return [
             'started_at' => 'datetime',
@@ -33,9 +28,9 @@ class MergeSession extends Model
         return $this->hasManyThrough(Group::class, MergeSessionGroup::class);
     }
 
-    
+
     public function isActive(): bool
     {
-        return is_null($this->ended_at);
+        return $this->ended_at === null;
     }
 }

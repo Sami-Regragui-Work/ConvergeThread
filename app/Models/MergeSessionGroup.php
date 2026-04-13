@@ -11,8 +11,6 @@ class MergeSessionGroup extends Pivot
 {
     protected $table = 'merge_session_groups';
 
-    protected $fillable = [];
-
     public function mergeSession(): BelongsTo
     {
         return $this->belongsTo(MergeSession::class, 'merge_session_id');
