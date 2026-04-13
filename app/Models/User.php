@@ -65,6 +65,7 @@ class User extends Authenticatable
     public function groups(): BelongsToMany
     {
         return $this->belongsToMany(Group::class, 'group_members')
+            ->using(GroupMember::class)
             ->withPivot(['group_role_override_id', 'permissions', 'left_at'])
             ->withTimestamps()
             ->wherePivotNull('left_at');
