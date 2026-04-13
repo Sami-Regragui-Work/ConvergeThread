@@ -29,6 +29,11 @@ class MergeSession extends Model
     }
 
 
+    public function messages(): HasMany
+    {
+        return $this->hasMany(Message::class);
+    }
+
     public function isActive(): bool
     {
         return $this->ended_at === null;
