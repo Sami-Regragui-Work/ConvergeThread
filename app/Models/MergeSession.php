@@ -33,6 +33,10 @@ class MergeSession extends Model
         return $this->hasManyThrough(Group::class, MergeSessionGroup::class);
     }
 
+    public function messages(): HasMany
+    {
+        return $this->hasMany(Message::class);
+    }
     
     public function isActive(): bool
     {
