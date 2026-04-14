@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\Exceptions\Auth\InvalidCredentialsException;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
@@ -43,8 +42,8 @@ class AuthService
     public function login(string $email, string $password): array
     {
         Auth::shouldUse('api');
-
-        if (!$token= Auth::attempt(compact('email', 'password'))) {
+        /** @var string $token */
+        if (!$token = Auth::attempt(compact('email', 'password'))) {
             throw new \Exception('Invalid credentials', 401);
         }
 
