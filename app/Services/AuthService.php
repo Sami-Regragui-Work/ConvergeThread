@@ -44,7 +44,7 @@ class AuthService
     {
         Auth::shouldUse('api');
 
-        if (!$token= Auth::attempt(compact('email', 'password'))) {
+        if (!$token = Auth::attempt(compact('email', 'password'))) {
             throw new \Exception('Invalid credentials', 401);
         }
 
