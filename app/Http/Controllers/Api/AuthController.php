@@ -23,14 +23,14 @@ class AuthController extends Controller
     {
         $cridentials = $request->validated();
 
-        $tenant = Tenant::where('name', $cridentials->tenant_slug)->firstOrFail();
+        $tenant = Tenant::where('name', $cridentials['tenant_slug'])->firstOrFail();
 
         try {
             $response = $this->authService->register(
-                $cridentials->email,
-                $cridentials->password,
-                $cridentials->username,
-                $cridentials->display_name ?? null,
+                $cridentials['email'],
+                $cridentials['password'],
+                $cridentials['username'],
+                $cridentials['display_name'] ?? null,
                 $tenant
             );
         } catch (\Exception $e) {
@@ -49,8 +49,8 @@ class AuthController extends Controller
 
         try {
             $response = $this->authService->login(
-                $cridentials->email,
-                $cridentials->password
+                $cridentials['email'],
+                $cridentials['password']
             );
         } catch (\Exception $e) {
             return response()->json([
