@@ -38,9 +38,14 @@ class Group extends Model
     public function members(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'group_members')
+            ->using(GroupMember::class)
             ->withPivot(['group_role_override_id', 'permissions', 'left_at'])
-            ->withTimestamps()
-            ->wherePivotNull('left_at');
+            ->withTimestamps();
+    }
+    
+    public function activeMembers(): BelongsToMany
+    {
+        return $this->members()->wherePivotNull('left_at');
     }
 
     public function groupRoleOverrides(): HasMany
