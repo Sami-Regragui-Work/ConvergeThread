@@ -20,7 +20,7 @@ return new class extends Migration
             $table->foreignId('tenant_id')->constrained()->cascadeOnDelete();
             $table->foreignId('tenant_role_id')->nullable()->constrained()->nullOnDelete();
             $table->boolean('is_banned')->default(false);
-            $table->string('banned_by')->nullable();
+            $table->string('banned_by_id')->nullable();
             $table->timestamps();
         });
     }
