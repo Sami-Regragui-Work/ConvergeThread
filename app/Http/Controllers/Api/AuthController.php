@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\LoginRequest;
+use App\Http\Requests\Api\RegisterRequest;
 use App\Models\Tenant;
 use App\Services\AuthService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -18,24 +19,18 @@ class AuthController extends Controller
     ) {
     }
 
-    public function register(Request $request): JsonResponse
+    public function register(RegisterRequest $request): JsonResponse
     {
-        $request->validate([
-            'email' => 'required|email|unique:users',
-            'password' => 'required|min:8',
-            'username' => 'required|unique:users',
-            'display_name' => 'nullable|string|max:100',
-            'tenant_slug' => 'required',
-        ]);
+        $cridentials = $request->validated();
 
-        $tenant = Tenant::where('name', $request->tenant_slug)->firstOrFail();
+        $tenant = Tenant::where('name', $cridentials->tenant_slug)->firstOrFail();
 
         try {
             $response = $this->authService->register(
-                $request->email,
-                $request->password,
-                $request->username,
-                $request->display_name ?? null,
+                $cridentials->email,
+                $cridentials->password,
+                $cridentials->username,
+                $cridentials->display_name ?? null,
                 $tenant
             );
         } catch (\Exception $e) {
@@ -47,18 +42,15 @@ class AuthController extends Controller
         return response()->json($response, 201);
     }
 
-    public function login(Request $request): JsonResponse
+    public function login(LoginRequest $request): JsonResponse
     {
-        $request->validate([
-            'email' => 'required|email',
-            'password' => 'required',
-            'tenant_slug' => 'required',
-        ]);
+        $cridentials = $request->validated();
+
 
         try {
             $response = $this->authService->login(
-                $request->email,
-                $request->password
+                $cridentials->email,
+                $cridentials->password
             );
         } catch (\Exception $e) {
             return response()->json([
