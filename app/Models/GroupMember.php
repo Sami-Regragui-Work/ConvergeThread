@@ -22,6 +22,8 @@ class GroupMember extends Pivot
         return [
             'permissions' => 'array',
             'left_at' => 'datetime',
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
         ];
     }
 
