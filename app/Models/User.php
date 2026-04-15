@@ -29,8 +29,9 @@ class User extends Authenticatable
         'username',
         'display_name',
         'tenant_id',
+        'tenant_role_id',
         'is_banned',
-        'banned_by',
+        'banned_by_id',
     ];
 
     /**
@@ -78,5 +79,10 @@ class User extends Authenticatable
     public function messages(): HasMany
     {
         return $this->hasMany(Message::class);
+    }
+
+    public function invitationsSent(): HasMany
+    {
+        return $this->hasMany(Invitation::class, 'invited_by_id');
     }
 }
