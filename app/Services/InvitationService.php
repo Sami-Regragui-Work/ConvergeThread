@@ -15,6 +15,9 @@ use Illuminate\Support\Str;
 
 class InvitationService
 {
+    public function __construct(private TenantUserService $tenantUserService)
+    {
+    }
     public function createOwnerInvitation(string $email, User $owner): Invitation
     {
         return Invitation::create([
@@ -52,7 +55,7 @@ class InvitationService
             ->firstOrFail();
 
         return DB::transaction(function () use ($invitation, $password, $displayName) {
-            $username = $this->generateUniqueTenantUsername(
+            $username = $this->tenantUserService->generateUniqueTenantUsername(
                 $displayName ?? $invitation->email,
                 $invitation->tenant_id
             );
@@ -73,32 +76,5 @@ class InvitationService
                 'invitation' => $invitation->load('invitedBy'),
             ];
         });
-    }
-
-    private function generateUniqueTenantUsername(string $baseName, Tenant $tenant): string
-    {
-        $username = Str::slug($baseName);
-
-        if (!User::where('tenant_id', $tenant->id)->where('username', $username)->exists())
-            return $username;
-
-        $usernames = User::where('tenant_id', $tenant->id)
-            ->whereLike('username', "$username%")
-            ->pluck('username')
-            ->toArray();
-
-        $numbers = array_map(function ($str) {
-            $split = explode('-', $str, 2);
-            if (count($split) == 2 && is_numeric($split[1])) {
-                return (int) $split[1];
-            }
-            return -1;
-        }, $usernames);
-
-        $currentNumber = empty($numbers) ? -1 : max($numbers) + 1;
-
-        if ($currentNumber == -1)
-            return $username;
-        return "$username-$currentNumber";
     }
 }
