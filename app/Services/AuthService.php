@@ -6,26 +6,33 @@ namespace App\Services;
 
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\TenantUserService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
 class AuthService
 {
+    public function __construct(private readonly TenantUserService $tenantUserService)
+    {
+    }
     public function register(
         string $email,
         string $password,
-        string $username,
         ?string $displayName,
         Tenant $tenant
     ): array {
         Auth::shouldUse('api');
 
+        $username = $this->tenantUserService->generateUniqueTenantUsername(
+            $displayName ?? explode('@', $email)[0],
+            $tenant
+        );
+
         $userData = [
             'email' => $email,
             'password' => Hash::make($password),
-            'username' => Str::slug($username),
+            'username' => $username,
             'display_name' => $displayName,
             'tenant_id' => $tenant->id,
         ];
