@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\CreateOwnerInvitationRequest;
 use App\Models\Invitation;
 use App\Services\InvitationService;
 use Illuminate\Http\JsonResponse;
@@ -18,16 +19,14 @@ class InvitationController extends Controller
     ) {
     }
 
-    public function createOwner(Request $request): JsonResponse
+    public function createOwner(CreateOwnerInvitationRequest $request): JsonResponse
     {
-        $request->validate([
-            'email' => 'required|email|unique:users,email',
-        ]);
+        $cridentials = $request->validated();
 
         $owner = $request->user();
 
         $invitation = $this->invitationService->createOwnerInvitation(
-            $request->email,
+            $cridentials['email'],
             $owner
         );
 
