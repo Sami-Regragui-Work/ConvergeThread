@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\AcceptInvitationRequest;
 use App\Http\Requests\Api\CreateOwnerInvitationRequest;
 use App\Http\Requests\Api\CreateTenantInvitationRequest;
 use App\Models\Invitation;
@@ -81,17 +82,14 @@ class InvitationController extends Controller
         ]);
     }
 
-    public function accept(Request $request, string $token): JsonResponse
+    public function accept(AcceptInvitationRequest $request, string $token): JsonResponse
     {
-        $request->validate([
-            'password' => 'required|string|min:8|confirmed',
-            'display_name' => 'nullable|string|max:100',
-        ]);
+        $cridentials = $request->validated();
 
         $result = $this->invitationService->acceptInvitation(
             $token,
-            $request->password,
-            $request->display_name
+            $cridentials['password'],
+            $cridentials['display_name']
         );
 
         return response()->json($result, 201);
