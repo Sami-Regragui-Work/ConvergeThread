@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\CreateOwnerInvitationRequest;
+use App\Http\Requests\Api\CreateTenantInvitationRequest;
 use App\Models\Invitation;
 use App\Services\InvitationService;
 use Illuminate\Http\JsonResponse;
@@ -36,23 +37,18 @@ class InvitationController extends Controller
         ], 201);
     }
 
-    public function createTenant(Request $request): JsonResponse
+    public function createTenant(CreateTenantInvitationRequest $request): JsonResponse
     {
-        $request->validate([
-            'email' => 'required|email|unique:users,email',
-            'tenant_id' => 'required|exists:tenants,id',
-            'group_id' => 'nullable|exists:groups,id',
-            'tenant_role_id' => 'nullable|exists:tenant_roles,id',
-        ]);
+        $cridentials = $request->validated();
 
         $invitedBy = $request->user();
 
         $invitation = $this->invitationService->createTenantInvitation(
-            $request->email,
+            $cridentials['email'],
             $invitedBy,
-            $request->tenant_id,
-            $request->group_id,
-            $request->tenant_role_id
+            $cridentials['tenant_id'],
+            $cridentials['group_id'],
+            $cridentials['tenant_role_id']
         );
 
         return response()->json([
