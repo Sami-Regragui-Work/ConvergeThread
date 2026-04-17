@@ -11,9 +11,9 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/refresh', [AuthController::class, 'refresh']);
 
-    Route::post('/invitations/owner', [InvitationController::class, 'createOwner']);
+    Route::post('/invitations/owner', [InvitationController::class, 'createOwnerInvitation']);
 
-    Route::post('/invitations/tenant', [InvitationController::class, 'createTenant']);
+    Route::post('/invitations/tenant', [InvitationController::class, 'createTenantInvitation']);
 });
 
 Route::get('/invitations/{token}', [InvitationController::class, 'show']);

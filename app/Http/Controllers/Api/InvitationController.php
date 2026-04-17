@@ -21,7 +21,7 @@ class InvitationController extends Controller
     ) {
     }
 
-    public function createOwner(CreateOwnerInvitationRequest $request): JsonResponse
+    public function createOwnerInvitation(CreateOwnerInvitationRequest $request): JsonResponse
     {
         $cridentials = $request->validated();
 
@@ -38,7 +38,7 @@ class InvitationController extends Controller
         ], 201);
     }
 
-    public function createTenant(CreateTenantInvitationRequest $request): JsonResponse
+    public function createTenantInvitation(CreateTenantInvitationRequest $request): JsonResponse
     {
         $cridentials = $request->validated();
 
