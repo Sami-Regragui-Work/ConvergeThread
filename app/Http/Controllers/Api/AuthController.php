@@ -29,14 +29,13 @@ class AuthController extends Controller
             $response = $this->authService->register(
                 $cridentials['email'],
                 $cridentials['password'],
-                $cridentials['username'],
                 $cridentials['display_name'] ?? null,
                 $tenant
             );
         } catch (\Exception $e) {
-            throw ValidationException::withMessages([
-                'email' => [$e->getMessage()],
-            ]);
+            return response()->json([
+                'message' => $e->getMessage()
+            ], $e->getCode() ?: 422);
         }
 
         return response()->json($response, 201);
