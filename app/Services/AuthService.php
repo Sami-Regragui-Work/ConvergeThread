@@ -20,9 +20,11 @@ class AuthService
         string $email,
         string $password,
         ?string $displayName,
-        Tenant $tenant
+        string $tenantSlug
     ): array {
         Auth::shouldUse('api');
+
+        $tenant = $this->tenantUserService->findTenantBySlug($tenantSlug);
 
         $username = $this->tenantUserService->generateUniqueTenantUsername(
             $displayName ?? explode('@', $email)[0],
