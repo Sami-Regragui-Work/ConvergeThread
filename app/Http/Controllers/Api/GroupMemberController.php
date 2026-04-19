@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\AddGroupMemberRequest;
+use App\Http\Requests\Api\AssignGroupMemberRoleRequest;
 use App\Models\Group;
 use App\Models\GroupMember;
 use App\Models\GroupRoleOverride;
@@ -54,7 +55,7 @@ class GroupMemberController extends Controller
     }
 
     public function assignRole(
-        AddGroupMemberRequest $request,
+        AssignGroupMemberRoleRequest $request,
         Group $group
     ): JsonResponse {
         $roleOverride = GroupRoleOverride::findOrFail($request->group_role_override_id);
