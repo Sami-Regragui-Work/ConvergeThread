@@ -7,12 +7,13 @@ namespace App\Services;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 
 class TenantUserService
 {
-    public function generateUniqueTenantUsername(string $baseName, Tenant $tenant): string
+    public function generateUniqueTenantUsername(string $displayName, Tenant $tenant): string
     {
-        $username = Str::slug($baseName);
+        $username = Str::slug($displayName, '_');
 
         if (!User::where('tenant_id', $tenant->id)->where('username', $username)->exists())
             return $username;
@@ -35,5 +36,14 @@ class TenantUserService
         if ($currentNumber == -1)
             return $username;
         return "$username-$currentNumber";
+    }
+
+    public function findTenantBySlug(string $slug): Tenant
+    {
+        $tenant = Tenant::where('name', $slug)->first();
+        if (!$tenant) {
+            throw new InvalidArgumentException("Tenant '{$slug}' not found", 422);
+        }
+        return $tenant;
     }
 }
