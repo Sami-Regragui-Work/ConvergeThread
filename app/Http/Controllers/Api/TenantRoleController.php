@@ -1,0 +1,52 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreTenantRoleRequest;
+use App\Http\Requests\UpdateTenantRoleRequest;
+use App\Models\TenantRole;
+use App\Services\RoleService;
+use Illuminate\Http\JsonResponse;
+
+class TenantRoleController extends Controller
+{
+    public function __construct(private readonly RoleService $roleService)
+    {
+    }
+
+    /**
+     * Display a listing of the resource.
+     */
+    public function index(): JsonResponse
+    {
+        $tenantId = request()->user()->tenant_id;
+        $roles = TenantRole::where('tenant_id', $tenantId)->get();
+        return response()->json($roles);
+    }
+
+    /**
+     * Store a newly created resource in storage.
+     */
+    public function store(StoreTenantRoleRequest $request): JsonResponse
+    {
+        $tenant = request()->user()->tenant;
+        $role = $this->roleService->createTenantRole(
+            $tenant,
+            $request->name,
+            $request->permissions
+        );
+        return response()->json($role, 201);
+    }
+    
+    /**
+     * Remove the specified resource from storage.
+     */
+    public function destroy(TenantRole $tenantRole): JsonResponse
+    {
+        $this->roleService->deleteTenantRole($tenantRole);
+        return response()->json(null, 204);
+    }
+}
