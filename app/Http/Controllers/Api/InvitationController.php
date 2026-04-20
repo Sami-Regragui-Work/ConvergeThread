@@ -9,7 +9,6 @@ use App\Http\Requests\Api\CreateTenantInvitationRequest;
 use App\Models\Invitation;
 use App\Services\InvitationService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 class InvitationController extends Controller

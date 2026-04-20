@@ -8,7 +8,6 @@ use App\Http\Requests\Api\UpdateGroupRequest;
 use App\Models\Group;
 use App\Models\User;
 use App\Services\GroupService;
-use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
 
 class GroupController extends Controller

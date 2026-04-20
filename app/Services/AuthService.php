@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\Tenant;
 use App\Models\User;
 use App\Services\TenantUserService;
 use Illuminate\Support\Facades\Auth;

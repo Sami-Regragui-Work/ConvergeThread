@@ -6,11 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\AddGroupMemberRequest;
 use App\Http\Requests\Api\AssignGroupMemberRoleRequest;
 use App\Models\Group;
-use App\Models\GroupMember;
 use App\Models\GroupRoleOverride;
 use App\Services\GroupMemberService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class GroupMemberController extends Controller
 {

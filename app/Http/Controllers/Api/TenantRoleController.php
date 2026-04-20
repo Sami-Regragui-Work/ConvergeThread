@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreTenantRoleRequest;
-use App\Http\Requests\UpdateTenantRoleRequest;
 use App\Models\TenantRole;
 use App\Services\RoleService;
 use Illuminate\Http\JsonResponse;
