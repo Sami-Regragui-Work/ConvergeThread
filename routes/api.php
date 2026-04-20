@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\GroupController;
+use App\Http\Controllers\Api\GroupMemberController;
 use App\Http\Controllers\Api\InvitationController;
 use Illuminate\Support\Facades\Route;
 
@@ -12,15 +13,28 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/refresh', [AuthController::class, 'refresh']);
 
-    Route::post('/invitations/owner', [InvitationController::class, 'createOwnerInvitation']);
-    Route::post('/invitations/tenant', [InvitationController::class, 'createTenantInvitation']);
+    Route::prefix('invitations')->group(function () {
+        Route::post('/owner', [InvitationController::class, 'createOwnerInvitation']);
+        Route::post('/tenant', [InvitationController::class, 'createTenantInvitation']);
+    });
 
-    Route::post('/groups', [GroupController::class, 'store']);
-    Route::get('/groups', [GroupController::class, 'index']);
-    Route::get('/groups/{group}', [GroupController::class, 'show']);
-    Route::patch('/groups/{group}', [GroupController::class, 'update']);
-    Route::delete('/groups/{group}', [GroupController::class, 'destroy']);
+    Route::prefix('groups')->group(function () {
+        Route::post('/', [GroupController::class, 'store']);
+        Route::get('/', [GroupController::class, 'index']);
+        Route::get('/{group}', [GroupController::class, 'show']);
+        Route::patch('/{group}', [GroupController::class, 'update']);
+        Route::delete('/{group}', [GroupController::class, 'destroy']);
+    });
+
+    Route::prefix('groups/{group}/members')->group(function () {
+        Route::get('/', [GroupMemberController::class, 'index']);
+        Route::post('/', [GroupMemberController::class, 'store']);
+        Route::patch('/{user}/role', [GroupMemberController::class, 'assignRole']);
+        Route::delete('/{user}', [GroupMemberController::class, 'destroy']);
+    });
 });
 
-Route::get('/invitations/{token}', [InvitationController::class, 'show']);
-Route::post('/invitations/{token}/accept', [InvitationController::class, 'accept']);
+Route::prefix('invitations')->group(function () {
+    Route::get('/{token}', [InvitationController::class, 'show']);
+    Route::post('/{token}/accept', [InvitationController::class, 'accept']);
+});
