@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\StoreGroupRoleOverrideRequest;
 use App\Models\Group;
 use App\Models\GroupRoleOverride;
 use App\Models\TenantRole;
@@ -28,13 +29,15 @@ class GroupRoleOverrideController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request, Group $group): JsonResponse
+    public function store(StoreGroupRoleOverrideRequest $request, Group $group): JsonResponse
     {
-        $tenantRole = TenantRole::findOrFail($request->tenant_role_id);
+        $credentials = $request->validated();
+
+        $tenantRole = TenantRole::findOrFail($credentials['tenant_role_id']);
         $override = $this->roleService->createGroupRoleOverride(
             $group,
             $tenantRole,
-            $request->permissions
+            $credentials['permissions'] ?? null
         );
 
         return response()->json($override->load('tenantRole'), 201);
