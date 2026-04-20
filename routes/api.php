@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\GroupController;
 use App\Http\Controllers\Api\GroupMemberController;
 use App\Http\Controllers\Api\InvitationController;
+use App\Http\Controllers\Api\TenantRoleController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register']);
@@ -31,6 +32,12 @@ Route::middleware('auth:api')->group(function () {
         Route::post('/', [GroupMemberController::class, 'store']);
         Route::patch('/{user}/role', [GroupMemberController::class, 'assignRole']);
         Route::delete('/{user}', [GroupMemberController::class, 'destroy']);
+    });
+
+    Route::prefix('tenant-roles')->group(function () {
+        Route::get('/', [TenantRoleController::class, 'index']);
+        Route::post('/', [TenantRoleController::class, 'store']);
+        Route::delete('/{tenantRole}', [TenantRoleController::class, 'destroy']);
     });
 });
 
