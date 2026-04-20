@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\AddGroupMemberRequest;
 use App\Http\Requests\Api\AssignGroupMemberRoleRequest;
+use App\Http\Requests\Api\RemoveGroupMemberRequest;
 use App\Models\Group;
 use App\Models\GroupRoleOverride;
+use App\Models\User;
 use App\Services\GroupMemberService;
 use Illuminate\Http\JsonResponse;
 
@@ -31,11 +33,11 @@ class GroupMemberController extends Controller
      */
     public function store(AddGroupMemberRequest $request, Group $group): JsonResponse
     {
-        $request->validated();
+        $cridentials = $request->validated();
 
         $member = $this->groupMemberService->add(
             $group,
-            $request->user()
+            User::find($cridentials['user_id'])
         );
 
         return response()->json($member, 201);
@@ -44,11 +46,13 @@ class GroupMemberController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Group $group): JsonResponse
+    public function destroy(RemoveGroupMemberRequest $request, Group $group): JsonResponse
     {
+        $cridentials = $request->validated();
+
         $this->groupMemberService->remove(
             $group,
-            request()->user()
+            User::find($cridentials['user_id'])
         );
 
         return response()->json(null, 204);
@@ -58,13 +62,13 @@ class GroupMemberController extends Controller
         AssignGroupMemberRoleRequest $request,
         Group $group
     ): JsonResponse {
-        $request->validated();
+        $cridentials = $request->validated();
 
-        $roleOverride = GroupRoleOverride::findOrFail($request->group_role_override_id);
+        $roleOverride = GroupRoleOverride::findOrFail($cridentials['group_role_override_id']);
 
         $member = $this->groupMemberService->assignRole(
             $group,
-            $request->user(),
+            User::find($cridentials['user_id']),
             $roleOverride
         );
 
