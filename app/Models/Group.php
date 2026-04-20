@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -42,7 +40,7 @@ class Group extends Model
             ->withPivot(['group_role_override_id', 'permissions', 'left_at'])
             ->withTimestamps();
     }
-    
+
     public function activeMembers(): BelongsToMany
     {
         return $this->members()->wherePivotNull('left_at');

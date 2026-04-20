@@ -37,10 +37,12 @@ class GroupController extends Controller
      */
     public function store(CreateGroupRequest $request): JsonResponse
     {
+        $cridentials = $request->validated();
+
         $user = $request->user();
 
         $group = $this->groupService->create(
-            $request->name,
+            $cridentials['name'],
             $user
         );
 
@@ -64,12 +66,14 @@ class GroupController extends Controller
      */
     public function update(UpdateGroupRequest $request, Group $group): JsonResponse
     {
+        $cridentials = $request->validated();
+
         $user = $request->user();
 
         $group = $this->groupService->updateName(
             $group,
             $user,
-            $request->name
+            $cridentials['name']
         );
 
         return response()->json($group->load('creator'));

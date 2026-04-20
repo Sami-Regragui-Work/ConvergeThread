@@ -33,6 +33,8 @@ class GroupMemberController extends Controller
      */
     public function store(AddGroupMemberRequest $request, Group $group): JsonResponse
     {
+        $request->validated();
+
         $member = $this->groupMemberService->add(
             $group,
             $request->user()
@@ -58,6 +60,8 @@ class GroupMemberController extends Controller
         AssignGroupMemberRoleRequest $request,
         Group $group
     ): JsonResponse {
+        $request->validated();
+
         $roleOverride = GroupRoleOverride::findOrFail($request->group_role_override_id);
 
         $member = $this->groupMemberService->assignRole(

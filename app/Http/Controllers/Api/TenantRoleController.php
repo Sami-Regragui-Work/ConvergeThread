@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
@@ -32,15 +30,18 @@ class TenantRoleController extends Controller
      */
     public function store(StoreTenantRoleRequest $request): JsonResponse
     {
+        $cridentials = $request->validated();
+
         $tenant = request()->user()->tenant;
+
         $role = $this->roleService->createTenantRole(
             $tenant,
-            $request->name,
-            $request->permissions
+            $cridentials['name'],
+            $cridentials['permissions']
         );
         return response()->json($role, 201);
     }
-    
+
     /**
      * Remove the specified resource from storage.
      */
