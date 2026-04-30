@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Api\CreateGroupRequest;
+use App\Http\Requests\Api\StoreGroupRequest;
 use App\Http\Requests\Api\UpdateGroupRequest;
 use App\Models\Group;
 use App\Models\User;
@@ -34,7 +34,7 @@ class GroupController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(CreateGroupRequest $request): JsonResponse
+    public function store(StoreGroupRequest $request): JsonResponse
     {
         $cridentials = $request->validated();
 
