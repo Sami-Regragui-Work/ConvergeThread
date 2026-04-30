@@ -41,6 +41,12 @@ class MessageService
         ];
     }
 
+    public function update(Message $message, string $content): Message
+    {
+        $message->update(['content' => $content]);
+        return $message->fresh();
+    }
+    
     public function delete(Message $message): bool
     {
         if ($message->is_file && $message->filepath) {
