@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\StoreDuoRequest;
 use App\Models\Duo;
 use App\Models\Group;
 use App\Models\User;
