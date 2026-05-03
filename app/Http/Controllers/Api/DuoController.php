@@ -9,6 +9,7 @@ use App\Models\Group;
 use App\Models\User;
 use App\Services\DuoService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class DuoController extends Controller
 {
@@ -19,9 +20,9 @@ class DuoController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(Group $group): JsonResponse
+    public function index(Request $request, Group $group): JsonResponse
     {
-        $user = request()->user();
+        $user = $request->user();
         $duos = $this->duoService->getUserDuos($group, $user);
         return response()->json($duos);
     }

@@ -7,6 +7,7 @@ use App\Http\Requests\StoreTenantRoleRequest;
 use App\Models\TenantRole;
 use App\Services\RoleService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class TenantRoleController extends Controller
 {
@@ -17,9 +18,9 @@ class TenantRoleController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $tenantId = request()->user()->tenant_id;
+        $tenantId = $request->user()->tenant_id;
         $roles = TenantRole::where('tenant_id', $tenantId)->get();
         return response()->json($roles);
     }
@@ -31,7 +32,7 @@ class TenantRoleController extends Controller
     {
         $cridentials = $request->validated();
 
-        $tenant = request()->user()->tenant;
+        $tenant = $request->user()->tenant;
 
         $role = $this->roleService->createTenantRole(
             $tenant,

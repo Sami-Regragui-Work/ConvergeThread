@@ -8,7 +8,7 @@ use App\Http\Requests\Api\UpdateGroupRequest;
 use App\Models\Group;
 use App\Services\GroupService;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpFoundation\JsonResponse;
+use Illuminate\Http\JsonResponse;
 
 class GroupController extends Controller
 {
@@ -19,9 +19,9 @@ class GroupController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $user = request()->user();
+        $user = $request->user();
 
         $groups = Group::where('tenant_id', $user->tenant_id)
             ->withCount(['activeMembers'])
