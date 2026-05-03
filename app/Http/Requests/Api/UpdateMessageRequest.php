@@ -23,7 +23,10 @@ class UpdateMessageRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'content' => 'sometimes|required|string',
+            'content' => 'sometimes|string|max:5000',
+            'file' => 'sometimes|nullable|file|max:10240',
+            'remove_file' => 'sometimes|boolean',
+            'empty_content' => 'sometimes|boolean',
         ];
     }
 }

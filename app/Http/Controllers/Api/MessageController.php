@@ -14,7 +14,7 @@ use Illuminate\Http\JsonResponse;
 
 class MessageController extends Controller
 {
-    public function __construct(private readonly MessageService $service)
+    public function __construct(private readonly MessageService $messageService)
     {
     }
 
@@ -41,7 +41,7 @@ class MessageController extends Controller
                 ->findOrFail($cridentials['parent_id'])
             : null;
 
-        $message = $this->service->create(
+        $message = $this->messageService->create(
             $chatable,
             $user,
             $cridentials['content'] ?? null,
@@ -59,7 +59,13 @@ class MessageController extends Controller
     {
         $cridentials = $request->validated();
 
-        $this->service->update($message, $cridentials['content']);
+        $this->messageService->update(
+            $message,
+            $cridentials['content'] ?? null,
+            $request->file('file'),
+            $cridentials['remove_file'] ?? false,
+            $cridentials['empty_content'] ?? false
+        );
 
         return response()->json($message->fresh()->load('user'));
     }
@@ -69,14 +75,14 @@ class MessageController extends Controller
      */
     public function destroy(Message $message): JsonResponse
     {
-        $this->service->delete($message);
+        $this->messageService->delete($message);
 
         return response()->json(null, 204);
     }
 
     public function thread(Message $message): JsonResponse
     {
-        $thread = $this->service->getThread($message);
+        $thread = $this->messageService->getThread($message);
 
         $thread['message']->load(['user', 'parent']);
         $thread['replies']->load('user');

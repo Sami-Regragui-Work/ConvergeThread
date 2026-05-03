@@ -9,6 +9,7 @@ use App\Models\Message;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class MessageService
 {
@@ -43,9 +44,52 @@ class MessageService
         ];
     }
 
-    public function update(Message $message, string $content): Message
-    {
-        $message->update(['content' => $content]);
+    public function update(
+        Message $message,
+        ?string $content = null,
+        ?UploadedFile $file = null,
+        bool $removeFile = false,
+        bool $emptyContent = false
+    ): Message {
+        $data = [];
+
+        if ($emptyContent) {
+            $data['content'] = null;
+        } elseif ($content !== null) {
+            $data['content'] = $content;
+        }
+
+        if ($removeFile && $message->file_path) {
+            Storage::disk('public')->delete($message->file_path);
+            $data['is_file'] = false;
+            $data['file_path'] = null;
+        }
+
+        if ($file) {
+            if ($message->file_path) {
+                Storage::disk('public')->delete($message->file_path);
+            }
+
+            $data['is_file'] = true;
+            $data['file_path'] = $file->store('messages', 'public');
+        }
+
+        $finalContent = array_key_exists('content', $data)
+            ? $data['content']
+            : $message->content;
+
+        $finalFilePath = array_key_exists('file_path', $data)
+            ? $data['file_path']
+            : $message->file_path;
+
+        if (blank($finalContent) && blank($finalFilePath)) {
+            throw ValidationException::withMessages([
+                'content' => ['Message must have content or file.'],
+            ]);
+        }
+
+        $message->update($data);
+
         return $message->fresh();
     }
 
