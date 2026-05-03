@@ -22,7 +22,7 @@ class MessageController extends Controller
      */
     public function store(StoreMessageRequest $request, string $chatType, int $chatId): JsonResponse
     {
-        $credentials = $request->validated();
+        $cridentials = $request->validated();
         $user = $request->user();
 
         $chatable = match ($chatType) {
@@ -34,19 +34,19 @@ class MessageController extends Controller
             default => abort(404, 'Invalid chat type'),
         };
 
-        $parent = isset($credentials['parent_id'])
-            ? Message::where('chatable_id', $chatId)
+        $parent = isset($cridentials['parent_id'])
+            ? Message::whereKey($cridentials['parent_id'])
+                ->where('chatable_id', $chatId)
                 ->where('chatable_type', $chatable->getMorphClass())
-                ->findOrFail($credentials['parent_id'])
+                ->findOrFail($cridentials['parent_id'])
             : null;
 
         $message = $this->service->create(
-            $chatId,
-            $chatable->getMorphClass(),
+            $chatable,
             $user,
-            $credentials['content'],
+            $cridentials['content'] ?? null,
             $request->file('file'),
-            $parent?->id
+            $parent
         );
 
         return response()->json($message->load(['user', 'parent']), 201);
@@ -57,9 +57,9 @@ class MessageController extends Controller
      */
     public function update(StoreMessageRequest $request, Message $message): JsonResponse
     {
-        $credentials = $request->validated();
+        $cridentials = $request->validated();
 
-        $this->service->update($message, $credentials['content']);
+        $this->service->update($message, $cridentials['content']);
 
         return response()->json($message->fresh()->load('user'));
     }
@@ -76,6 +76,11 @@ class MessageController extends Controller
 
     public function thread(Message $message): JsonResponse
     {
-        return response()->json($this->service->getThread($message));
+        $thread = $this->service->getThread($message);
+
+        $thread['message']->load(['user', 'parent']);
+        $thread['replies']->load('user');
+
+        return response()->json($thread);
     }
 }

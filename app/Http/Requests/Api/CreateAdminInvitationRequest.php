@@ -5,7 +5,7 @@ namespace App\Http\Requests\Api;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
-class CreateOwnerInvitationRequest extends FormRequest
+class CreateAdminInvitationRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.

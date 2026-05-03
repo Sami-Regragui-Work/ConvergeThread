@@ -35,10 +35,10 @@ class GroupMemberController extends Controller
     {
         $cridentials = $request->validated();
 
-        $member = $this->groupMemberService->add(
-            $group,
-            User::find($cridentials['user_id'])
-        );
+        $user = User::where('tenant_id', $group->tenant_id)
+            ->findOrFail($cridentials['user_id']);
+
+        $member = $this->groupMemberService->add($group, $user);
 
         return response()->json($member, 201);
     }
@@ -50,10 +50,10 @@ class GroupMemberController extends Controller
     {
         $cridentials = $request->validated();
 
-        $this->groupMemberService->remove(
-            $group,
-            User::find($cridentials['user_id'])
-        );
+        $member = User::where('tenant_id', $group->tenant_id)
+            ->findOrFail($cridentials['user_id']);
+
+        $this->groupMemberService->remove($group, $member);
 
         return response()->json(null, 204);
     }
@@ -64,14 +64,20 @@ class GroupMemberController extends Controller
     ): JsonResponse {
         $cridentials = $request->validated();
 
-        $roleOverride = GroupRoleOverride::findOrFail($cridentials['group_role_override_id']);
+        $member = User::where('tenant_id', $group->tenant_id)
+            ->findOrFail($cridentials['user_id']);
 
-        $member = $this->groupMemberService->assignRole(
+        $roleOverride = isset($credentials['group_role_override_id'])
+            ? GroupRoleOverride::where('group_id', $group->id)
+                ->findOrFail($cridentials['group_role_override_id'])
+            : null;
+
+        $groupMember = $this->groupMemberService->assignRole(
             $group,
-            User::find($cridentials['user_id']),
+            $member,
             $roleOverride
         );
 
-        return response()->json($member);
+        return response()->json($groupMember);
     }
 }

@@ -16,7 +16,7 @@ class InvitationService
     public function __construct(private TenantUserService $tenantUserService)
     {
     }
-    public function createOwnerInvitation(string $email, User $owner): Invitation
+    public function createAdminInvitation(string $email, User $owner): Invitation
     {
         return Invitation::create([
             'tenant_id' => 0,
@@ -27,7 +27,7 @@ class InvitationService
         ]);
     }
 
-    public function createTenantInvitation(
+    public function createMemberInvitation(
         string $email,
         User $invitedBy,
         Tenant $tenant,
@@ -36,9 +36,9 @@ class InvitationService
     ): Invitation {
         return Invitation::create([
             'tenant_id' => $tenant->id,
-            'group_id' => $group->id,
+            'group_id' => $group?->id,
             'invited_by_id' => $invitedBy->id,
-            'tenant_role_id' => $tenantRole->id,
+            'tenant_role_id' => $tenantRole?->id,
             'email' => $email,
             'token' => Str::random(60),
             'expires_at' => now()->addDays(7),
@@ -47,7 +47,11 @@ class InvitationService
 
     public function acceptInvitation(string $token, string $password, ?string $displayName = null): array
     {
-        $invitation = Invitation::where('token', $token)
+        /**
+         * @var Invitation
+         */
+        $invitation = Invitation::with('tenant')
+            ->where('token', $token)
             ->whereNull('accepted_at')
             ->where('expires_at', '>', now())
             ->firstOrFail();
@@ -55,7 +59,7 @@ class InvitationService
         return DB::transaction(function () use ($invitation, $password, $displayName) {
             $username = $this->tenantUserService->generateUniqueTenantUsername(
                 $displayName ?? $invitation->email,
-                $invitation->tenant_id
+                $invitation->tenant
             );
 
             $user = User::create([
@@ -70,8 +74,8 @@ class InvitationService
             $invitation->update(['accepted_at' => now()]);
 
             return [
-                'user' => $user->load('tenant', 'tenantRole'),
-                'invitation' => $invitation->load('invitedBy'),
+                'user' => $user/*->load(['tenant', 'tenantRole'])*/,
+                'invitation' => $invitation/*->load('invitedBy')*/,
             ];
         });
     }

@@ -9,7 +9,6 @@ use App\Models\GroupRoleOverride;
 use App\Models\TenantRole;
 use App\Services\RoleService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class GroupRoleOverrideController extends Controller
 {
@@ -31,13 +30,13 @@ class GroupRoleOverrideController extends Controller
      */
     public function store(StoreGroupRoleOverrideRequest $request, Group $group): JsonResponse
     {
-        $credentials = $request->validated();
+        $cridentials = $request->validated();
 
-        $tenantRole = TenantRole::findOrFail($credentials['tenant_role_id']);
+        $tenantRole = TenantRole::findOrFail($cridentials['tenant_role_id']);
         $override = $this->roleService->createGroupRoleOverride(
             $group,
             $tenantRole,
-            $credentials['permissions'] ?? null
+            $cridentials['permissions'] ?? null
         );
 
         return response()->json($override->load('tenantRole'), 201);

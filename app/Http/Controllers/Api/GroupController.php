@@ -6,8 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\StoreGroupRequest;
 use App\Http\Requests\Api\UpdateGroupRequest;
 use App\Models\Group;
-use App\Models\User;
 use App\Services\GroupService;
+use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
 
 class GroupController extends Controller
@@ -45,7 +45,7 @@ class GroupController extends Controller
             $user
         );
 
-        return response()->json($group->load('creator', 'tenant'), 201);
+        return response()->json($group->load(['creator', 'tenant']), 201);
     }
 
     /**
@@ -81,9 +81,11 @@ class GroupController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Group $group, User $user): JsonResponse
+    public function destroy(Request $request, Group $group): JsonResponse
     {
-        $this->groupService->delete($group, $user);
+        $deleter = $request->user();
+
+        $this->groupService->delete($group, $deleter);
 
         return response()->json(null, 204);
     }

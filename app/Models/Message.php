@@ -15,7 +15,7 @@ class Message extends Model
         'user_id',
         'content',
         'is_file',
-        'filepath',
+        'file_path',
         'parent_id',
     ];
 

@@ -9,7 +9,6 @@ use App\Models\Group;
 use App\Models\User;
 use App\Services\DuoService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class DuoController extends Controller
 {
@@ -32,11 +31,11 @@ class DuoController extends Controller
      */
     public function store(StoreDuoRequest $request, Group $group): JsonResponse
     {
-        $credentials = $request->validated();
-        $user1 = User::where('tenant_id', $group->tenant_id)->findOrFail($credentials['user1_id']);
-        $user2 = User::where('tenant_id', $group->tenant_id)->findOrFail($credentials['user2_id']);
+        $cridentials = $request->validated();
+        $user1 = User::where('tenant_id', $group->tenant_id)->findOrFail($cridentials['user1_id']);
+        $user2 = User::where('tenant_id', $group->tenant_id)->findOrFail($cridentials['user2_id']);
 
-        $duo = $this->duoService->create($group, $user1, $user2, $credentials['name']);
+        $duo = $this->duoService->create($group, $user1, $user2, $cridentials['name']);
 
         return response()->json($duo->load(['user1', 'user2']), 201);
     }

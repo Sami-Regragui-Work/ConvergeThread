@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Duo extends Model
 {
@@ -38,8 +38,8 @@ class Duo extends Model
         return $this->belongsTo(User::class, 'user2_id');
     }
 
-    public function messages(): HasMany
+    public function messages(): MorphMany
     {
-        return $this->hasMany(Message::class);
+        return $this->morphMany(Message::class, 'chatable');
     }
 }

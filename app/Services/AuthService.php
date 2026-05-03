@@ -50,7 +50,7 @@ class AuthService
         Auth::shouldUse('api');
         /** @var string $token */
         if (!$token = Auth::attempt(compact('email', 'password'))) {
-            throw new \Exception('Invalid credentials', 401);
+            throw new \Exception('Invalid cridentials', 401);
         }
 
         $user = Auth::user();
@@ -82,7 +82,7 @@ class AuthService
     private function getAuthResponse(string $token, User $user): array
     {
         return [
-            'user' => $user->load('tenant'),
+            'user' => $user/*->load('tenant')*/ ,
             'token' => $token,
             'token_type' => 'bearer',
         ];

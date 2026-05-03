@@ -4,9 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\AcceptInvitationRequest;
-use App\Http\Requests\Api\CreateOwnerInvitationRequest;
-use App\Http\Requests\Api\CreateTenantInvitationRequest;
+use App\Http\Requests\Api\CreateAdminInvitationRequest;
+use App\Http\Requests\Api\CreateMemberInvitationRequest;
+use App\Models\Group;
 use App\Models\Invitation;
+use App\Models\Tenant;
+use App\Models\TenantRole;
 use App\Services\InvitationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
@@ -18,13 +21,13 @@ class InvitationController extends Controller
     ) {
     }
 
-    public function createOwnerInvitation(CreateOwnerInvitationRequest $request): JsonResponse
+    public function createAdminInvitation(CreateAdminInvitationRequest $request): JsonResponse
     {
         $cridentials = $request->validated();
 
         $owner = $request->user();
 
-        $invitation = $this->invitationService->createOwnerInvitation(
+        $invitation = $this->invitationService->createAdminInvitation(
             $cridentials['email'],
             $owner
         );
@@ -35,22 +38,32 @@ class InvitationController extends Controller
         ], 201);
     }
 
-    public function createTenantInvitation(CreateTenantInvitationRequest $request): JsonResponse
+    public function createMemberInvitation(CreateMemberInvitationRequest $request): JsonResponse
     {
         $cridentials = $request->validated();
 
         $invitedBy = $request->user();
 
-        $invitation = $this->invitationService->createTenantInvitation(
+        $tenant = Tenant::findOrFail($cridentials['tenant_id']);
+
+        $group = isset($cridentials['group_id'])
+            ? Group::where('tenant_id', $tenant->id)->findOrFail($cridentials['group_id'])
+            : null;
+
+        $tenantRole = isset($cridentials['tenant_role_id'])
+            ? TenantRole::where('tenant_id', $tenant->id)->findOrFail($cridentials['tenant_role_id'])
+            : null;
+
+        $invitation = $this->invitationService->createMemberInvitation(
             $cridentials['email'],
             $invitedBy,
-            $cridentials['tenant_id'],
-            $cridentials['group_id'],
-            $cridentials['tenant_role_id']
+            $tenant,
+            $group,
+            $tenantRole
         );
 
         return response()->json([
-            'invitation' => $invitation->load('tenant', 'group', 'tenantRole', 'invitedBy'),
+            'invitation' => $invitation->load(['tenant', 'group', 'tenantRole', 'invitedBy']),
             'accept_url' => config('app.url') . '/api/invitations/' . $invitation->token . '/accept',
         ], 201);
     }
@@ -86,8 +99,16 @@ class InvitationController extends Controller
         $result = $this->invitationService->acceptInvitation(
             $token,
             $cridentials['password'],
-            $cridentials['display_name']
+            $cridentials['display_name'] ?? null
         );
+
+        $result['user']->load(['tenant', 'tenantRole']);
+
+        if ((int) $result['invitation']->tenant_id === 0) {
+            $result['invitation']->load('invitedBy');
+        } else {
+            $result['invitation']->load(['invitedBy', 'tenant', 'tenantRole', 'group']);
+        }
 
         return response()->json($result, 201);
     }

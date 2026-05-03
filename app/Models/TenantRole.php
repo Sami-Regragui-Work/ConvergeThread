@@ -32,4 +32,9 @@ class TenantRole extends Model
     {
         return $this->hasMany(GroupRoleOverride::class, 'tenant_role_id');
     }
+
+    public function users(): HasMany
+    {
+        return $this->hasMany(User::class);
+    }
 }

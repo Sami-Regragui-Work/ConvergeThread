@@ -3,8 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class MergeSession extends Model
 {
@@ -21,15 +22,14 @@ class MergeSession extends Model
         return $this->hasMany(MergeSessionGroup::class);
     }
 
-    public function groups(): HasManyThrough
-    {
-        return $this->hasManyThrough(Group::class, MergeSessionGroup::class);
+    public function groups(): BelongsToMany
+{
+    return $this->belongsToMany(Group::class, 'merge_session_groups');
     }
 
-
-    public function messages(): HasMany
+    public function messages(): MorphMany
     {
-        return $this->hasMany(Message::class);
+        return $this->morphMany(Message::class, 'chatable');
     }
 
     public function isActive(): bool

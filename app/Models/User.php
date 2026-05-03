@@ -108,4 +108,9 @@ class User extends Authenticatable implements JWTSubject
     {
         return $this->belongsTo(User::class, 'banned_by_id');
     }
+
+    public function bannedUsers(): HasMany
+    {
+        return $this->hasMany(User::class, 'banned_by_id');
+    }
 }

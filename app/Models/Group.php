@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Group extends Model
 {
@@ -56,8 +57,8 @@ class Group extends Model
         return $this->hasMany(Duo::class);
     }
 
-    public function messages(): HasMany
+    public function messages(): MorphMany
     {
-        return $this->hasMany(Message::class);
+        return $this->morphMany(Message::class, 'chatable');
     }
 }

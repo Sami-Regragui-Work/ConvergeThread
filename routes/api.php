@@ -14,8 +14,8 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/refresh', [AuthController::class, 'refresh']);
 
     Route::prefix('invitations')->group(function () {
-        Route::post('/owner', [InvitationController::class, 'createOwnerInvitation']);
-        Route::post('/tenant', [InvitationController::class, 'createTenantInvitation']);
+        Route::post('/owner', [InvitationController::class, 'createAdminInvitation']);
+        Route::post('/tenant', [InvitationController::class, 'createMemberInvitation']);
     });
 
     Route::prefix('groups')->group(function () {
