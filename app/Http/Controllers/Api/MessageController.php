@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\StoreMessageRequest;
+use App\Http\Requests\Api\UpdateMessageRequest;
 use App\Models\Duo;
 use App\Models\Group;
 use App\Models\MergeSession;
@@ -54,7 +55,7 @@ class MessageController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(StoreMessageRequest $request, Message $message): JsonResponse
+    public function update(UpdateMessageRequest $request, Message $message): JsonResponse
     {
         $cridentials = $request->validated();
 
