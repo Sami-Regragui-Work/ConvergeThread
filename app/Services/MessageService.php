@@ -38,7 +38,7 @@ class MessageService
     public function getThread(Message $message): array
     {
         return [
-            'message' => $message/*->load(['user', 'replies.user'])*/,
+            'message' => $message,
             'replies' => $message->replies()->latest()->get(),
         ];
     }

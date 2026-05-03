@@ -12,22 +12,35 @@ class GroupMemberService
 {
     public function add(Group $group, User $member): GroupMember
     {
-        $group->members()->detach($member);
+        $existingMembership = GroupMember::where('group_id', $group->id)
+            ->where('user_id', $member->id)
+            ->first();
+
+        if ($existingMembership) {
+            $existingMembership->update([
+                'group_role_override_id' => null,
+                'permissions' => null,
+                'left_at' => null,
+            ]);
+
+            return $existingMembership->fresh();
+        }
 
         $group->members()->attach($member, [
             'group_role_override_id' => null,
             'permissions' => null,
+            'left_at' => null,
         ]);
 
-        return $group->members()
+        return GroupMember::where('group_id', $group->id)
             ->where('user_id', $member->id)
             ->whereNull('left_at')
-            ->first();
+            ->firstOrFail();
     }
 
     public function remove(Group $group, User $member): void
     {
-        $groupMember = $group->members()
+        $groupMember = GroupMember::where('group_id', $group->id)
             ->where('user_id', $member->id)
             ->whereNull('left_at')
             ->firstOrFail();
@@ -37,7 +50,7 @@ class GroupMemberService
 
     public function assignRole(Group $group, User $member, ?GroupRoleOverride $roleOverride = null): GroupMember
     {
-        $groupMember = $group->members()
+        $groupMember = GroupMember::where('group_id', $group->id)
             ->where('user_id', $member->id)
             ->whereNull('left_at')
             ->firstOrFail();
@@ -52,8 +65,8 @@ class GroupMemberService
 
     public function getActive(Group $group): Collection
     {
-        return $group->activeMembers()
-            ->with(['groupRoleOverride.tenantRole'])
+        return GroupMember::where('group_id', $group->id)
+            ->whereNull('left_at')
             ->get();
     }
 }

@@ -67,7 +67,7 @@ class GroupMemberController extends Controller
         $member = User::where('tenant_id', $group->tenant_id)
             ->findOrFail($cridentials['user_id']);
 
-        $roleOverride = isset($credentials['group_role_override_id'])
+        $roleOverride = isset($cridentials['group_role_override_id'])
             ? GroupRoleOverride::where('group_id', $group->id)
                 ->findOrFail($cridentials['group_role_override_id'])
             : null;

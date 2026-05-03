@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Group;
+use App\Models\GroupMember;
 use App\Models\Invitation;
 use App\Models\Tenant;
 use App\Models\TenantRole;
@@ -71,11 +72,25 @@ class InvitationService
                 'tenant_role_id' => $invitation->tenant_role_id,
             ]);
 
+            if ($invitation->group_id) {
+                GroupMember::updateOrCreate(
+                    [
+                        'group_id' => $invitation->group_id,
+                        'user_id' => $user->id,
+                    ],
+                    [
+                        'group_role_override_id' => null,
+                        'permissions' => null,
+                        'left_at' => null,
+                    ]
+                );
+            }
+
             $invitation->update(['accepted_at' => now()]);
 
             return [
-                'user' => $user/*->load(['tenant', 'tenantRole'])*/,
-                'invitation' => $invitation/*->load('invitedBy')*/,
+                'user' => $user,
+                'invitation' => $invitation,
             ];
         });
     }
