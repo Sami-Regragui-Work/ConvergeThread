@@ -7,7 +7,7 @@ use App\Models\MergeSession;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
-class MergeService
+class MergeSessionService
 {
     public function start(Group $group1, Group $group2): MergeSession
     {
