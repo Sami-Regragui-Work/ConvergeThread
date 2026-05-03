@@ -35,8 +35,7 @@ class MessageController extends Controller
         };
 
         $parent = isset($cridentials['parent_id'])
-            ? Message::whereKey($cridentials['parent_id'])
-                ->where('chatable_id', $chatId)
+            ? Message::where('chatable_id', $chatId)
                 ->where('chatable_type', $chatable->getMorphClass())
                 ->findOrFail($cridentials['parent_id'])
             : null;
