@@ -21,7 +21,7 @@ class MessageService
     ): Message {
         $data = [
             'chatable_id' => $chatable->id,
-            'chatable_type' => $chatable::class,
+            'chatable_type' => $chatable->getMorphClass(),
             'user_id' => $user->id,
             'content' => $content,
             'parent_id' => $parent?->id,

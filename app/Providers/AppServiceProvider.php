@@ -2,6 +2,10 @@
 
 namespace App\Providers;
 
+use App\Models\Duo;
+use App\Models\Group;
+use App\Models\MergeSession;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -19,6 +23,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        Relation::enforceMorphMap([
+            'group' => Group::class,
+            'duo' => Duo::class,
+            'merge' => MergeSession::class,
+        ]);
     }
 }
