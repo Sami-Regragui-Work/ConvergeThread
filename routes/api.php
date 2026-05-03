@@ -1,9 +1,12 @@
 <?php
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\DuoController;
 use App\Http\Controllers\Api\GroupController;
 use App\Http\Controllers\Api\GroupMemberController;
+use App\Http\Controllers\Api\GroupRoleOverrideController;
 use App\Http\Controllers\Api\InvitationController;
 use App\Http\Controllers\Api\MergeSessionController;
+use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\TenantRoleController;
 use Illuminate\Support\Facades\Route;
 
@@ -34,16 +37,36 @@ Route::middleware('auth:api')->group(function () {
         Route::delete('/{user}', [GroupMemberController::class, 'destroy']);
     });
 
+    Route::prefix('groups/{group}/duos')->group(function () {
+        Route::get('/', [DuoController::class, 'index']);
+        Route::post('/', [DuoController::class, 'store']);
+        Route::delete('/{duo}', [DuoController::class, 'destroy']);
+    });
+
+    Route::prefix('groups/{group}/role-overrides')->group(function () {
+        Route::get('/', [GroupRoleOverrideController::class, 'index']);
+        Route::post('/', [GroupRoleOverrideController::class, 'store']);
+        Route::delete('/{groupRoleOverride}', [GroupRoleOverrideController::class, 'destroy']);
+    });
+
     Route::prefix('tenant-roles')->group(function () {
         Route::get('/', [TenantRoleController::class, 'index']);
         Route::post('/', [TenantRoleController::class, 'store']);
         Route::delete('/{tenantRole}', [TenantRoleController::class, 'destroy']);
     });
+
     Route::prefix('merge-sessions')->group(function () {
         Route::get('/', [MergeSessionController::class, 'index']);
         Route::post('/', [MergeSessionController::class, 'store']);
         Route::get('/{mergeSession}', [MergeSessionController::class, 'show']);
         Route::delete('/{mergeSession}', [MergeSessionController::class, 'destroy']);
+    });
+
+    Route::prefix('messages')->group(function () {
+        Route::post('/{chatType}/{chatId}', [MessageController::class, 'store']);
+        Route::patch('/{message}', [MessageController::class, 'update']);
+        Route::delete('/{message}', [MessageController::class, 'destroy']);
+        Route::get('/{message}/thread', [MessageController::class, 'thread']);
     });
 });
 
