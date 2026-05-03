@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\StoreMergeSessionRequest;
 use App\Models\Group;
 use App\Models\MergeSession;
 use App\Services\MergeSessionService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class MergeSessionController extends Controller
 {
