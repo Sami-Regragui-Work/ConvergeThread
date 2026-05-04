@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\DuoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 class DuoController extends Controller
 {
@@ -23,6 +24,8 @@ class DuoController extends Controller
     public function index(Request $request, Group $group): JsonResponse
     {
         $user = $request->user();
+        Gate::authorize('viewDuos', $group);
+
         $duos = $this->duoService->getUserDuos($group, $user);
         return response()->json($duos);
     }
@@ -33,6 +36,8 @@ class DuoController extends Controller
     public function store(StoreDuoRequest $request, Group $group): JsonResponse
     {
         $cridentials = $request->validated();
+        Gate::authorize('createDuo', $group);
+
         $user1 = User::where('tenant_id', $group->tenant_id)->findOrFail($cridentials['user1_id']);
         $user2 = User::where('tenant_id', $group->tenant_id)->findOrFail($cridentials['user2_id']);
 
@@ -46,6 +51,8 @@ class DuoController extends Controller
      */
     public function destroy(Duo $duo): JsonResponse
     {
+        Gate::authorize('deleteDuo', $duo->group);
+        
         $this->duoService->delete($duo);
         return response()->json(null, 204);
     }

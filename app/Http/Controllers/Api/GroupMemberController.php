@@ -11,6 +11,7 @@ use App\Models\GroupRoleOverride;
 use App\Models\User;
 use App\Services\GroupMemberService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Gate;
 
 class GroupMemberController extends Controller
 {
@@ -24,6 +25,8 @@ class GroupMemberController extends Controller
      */
     public function index(Group $group): JsonResponse
     {
+        Gate::authorize('viewMembers', $group);
+
         $members = $this->groupMemberService->getActive($group);
         return response()->json($members);
     }
@@ -34,6 +37,7 @@ class GroupMemberController extends Controller
     public function store(AddGroupMemberRequest $request, Group $group): JsonResponse
     {
         $cridentials = $request->validated();
+        Gate::authorize('addMember', $group);
 
         $user = User::where('tenant_id', $group->tenant_id)
             ->findOrFail($cridentials['user_id']);
@@ -49,6 +53,7 @@ class GroupMemberController extends Controller
     public function destroy(RemoveGroupMemberRequest $request, Group $group): JsonResponse
     {
         $cridentials = $request->validated();
+        Gate::authorize('removeMember', $group);
 
         $member = User::where('tenant_id', $group->tenant_id)
             ->findOrFail($cridentials['user_id']);
@@ -63,6 +68,7 @@ class GroupMemberController extends Controller
         Group $group
     ): JsonResponse {
         $cridentials = $request->validated();
+        Gate::authorize('assignMemberRole', $group);
 
         $member = User::where('tenant_id', $group->tenant_id)
             ->findOrFail($cridentials['user_id']);

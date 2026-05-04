@@ -9,6 +9,7 @@ use App\Models\Group;
 use App\Services\GroupService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Gate;
 
 class GroupController extends Controller
 {
@@ -22,6 +23,7 @@ class GroupController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
+        Gate::authorize('viewAny', Group::class);
 
         $groups = Group::where('tenant_id', $user->tenant_id)
             ->withCount(['activeMembers'])
@@ -37,6 +39,7 @@ class GroupController extends Controller
     public function store(StoreGroupRequest $request): JsonResponse
     {
         $cridentials = $request->validated();
+        Gate::authorize('create', Group::class);
 
         $user = $request->user();
 
@@ -53,6 +56,7 @@ class GroupController extends Controller
      */
     public function show(Group $group): JsonResponse
     {
+        Gate::authorize('view', $group);
         return response()->json($group->load([
             'creator:id,display_name',
             'activeMembers:id,display_name,username',
@@ -66,6 +70,7 @@ class GroupController extends Controller
     public function update(UpdateGroupRequest $request, Group $group): JsonResponse
     {
         $cridentials = $request->validated();
+        Gate::authorize('update', $group);
 
         $user = $request->user();
 
@@ -84,6 +89,7 @@ class GroupController extends Controller
     public function destroy(Request $request, Group $group): JsonResponse
     {
         $deleter = $request->user();
+        Gate::authorize('delete', $group);
 
         $this->groupService->delete($group, $deleter);
 

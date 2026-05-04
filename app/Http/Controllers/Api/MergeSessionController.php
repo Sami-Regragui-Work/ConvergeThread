@@ -8,6 +8,7 @@ use App\Models\Group;
 use App\Models\MergeSession;
 use App\Services\MergeSessionService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Gate;
 
 class MergeSessionController extends Controller
 {
@@ -20,6 +21,8 @@ class MergeSessionController extends Controller
      */
     public function index(): JsonResponse
     {
+        Gate::authorize('viewAny', MergeSession::class);
+
         $sessions = $this->mergeService->getActive();
         return response()->json($sessions->load('groups'));
     }
@@ -30,6 +33,8 @@ class MergeSessionController extends Controller
     public function store(StoreMergeSessionRequest $request): JsonResponse
     {
         $cridentials = $request->validated();
+        Gate::authorize('create', MergeSession::class);
+
         $user = $request->user();
 
         $group1 = Group::where('tenant_id', $user->tenant_id)
@@ -48,6 +53,8 @@ class MergeSessionController extends Controller
      */
     public function show(MergeSession $mergeSession): JsonResponse
     {
+        Gate::authorize('view', $mergeSession);
+
         return response()->json($mergeSession->load('groups'));
     }
 
@@ -56,6 +63,8 @@ class MergeSessionController extends Controller
      */
     public function destroy(MergeSession $mergeSession): JsonResponse
     {
+        Gate::authorize('delete', $mergeSession);
+        
         $session = $this->mergeService->end($mergeSession);
         return response()->json($session);
     }

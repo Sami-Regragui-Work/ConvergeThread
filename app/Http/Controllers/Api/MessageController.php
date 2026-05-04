@@ -11,6 +11,7 @@ use App\Models\MergeSession;
 use App\Models\Message;
 use App\Services\MessageService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Gate;
 
 class MessageController extends Controller
 {
@@ -35,6 +36,8 @@ class MessageController extends Controller
             default => abort(404, 'Invalid chat type'),
         };
 
+        Gate::authorize('createMessage', $chatable);
+
         $parent = isset($cridentials['parent_id'])
             ? Message::where('chatable_id', $chatId)
                 ->where('chatable_type', $chatable->getMorphClass())
@@ -58,6 +61,7 @@ class MessageController extends Controller
     public function update(UpdateMessageRequest $request, Message $message): JsonResponse
     {
         $cridentials = $request->validated();
+        Gate::authorize('update', $message);
 
         $this->messageService->update(
             $message,
@@ -75,6 +79,8 @@ class MessageController extends Controller
      */
     public function destroy(Message $message): JsonResponse
     {
+        Gate::authorize('delete', $message);
+
         $this->messageService->delete($message);
 
         return response()->json(null, 204);
@@ -82,6 +88,8 @@ class MessageController extends Controller
 
     public function thread(Message $message): JsonResponse
     {
+        Gate::authorize('view', $message);
+        
         $thread = $this->messageService->getThread($message);
 
         $thread['message']->load(['user', 'parent']);

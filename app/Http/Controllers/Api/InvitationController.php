@@ -12,6 +12,7 @@ use App\Models\Tenant;
 use App\Models\TenantRole;
 use App\Services\InvitationService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
 class InvitationController extends Controller
@@ -24,6 +25,7 @@ class InvitationController extends Controller
     public function createAdminInvitation(CreateAdminInvitationRequest $request): JsonResponse
     {
         $cridentials = $request->validated();
+        Gate::authorize('createAdmin', Invitation::class);
 
         $owner = $request->user();
 
@@ -41,6 +43,7 @@ class InvitationController extends Controller
     public function createMemberInvitation(CreateMemberInvitationRequest $request): JsonResponse
     {
         $cridentials = $request->validated();
+        Gate::authorize('createMember', Invitation::class);
 
         $invitedBy = $request->user();
 
