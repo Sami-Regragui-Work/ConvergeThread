@@ -19,7 +19,7 @@ class MergeSessionPolicy
      */
     public function viewAny(User $viewer): bool
     {
-        return !$viewer->is_banned && $viewer->tenant_id != 0;
+        return $viewer->banned_by_id === null && $viewer->tenant_id != 0;
     }
 
     /**
@@ -41,7 +41,7 @@ class MergeSessionPolicy
      */
     public function create(User $creator): bool
     {
-        return !$creator->is_banned && $creator->tenant_id != 0;
+        return $creator->banned_by_id === null && $creator->tenant_id != 0;
     }
 
     /**

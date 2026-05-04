@@ -54,7 +54,7 @@ class AuthService
         }
 
         $user = Auth::user();
-        if ($user->is_banned) {
+        if ($user->banned_by_id !== null) {
             Auth::logout();
             throw new \Exception('Banned account', 403);
         }

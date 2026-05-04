@@ -18,7 +18,7 @@ class GroupPermissionService
 
     public function getEffectivePermissions(Group $group, User $member): array
     {
-        if ($member->is_banned || (string) $member->tenant_id != (string) $group->tenant_id) {
+        if ($member->banned_by_id !== null || (string) $member->tenant_id != (string) $group->tenant_id) {
             return [];
         }
 

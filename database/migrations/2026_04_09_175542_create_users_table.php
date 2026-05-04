@@ -17,7 +17,6 @@ return new class extends Migration {
             $table->string('display_name', 100)->nullable();
             $table->foreignId('tenant_id')->constrained()->cascadeOnDelete();
             $table->foreignId('tenant_role_id')->nullable()->constrained()->nullOnDelete();
-            $table->boolean('is_banned')->default(false);
             $table->foreignId('banned_by_id')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
         });

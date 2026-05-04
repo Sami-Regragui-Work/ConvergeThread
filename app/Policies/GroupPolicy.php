@@ -18,7 +18,7 @@ class GroupPolicy
      */
     public function viewAny(User $user): bool
     {
-        return !$user->is_banned && (string) $user->tenant_id != 0;
+        return $user->banned_by_id === null && (string) $user->tenant_id != 0;
     }
 
     /**
@@ -34,7 +34,7 @@ class GroupPolicy
      */
     public function create(User $user): bool
     {
-        return !$user->is_banned && (string) $user->tenant_id != 0;
+        return $user->banned_by_id === null && (string) $user->tenant_id != 0;
     }
 
     /**

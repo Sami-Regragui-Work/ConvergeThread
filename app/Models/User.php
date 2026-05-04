@@ -29,7 +29,6 @@ class User extends Authenticatable implements JWTSubject
         'display_name',
         'tenant_id',
         'tenant_role_id',
-        'is_banned',
         'banned_by_id',
     ];
 
@@ -51,7 +50,6 @@ class User extends Authenticatable implements JWTSubject
     {
         return [
             'password' => 'hashed',
-            'is_banned' => 'boolean',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
         ];

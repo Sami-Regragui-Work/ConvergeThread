@@ -38,7 +38,7 @@ class TenantRolePolicy
 
     private function isTenantAdmin(User $user): bool
     {
-        if ($user->is_banned || !$user->tenantRole) {
+        if ($user->banned_by_id !== null || !$user->tenantRole) {
             return false;
         }
 
