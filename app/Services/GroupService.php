@@ -11,7 +11,7 @@ class GroupService
 {
     public function create(string $name, User $creator): Group
     {
-        if ((string) $creator->tenant_id == 0) {
+        if ((string) $creator->tenant_id == '0') {
             throw new AuthorizationException('Owners cannot create tenant groups.');
         }
 
@@ -28,7 +28,7 @@ class GroupService
 
     public function updateName(Group $group, User $updater, string $name): Group
     {
-        if ($updater->id != $group->creator_id) {
+        if ((string) $updater->id != (string) $group->creator_id) {
             throw new AuthorizationException('Only creator can update group name.');
         }
 
@@ -38,7 +38,7 @@ class GroupService
 
     public function delete(Group $group, User $deleter): void
     {
-        if ($deleter->id != $group->creator_id) {
+        if ((string) $deleter->id != (string) $group->creator_id) {
             throw new AuthorizationException('Only creator can delete.');
         }
 

@@ -18,11 +18,11 @@ class GroupPermissionService
 
     public function getEffectivePermissions(Group $group, User $member): array
     {
-        if ($member->is_banned || $member->tenant_id != $group->tenant_id) {
+        if ($member->is_banned || (string) $member->tenant_id != (string) $group->tenant_id) {
             return [];
         }
 
-        if ($group->creator_id == $member->id) {
+        if ((string) $group->creator_id == (string) $member->id) {
             return ['*'];
         }
 
