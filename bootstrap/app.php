@@ -2,6 +2,7 @@
 use App\Http\Middleware\BanCheck;
 use App\Http\Middleware\GroupMember;
 use App\Http\Middleware\IdentifyTenant;
+use App\Http\Middleware\IsOwner;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -17,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'ban.check' => BanCheck::class,
             'group.member' => GroupMember::class,
             'identify.tenant' => IdentifyTenant::class,
+            'is.owner' => IsOwner::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
