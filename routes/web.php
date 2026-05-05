@@ -9,7 +9,12 @@ use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\MergeSessionController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\TenantRoleController;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+
+Route::get('/', function () {
+    return Auth::check() ? redirect('/groups') : redirect('/auth/login');
+});
 
 Route::middleware('guest')->prefix('auth')->name('auth.')->group(function () {
     Route::get('register', [AuthController::class, 'showRegister'])->name('register');
