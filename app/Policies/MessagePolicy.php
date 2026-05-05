@@ -45,11 +45,8 @@ class MessagePolicy
      */
     public function update(User $editor, Message $message): bool
     {
-        if ((string) $message->user_id !== (string) $editor->id) {
-            return false;
-        }
-
-        return $this->view($editor, $message);
+        return (string) $message->user_id == (string) $editor->id
+            && $this->view($editor, $message);
     }
 
     /**
@@ -57,11 +54,8 @@ class MessagePolicy
      */
     public function delete(User $deleter, Message $message): bool
     {
-        if ((string) $message->user_id !== (string) $deleter->id) {
-            return false;
-        }
-
-        return $this->view($deleter, $message);
+        return (string) $message->user_id == (string) $deleter->id
+            && $this->view($deleter, $message);
     }
 
     public function thread(User $user, Message $message): bool
