@@ -49,10 +49,10 @@ class DuoController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Duo $duo): JsonResponse
+    public function destroy(Group $group, Duo $duo): JsonResponse
     {
-        Gate::authorize('deleteDuo', $duo->group);
-        
+        Gate::authorize('deleteDuo', $group);
+
         $this->duoService->delete($duo);
         return response()->json(null, 204);
     }

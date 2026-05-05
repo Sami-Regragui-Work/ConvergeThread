@@ -49,10 +49,10 @@ class GroupRoleOverrideController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(GroupRoleOverride $groupRoleOverride): JsonResponse
+    public function destroy(Group $group, GroupRoleOverride $groupRoleOverride): JsonResponse
     {
-        Gate::authorize('manageRoleOverrides', $groupRoleOverride->group);
-        
+        Gate::authorize('manageRoleOverrides', $group);
+
         $this->roleService->deleteGroupRoleOverride($groupRoleOverride);
         return response()->json(null, 204);
     }
