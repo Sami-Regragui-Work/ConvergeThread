@@ -37,6 +37,10 @@ Route::prefix('invitations')->name('invitations.')->group(function () {
     Route::post('{token}/accept', [InvitationController::class, 'accept'])->name('accept.store');
 });
 
+Route::middleware(['auth', 'is.owner'])->prefix('owner')->name('owner.')->group(function () {
+    Route::get('', [OwnerController::class, 'index'])->name('index');
+});
+
 Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
     Route::post('auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
 
