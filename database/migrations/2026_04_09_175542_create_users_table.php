@@ -13,12 +13,14 @@ return new class extends Migration {
             $table->id();
             $table->string('email')->unique();
             $table->string('password');
-            $table->string('username', 100)->unique();
+            $table->string('username', 100);
             $table->string('display_name', 100)->nullable();
             $table->foreignId('tenant_id')->constrained()->cascadeOnDelete();
             $table->foreignId('tenant_role_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('banned_by_id')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
+
+            $table->unique(['tenant_id', 'username']);
         });
     }
 
