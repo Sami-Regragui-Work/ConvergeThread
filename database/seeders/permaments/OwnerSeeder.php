@@ -21,7 +21,7 @@ class OwnerSeeder extends Seeder
                 'username' => 'sami_regragui',
                 'display_name' => 'Owner',
                 'password' => Hash::make('@Srw181202#ConvergeThread'),
-                'tenant_id' => 0,
+                'tenant_id' => 1,
                 'tenant_role_id' => null,
                 'banned_by_id' => null,
             ]
