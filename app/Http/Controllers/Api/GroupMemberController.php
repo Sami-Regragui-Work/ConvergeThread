@@ -7,6 +7,7 @@ use App\Http\Requests\Api\AddGroupMemberRequest;
 use App\Http\Requests\Api\AssignGroupMemberRoleRequest;
 use App\Http\Requests\Api\RemoveGroupMemberRequest;
 use App\Models\Group;
+use App\Models\GroupMember;
 use App\Models\GroupRoleOverride;
 use App\Models\User;
 use App\Services\GroupMemberService;
@@ -25,7 +26,7 @@ class GroupMemberController extends Controller
      */
     public function index(Group $group): JsonResponse
     {
-        Gate::authorize('viewMembers', $group);
+        Gate::authorize('viewAny', [GroupMember::class, $group]);
 
         $members = $this->groupMemberService->getActive($group);
         return response()->json($members);
@@ -37,7 +38,7 @@ class GroupMemberController extends Controller
     public function store(AddGroupMemberRequest $request, Group $group): JsonResponse
     {
         $cridentials = $request->validated();
-        Gate::authorize('addMember', $group);
+        Gate::authorize('create', [GroupMember::class, $group]);
 
         $user = User::where('tenant_id', $group->tenant_id)
             ->findOrFail($cridentials['user_id']);
@@ -53,7 +54,7 @@ class GroupMemberController extends Controller
     public function destroy(RemoveGroupMemberRequest $request, Group $group): JsonResponse
     {
         $cridentials = $request->validated();
-        Gate::authorize('removeMember', $group);
+        Gate::authorize('delete', [GroupMember::class, $group]);
 
         $member = User::where('tenant_id', $group->tenant_id)
             ->findOrFail($cridentials['user_id']);
@@ -68,7 +69,7 @@ class GroupMemberController extends Controller
         Group $group
     ): JsonResponse {
         $cridentials = $request->validated();
-        Gate::authorize('assignMemberRole', $group);
+        Gate::authorize('assignRole', [GroupMember::class, $group]);
 
         $member = User::where('tenant_id', $group->tenant_id)
             ->findOrFail($cridentials['user_id']);

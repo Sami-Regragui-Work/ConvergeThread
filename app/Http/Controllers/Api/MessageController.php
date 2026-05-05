@@ -36,7 +36,7 @@ class MessageController extends Controller
             default => abort(404, 'Invalid chat type'),
         };
 
-        Gate::authorize('createMessage', $chatable);
+        Gate::authorize('create', [Message::class, $chatable]);
 
         $parent = isset($cridentials['parent_id'])
             ? Message::where('chatable_id', $chatId)
@@ -88,7 +88,7 @@ class MessageController extends Controller
 
     public function thread(Message $message): JsonResponse
     {
-        Gate::authorize('view', $message);
+        Gate::authorize('thread', $message);
         
         $thread = $this->messageService->getThread($message);
 

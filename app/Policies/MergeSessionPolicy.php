@@ -5,7 +5,6 @@ namespace App\Policies;
 use App\Models\MergeSession;
 use App\Models\User;
 use App\Services\GroupPermissionService;
-use Illuminate\Auth\Access\Response;
 
 class MergeSessionPolicy
 {

@@ -16,45 +16,40 @@ class GroupPolicy
     /**
      * Determine whether the user can view any models.
      */
-    public function viewAny(User $user): bool
+    public function viewAny(User $viewer): bool
     {
-        return $user->banned_by_id === null && (string) $user->tenant_id != 0;
+        return $viewer->banned_by_id === null && (string) $viewer->tenant_id != 0;
     }
 
     /**
      * Determine whether the user can view the model.
      */
-    public function view(User $user, Group $group): bool
+    public function view(User $viewer, Group $group): bool
     {
-        return $this->groupPermissionService->hasPermission($group, $user, 'group.view');
+        return $this->groupPermissionService->hasPermission($group, $viewer, 'group.view');
     }
 
     /**
      * Determine whether the user can create models.
      */
-    public function create(User $user): bool
+    public function create(User $creator): bool
     {
-        return $user->banned_by_id === null && (string) $user->tenant_id != 0;
+        return $creator->banned_by_id === null && (string) $creator->tenant_id != 0;
     }
 
     /**
      * Determine whether the user can update the model.
      */
-    public function update(User $user, Group $group): bool
+    public function update(User $editor, Group $group): bool
     {
-        return $this->groupPermissionService->hasPermission($group, $user, 'group.update');
+        return $this->groupPermissionService->hasPermission($group, $editor, 'group.update');
     }
 
     /**
      * Determine whether the user can delete the model.
      */
-    public function delete(User $user, Group $group): bool
+    public function delete(User $deleter, Group $group): bool
     {
-        return $this->groupPermissionService->hasPermission($group, $user, 'group.delete');
-    }
-
-    public function createMessage(User $user, Group $group): bool
-    {
-        return $this->groupPermissionService->hasPermission($group, $user, 'messages.create');
+        return $this->groupPermissionService->hasPermission($group, $deleter, 'group.delete');
     }
 }

@@ -16,29 +16,29 @@ class GroupMemberPolicy
     /**
      * Determine whether the user can view any models.
      */
-    public function viewAny(User $user, Group $group): bool
+    public function viewAny(User $viewer, Group $group): bool
     {
-        return $this->groupPermissionService->hasPermission($group, $user, 'group_members.view');
+        return $this->groupPermissionService->hasPermission($group, $viewer, 'group_members.view');
     }
 
     /**
      * Determine whether the user can create models.
      */
-    public function create(User $user, Group $group): bool
+    public function create(User $creator, Group $group): bool
     {
-        return $this->groupPermissionService->hasPermission($group, $user, 'group_members.add');
+        return $this->groupPermissionService->hasPermission($group, $creator, 'group_members.add');
     }
 
     /**
      * Determine whether the user can delete the model.
      */
-    public function delete(User $user, Group $group): bool
+    public function delete(User $deleter, Group $group): bool
     {
-        return $this->groupPermissionService->hasPermission($group, $user, 'group_members.remove');
+        return $this->groupPermissionService->hasPermission($group, $deleter, 'group_members.remove');
     }
 
-    public function assignRole(User $user, Group $group): bool
+    public function assignRole(User $roleAssigner, Group $group): bool
     {
-        return $this->groupPermissionService->hasPermission($group, $user, 'group_members.assign_role');
+        return $this->groupPermissionService->hasPermission($group, $roleAssigner, 'group_members.assign_role');
     }
 }

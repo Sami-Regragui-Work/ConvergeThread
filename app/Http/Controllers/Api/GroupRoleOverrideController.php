@@ -22,7 +22,7 @@ class GroupRoleOverrideController extends Controller
      */
     public function index(Group $group): JsonResponse
     {
-        Gate::authorize('manageRoleOverrides', $group);
+        Gate::authorize('viewAny', [GroupRoleOverride::class, $group]);
 
         $overrides = $group->groupRoleOverrides()->with('tenantRole')->get();
         return response()->json($overrides);
@@ -34,7 +34,7 @@ class GroupRoleOverrideController extends Controller
     public function store(StoreGroupRoleOverrideRequest $request, Group $group): JsonResponse
     {
         $cridentials = $request->validated();
-        Gate::authorize('manageRoleOverrides', $group);
+        Gate::authorize('create', [GroupRoleOverride::class, $group]);
 
         $tenantRole = TenantRole::findOrFail($cridentials['tenant_role_id']);
         $override = $this->roleService->createGroupRoleOverride(
@@ -51,7 +51,7 @@ class GroupRoleOverrideController extends Controller
      */
     public function destroy(Group $group, GroupRoleOverride $groupRoleOverride): JsonResponse
     {
-        Gate::authorize('manageRoleOverrides', $group);
+        Gate::authorize('delete', [GroupRoleOverride::class, $group]);
 
         $this->roleService->deleteGroupRoleOverride($groupRoleOverride);
         return response()->json(null, 204);

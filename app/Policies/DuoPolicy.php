@@ -17,24 +17,24 @@ class DuoPolicy
     /**
      * Determine whether the user can view any models.
      */
-    public function viewAny(User $user, Group $group): bool
+    public function viewAny(User $viewer, Group $group): bool
     {
-        return $this->groupPermissionService->hasPermission($group, $user, 'duos.view');
+        return $this->groupPermissionService->hasPermission($group, $viewer, 'duos.view');
     }
 
     /**
      * Determine whether the user can create models.
      */
-    public function create(User $user, Group $group): bool
+    public function create(User $creator, Group $group): bool
     {
-        return $this->groupPermissionService->hasPermission($group, $user, 'duos.create');
+        return $this->groupPermissionService->hasPermission($group, $creator, 'duos.create');
     }
 
     /**
      * Determine whether the user can delete the model.
      */
-    public function delete(User $user, Group $group): bool
+    public function delete(User $deleter, Group $group): bool
     {
-        return $this->groupPermissionService->hasPermission($group, $user, 'duos.delete');
+        return $this->groupPermissionService->hasPermission($group, $deleter, 'duos.delete');
     }
 }

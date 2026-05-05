@@ -19,11 +19,11 @@ class MessagePolicy
     /**
      * Determine whether the user can view the model.
      */
-    public function view(User $user, Message $message): bool
+    public function view(User $viewer, Message $message): bool
     {
         return $this->chatablePermissionService->hasPermission(
             $message->chatable,
-            $user,
+            $viewer,
             'messages.view'
         );
     }
@@ -58,8 +58,8 @@ class MessagePolicy
             && $this->view($deleter, $message);
     }
 
-    public function thread(User $user, Message $message): bool
+    public function thread(User $viewer, Message $message): bool
     {
-        return $this->view($user, $message);
+        return $this->view($viewer, $message);
     }
 }

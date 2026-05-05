@@ -24,7 +24,7 @@ class DuoController extends Controller
     public function index(Request $request, Group $group): JsonResponse
     {
         $user = $request->user();
-        Gate::authorize('viewDuos', $group);
+        Gate::authorize('viewAny', [Duo::class, $group]);
 
         $duos = $this->duoService->getUserDuos($group, $user);
         return response()->json($duos);
@@ -36,7 +36,7 @@ class DuoController extends Controller
     public function store(StoreDuoRequest $request, Group $group): JsonResponse
     {
         $cridentials = $request->validated();
-        Gate::authorize('createDuo', $group);
+        Gate::authorize('create', [Duo::class, $group]);
 
         $user1 = User::where('tenant_id', $group->tenant_id)->findOrFail($cridentials['user1_id']);
         $user2 = User::where('tenant_id', $group->tenant_id)->findOrFail($cridentials['user2_id']);
@@ -51,8 +51,8 @@ class DuoController extends Controller
      */
     public function destroy(Group $group, Duo $duo): JsonResponse
     {
-        Gate::authorize('deleteDuo', $group);
-
+        Gate::authorize('delete', [Duo::class, $group]);
+        
         $this->duoService->delete($duo);
         return response()->json(null, 204);
     }
