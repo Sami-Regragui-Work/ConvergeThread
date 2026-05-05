@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\StoreTenantRoleRequest;
+use App\Http\Requests\Api\StoreTenantRoleRequest;
 use App\Models\TenantRole;
 use App\Services\RoleService;
 use Illuminate\Http\JsonResponse;
@@ -52,7 +52,7 @@ class TenantRoleController extends Controller
     public function destroy(TenantRole $tenantRole): JsonResponse
     {
         Gate::authorize('delete', $tenantRole);
-        
+
         $this->roleService->deleteTenantRole($tenantRole);
         return response()->json(null, 204);
     }

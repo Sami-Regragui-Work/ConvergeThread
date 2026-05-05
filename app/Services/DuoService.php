@@ -31,7 +31,7 @@ class DuoService
         return [
             'owned' => $group->duos()
                 ->where(
-                    fn($query) => $query
+                    fn($q) => $q
                         ->where('user1_id', $user->id)
                         ->orWhere('user2_id', $user->id)
                 )

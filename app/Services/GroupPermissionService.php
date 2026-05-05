@@ -32,12 +32,15 @@ class GroupPermissionService
             return [];
         }
 
-        $basePermissions = $member->tenantRole?->permissions ?? [];
-        $groupPermissions = $membership->permissions ?? [];
+        $rolePermissions = $membership->groupRoleOverride?->permissions
+            ?? $member->tenantRole?->permissions
+            ?? [];
+
+        $membershipPermissions = $membership->permissions ?? [];
 
         return array_values(array_unique([
-            ...$basePermissions,
-            ...$groupPermissions,
+            ...$rolePermissions,
+            ...$membershipPermissions,
         ]));
     }
 

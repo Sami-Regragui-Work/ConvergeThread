@@ -79,6 +79,7 @@ Route::middleware(['auth:api', 'ban.check', 'identify.tenant'])->group(function 
     });
 
     Route::prefix('messages')->group(function () {
+        Route::get('{chatType}/{chatId}', [MessageController::class, 'index']);
         Route::post('{chatType}/{chatId}', [MessageController::class, 'store']);
         Route::patch('{message}', [MessageController::class, 'update']);
         Route::delete('{message}', [MessageController::class, 'destroy']);

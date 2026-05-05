@@ -11,12 +11,39 @@ use App\Models\MergeSession;
 use App\Models\Message;
 use App\Services\MessageService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 
 class MessageController extends Controller
 {
     public function __construct(private readonly MessageService $messageService)
     {
+    }
+
+    /**
+     * Display a listing of the resource.
+     */
+    public function index(Request $request, string $chatType, int $chatId): JsonResponse
+    {
+        $user = $request->user();
+
+        $chatable = match ($chatType) {
+            'group' => Group::where('tenant_id', $user->tenant_id)->findOrFail($chatId),
+            'duo' => Duo::whereHas('group', fn($q) => $q->where('tenant_id', $user->tenant_id))->findOrFail($chatId),
+            'merge' => MergeSession::whereHas('groups', fn($q) => $q->where('tenant_id', $user->tenant_id))->findOrFail($chatId),
+            default => abort(404, 'Invalid chat type'),
+        };
+
+        Gate::authorize('view', [Message::class, $chatable]);
+
+        $messages = Message::where('chatable_type', $chatable->getMorphClass())
+            ->where('chatable_id', $chatable->id)
+            ->whereNull('parent_id')
+            ->with(['user', 'replies.user'])
+            ->latest()
+            ->paginate(50);
+
+        return response()->json($messages);
     }
 
     /**
@@ -89,7 +116,7 @@ class MessageController extends Controller
     public function thread(Message $message): JsonResponse
     {
         Gate::authorize('thread', $message);
-        
+
         $thread = $this->messageService->getThread($message);
 
         $thread['message']->load(['user', 'parent']);

@@ -4,12 +4,18 @@ namespace App\Providers;
 
 // use Illuminate\Support\ServiceProvider;
 
+use App\Models\Duo;
 use App\Models\Group;
+use App\Models\GroupMember;
+use App\Models\GroupRoleOverride;
 use App\Models\Invitation;
 use App\Models\MergeSession;
 use App\Models\Message;
 use App\Models\TenantRole;
+use App\Policies\DuoPolicy;
+use App\Policies\GroupMemberPolicy;
 use App\Policies\GroupPolicy;
+use App\Policies\GroupRoleOverridePolicy;
 use App\Policies\InvitationPolicy;
 use App\Policies\MergeSessionPolicy;
 use App\Policies\MessagePolicy;
@@ -20,6 +26,9 @@ class AuthServiceProvider extends VendorAuthServiceProvider
 {
     protected $policies = [
         Group::class => GroupPolicy::class,
+        GroupMember::class => GroupMemberPolicy::class,
+        GroupRoleOverride::class => GroupRoleOverridePolicy::class,
+        Duo::class => DuoPolicy::class,
         Message::class => MessagePolicy::class,
         MergeSession::class => MergeSessionPolicy::class,
         TenantRole::class => TenantRolePolicy::class,
