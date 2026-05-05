@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Tenant extends Model
@@ -33,5 +34,15 @@ class Tenant extends Model
     public function tenantRoles(): HasMany
     {
         return $this->hasMany(TenantRole::class);
+    }
+
+    public function closedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'closed_by_id');
+    }
+
+    public function isClosed(): bool
+    {
+        return $this->closed_by_id !== null;
     }
 }

@@ -13,7 +13,6 @@ return new class extends Migration {
             $table->id();
             $table->string('name');
             $table->string('admin_email');
-            $table->foreignId('closed_by_id')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
         });
     }
