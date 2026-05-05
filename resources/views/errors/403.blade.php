@@ -13,7 +13,9 @@
     <div class="text-center px-6">
         <div class="text-8xl font-black text-white/5 mb-6 select-none">403</div>
         <h1 class="text-2xl font-bold text-white mb-3">Access Denied</h1>
-        <p class="text-slate-400 text-sm mb-8 max-w-sm mx-auto">You don't have permission to access this resource.</p>
+        <p class="text-slate-400 text-sm mb-8 max-w-sm mx-auto">
+            {{ $exception->getMessage() ?: "You don't have permission to access this resource." }}
+        </p>
         <a href="{{ url('/') }}"
             class="inline-block bg-indigo-500 hover:bg-indigo-600 text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition">
             Go Home

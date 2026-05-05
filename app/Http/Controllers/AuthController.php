@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
 use App\Services\AuthService;
+use Illuminate\Support\Facades\Auth;
 
 class AuthController extends Controller
 {
@@ -52,6 +53,10 @@ class AuthController extends Controller
             );
         } catch (\Exception $e) {
             return back()->withErrors(['email' => $e->getMessage()])->withInput();
+        }
+
+        if (Auth::user()->tenant_id == 1) {
+            return redirect()->intended(route('owner.index'));
         }
 
         return redirect()->intended(route('groups.index'));

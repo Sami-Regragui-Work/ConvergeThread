@@ -47,43 +47,66 @@
     </style>
 </head>
 
-<body class="antialiased" x-data="{ sidebarOpen: true }">
+<body class="antialiased" x-data="{ sidebarOpen: false }">
     @include('partials.flash')
 
-    <div class="flex h-screen overflow-hidden bg-surface-400">
+    <div class="flex min-h-screen bg-surface-400">
         @auth
-            <aside :class="sidebarOpen ? 'w-64' : 'w-0 overflow-hidden'"
-                class="flex-shrink-0 transition-all duration-300 bg-surface-300 border-r border-white/5 flex flex-col">
+            <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+                class="fixed inset-y-0 left-0 z-40 w-64 border-r border-white/5 bg-surface-300 transition-transform duration-300 lg:translate-x-0 lg:static lg:inset-auto lg:z-auto flex flex-col">
                 <div class="flex items-center gap-3 px-5 py-4 border-b border-white/5">
                     <div
                         class="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center text-white font-bold text-sm">
-                        CT</div>
+                        CT
+                    </div>
                     <span class="font-semibold text-white text-sm tracking-wide">ConvergeThread</span>
                 </div>
+
                 <nav class="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-                    <p class="text-xs text-slate-500 uppercase tracking-widest px-2 mb-2">Workspace</p>
-                    <a href="{{ url('/groups') }}"
-                        class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white text-sm transition {{ request()->is('groups*') ? 'bg-brand-500/10 text-brand-400' : '' }}">Groups</a>
-                    <a href="{{ url('/merge-sessions') }}"
-                        class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white text-sm transition {{ request()->is('merge-sessions*') ? 'bg-brand-500/10 text-brand-400' : '' }}">Merge
-                        Sessions</a>
+                    @if((string) auth()->user()->tenant_id === '1')
+                        <p class="text-xs text-slate-500 uppercase tracking-widest px-2 mb-2">Owner</p>
+
+                        <a href="{{ url('/owner') }}"
+                            class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white text-sm transition {{ request()->is('owner*') ? 'bg-brand-500/10 text-brand-400' : '' }}">
+                            Dashboard
+                        </a>
+                    @else
+                        <p class="text-xs text-slate-500 uppercase tracking-widest px-2 mb-2">Workspace</p>
+
+                        <a href="{{ url('/groups') }}"
+                            class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white text-sm transition {{ request()->is('groups*') ? 'bg-brand-500/10 text-brand-400' : '' }}">
+                            Groups
+                        </a>
+
+                        <a href="{{ url('/merge-sessions') }}"
+                            class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white text-sm transition {{ request()->is('merge-sessions*') ? 'bg-brand-500/10 text-brand-400' : '' }}">
+                            Merge Sessions
+                        </a>
+                    @endif
                 </nav>
             </aside>
+
+            <div x-cloak x-show="sidebarOpen" @click="sidebarOpen = false"
+                class="fixed inset-0 z-30 bg-slate-950/50 backdrop-blur-[1px] lg:hidden"></div>
         @endauth
 
-        <div class="flex flex-col flex-1 overflow-hidden">
-            <header class="flex items-center gap-4 px-5 py-3 border-b border-white/5 bg-surface-300 shrink-0">
+        <div class="flex min-w-0 flex-1 flex-col">
+            <header
+                class="sticky top-0 z-20 flex items-center gap-4 px-4 sm:px-5 py-3 border-b border-white/5 bg-surface-300/95 backdrop-blur shrink-0">
                 @auth
                     <button @click="sidebarOpen = !sidebarOpen"
-                        class="p-1.5 rounded-md hover:bg-white/5 text-slate-400 hover:text-white transition">Menu</button>
+                        class="inline-flex items-center justify-center p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition"
+                        type="button">
+                        Menu
+                    </button>
                 @endauth
 
-                {{-- Brand Logo in Header --}}
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 min-w-0">
                     <div
                         class="w-7 h-7 rounded-lg bg-brand-500 flex items-center justify-center text-white font-bold text-xs">
-                        CT</div>
-                    <h1 class="text-sm font-semibold text-white">ConvergeThread</h1>
+                        CT
+                    </div>
+                    <h1 class="text-sm font-semibold text-white truncate">ConvergeThread</h1>
                 </div>
 
                 <div class="ml-auto flex items-center gap-3">
@@ -99,8 +122,8 @@
                 </div>
             </header>
 
-            <main class="flex-1 overflow-y-auto p-6 flex items-center justify-center">
-                <div class="w-full">
+            <main class="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
+                <div class="w-full max-w-7xl mx-auto">
                     @include('partials.validation-errors')
                     @yield('content')
                 </div>

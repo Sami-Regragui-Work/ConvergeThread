@@ -20,7 +20,8 @@ class OwnerSeeder extends Seeder
             [
                 'username' => 'sami_regragui',
                 'display_name' => 'Owner',
-                'password' => Hash::make('@Srw181202#ConvergeThread'),
+                // 'password' => Hash::make('@Srw181202#Convergethread'),
+                'password' => Hash::make('sami.regragui.work@protonmail.com'),
                 'tenant_id' => 1,
                 'tenant_role_id' => null,
                 'banned_by_id' => null,

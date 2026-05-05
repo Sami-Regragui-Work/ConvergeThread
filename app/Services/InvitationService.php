@@ -20,7 +20,7 @@ class InvitationService
     public function createAdminInvitation(string $email, User $owner): Invitation
     {
         return Invitation::create([
-            'tenant_id' => 0,
+            'tenant_id' => 1,
             'invited_by_id' => $owner->id,
             'email' => $email,
             'token' => Str::random(60),

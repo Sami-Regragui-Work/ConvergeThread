@@ -24,8 +24,8 @@ class OwnerController extends Controller
             ->get();
 
         $groups = Group::query()
-            ->with(['tenant', 'creator', 'users'])
-            ->withCount('users')
+            ->with(['tenant', 'creator', 'members'])
+            ->withCount('members')
             ->orderBy('id')
             ->get();
 

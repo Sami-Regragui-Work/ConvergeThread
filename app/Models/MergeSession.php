@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class MergeSession extends Model
 {
+    public $timestamps = false;
     protected function casts(): array
     {
         return [
