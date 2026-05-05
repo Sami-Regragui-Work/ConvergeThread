@@ -3,10 +3,9 @@
 namespace App\Services;
 
 use App\Models\User;
-use App\Services\TenantUserService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Tymon\JWTAuth\Facades\JWTAuth;
+// use Tymon\JWTAuth\Facades\JWTAuth;
 
 class AuthService
 {
@@ -18,9 +17,7 @@ class AuthService
         string $password,
         ?string $displayName,
         string $tenantSlug
-    ): array {
-        Auth::shouldUse('api');
-
+    ): User {
         $tenant = $this->tenantUserService->findTenantBySlug($tenantSlug);
 
         $username = $this->tenantUserService->generateUniqueTenantUsername(
@@ -28,63 +25,43 @@ class AuthService
             $tenant
         );
 
-        $userData = [
+        $user = User::create([
             'email' => $email,
             'password' => Hash::make($password),
             'username' => $username,
             'display_name' => $displayName,
             'tenant_id' => $tenant->id,
-        ];
-
-        $user = User::create($userData);
+        ]);
 
         Auth::login($user);
 
-        $token = JWTAuth::fromUser($user);
+        session()->regenerate();
 
-        return $this->getAuthResponse($token, $user);
+        return $user;
     }
 
-    public function login(string $email, string $password): array
+    public function login(string $email, string $password): User
     {
-        Auth::shouldUse('api');
-        /** @var string $token */
-        if (!$token = Auth::attempt(compact('email', 'password'))) {
+        if (!Auth::attempt(compact('email', 'password'), false)) {
             throw new \Exception('Invalid cridentials', 401);
         }
 
         $user = Auth::user();
+
         if ($user->banned_by_id !== null) {
             Auth::logout();
             throw new \Exception('Banned account', 403);
         }
 
-        return $this->getAuthResponse($token, $user);
-    }
+        session()->regenerate();
 
-    public function refresh(): array
-    {
-        Auth::shouldUse('api');
-
-        $token = Auth::refresh();
-        return [
-            'token' => $token,
-            'token_type' => 'bearer',
-        ];
+        return $user;
     }
 
     public function logout(): void
     {
-        Auth::shouldUse('api');
         Auth::logout();
-    }
-
-    private function getAuthResponse(string $token, User $user): array
-    {
-        return [
-            'user' => $user,
-            'token' => $token,
-            'token_type' => 'bearer',
-        ];
+        session()->invalidate();
+        session()->regenerateToken();
     }
 }

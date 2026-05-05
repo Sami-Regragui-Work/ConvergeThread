@@ -4,7 +4,6 @@ namespace App\Http\Middleware;
 
 use App\Models\Group;
 use Closure;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -15,14 +14,16 @@ class GroupMember
      *
      * @param  Closure(Request): (Response)  $next
      */
-    public function handle(Request $request, Closure $next): Response|JsonResponse
+    public function handle(Request $request, Closure $next): Response
     {
         $member = $request->user();
 
         if (!$member) {
-            return response()->json([
-                'message' => 'Unauthenticated.',
-            ], 401);
+            return redirect()
+                ->route('auth.login')
+                ->withErrors([
+                    'email' => 'Unauthenticated.',
+                ]);
         }
 
         $group = $request->route('group');
@@ -36,9 +37,7 @@ class GroupMember
             ->exists();
 
         if (!$isMember) {
-            return response()->json([
-                'message' => 'You are not a member of this group.',
-            ], 403);
+            abort(403, 'You are not a member of this group.');
         }
 
         return $next($request);

@@ -10,9 +10,9 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Tymon\JWTAuth\Contracts\JWTSubject;
+// use Tymon\JWTAuth\Contracts\JWTSubject;
 
-class User extends Authenticatable implements JWTSubject
+class User extends Authenticatable /*implements JWTSubject*/
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
@@ -55,18 +55,18 @@ class User extends Authenticatable implements JWTSubject
         ];
     }
 
-    public function getJWTIdentifier()
-    {
-        return $this->getKey();
-    }
+    // public function getJWTIdentifier()
+    // {
+    //     return $this->getKey();
+    // }
 
-    public function getJWTCustomClaims()
-    {
-        return [
-            'tenant_id' => $this->tenant_id,
-            'username' => $this->username,
-        ];
-    }
+    // public function getJWTCustomClaims()
+    // {
+    //     return [
+    //         'tenant_id' => $this->tenant_id,
+    //         'username' => $this->username,
+    //     ];
+    // }
 
     public function tenant(): BelongsTo
     {

@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Http\Requests\Api;
+namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
-class StoreTenantRoleRequest extends FormRequest
+class UpdateGroupRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -23,9 +23,7 @@ class StoreTenantRoleRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => 'required|string|max:100|unique:tenant_roles,name,NULL,id,tenant_id,' . request()->user()->tenant_id,
-            'permissions' => 'required|array',
-            'permissions.*' => 'string',
+            'name' => 'sometimes|string|max:255',
         ];
     }
 }

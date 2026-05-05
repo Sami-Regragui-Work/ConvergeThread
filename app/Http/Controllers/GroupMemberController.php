@@ -1,17 +1,15 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
-use App\Http\Requests\Api\AddGroupMemberRequest;
-use App\Http\Requests\Api\AssignGroupMemberRoleRequest;
-use App\Http\Requests\Api\RemoveGroupMemberRequest;
+use App\Http\Requests\AddGroupMemberRequest;
+use App\Http\Requests\AssignGroupMemberRoleRequest;
+use App\Http\Requests\RemoveGroupMemberRequest;
 use App\Models\Group;
 use App\Models\GroupMember;
 use App\Models\GroupRoleOverride;
 use App\Models\User;
 use App\Services\GroupMemberService;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Gate;
 
 class GroupMemberController extends Controller
@@ -24,18 +22,19 @@ class GroupMemberController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(Group $group): JsonResponse
+    public function index(Group $group)
     {
         Gate::authorize('viewAny', [GroupMember::class, $group]);
 
         $members = $this->groupMemberService->getActive($group);
-        return response()->json($members);
+
+        return view('group_members.index', compact('members', 'group'));
     }
 
     /**
      * Store a newly created resource in storage.
      */
-    public function store(AddGroupMemberRequest $request, Group $group): JsonResponse
+    public function store(AddGroupMemberRequest $request, Group $group)
     {
         $cridentials = $request->validated();
         Gate::authorize('create', [GroupMember::class, $group]);
@@ -43,15 +42,17 @@ class GroupMemberController extends Controller
         $user = User::where('tenant_id', $group->tenant_id)
             ->findOrFail($cridentials['user_id']);
 
-        $member = $this->groupMemberService->add($group, $user);
+        $this->groupMemberService->add($group, $user);
 
-        return response()->json($member, 201);
+        return redirect()
+            ->route('groups.members.index', $group)
+            ->with('success', 'Member added successfully.');
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(RemoveGroupMemberRequest $request, Group $group): JsonResponse
+    public function destroy(RemoveGroupMemberRequest $request, Group $group)
     {
         $cridentials = $request->validated();
         Gate::authorize('delete', [GroupMember::class, $group]);
@@ -61,13 +62,15 @@ class GroupMemberController extends Controller
 
         $this->groupMemberService->remove($group, $member);
 
-        return response()->json(null, 204);
+        return redirect()
+            ->route('groups.members.index', $group)
+            ->with('success', 'Member removed successfully.');
     }
 
     public function assignRole(
         AssignGroupMemberRoleRequest $request,
         Group $group
-    ): JsonResponse {
+    ) {
         $cridentials = $request->validated();
         Gate::authorize('assignRole', [GroupMember::class, $group]);
 
@@ -79,12 +82,14 @@ class GroupMemberController extends Controller
                 ->findOrFail($cridentials['group_role_override_id'])
             : null;
 
-        $groupMember = $this->groupMemberService->assignRole(
+        $this->groupMemberService->assignRole(
             $group,
             $member,
             $roleOverride
         );
 
-        return response()->json($groupMember);
+        return redirect()
+            ->route('groups.members.index', $group)
+            ->with('success', 'Member role updated successfully.');
     }
 }

@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Http\Requests\Api;
+namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
-class CreateMemberInvitationRequest extends FormRequest
+class UpdateMessageRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -23,10 +23,10 @@ class CreateMemberInvitationRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'email' => 'required|email|unique:users,email',
-            'tenant_id' => 'required|exists:tenants,id',
-            'group_id' => 'nullable|exists:groups,id',
-            'tenant_role_id' => 'nullable|exists:tenant_roles,id',
+            'content' => 'sometimes|string|max:5000',
+            'file' => 'sometimes|nullable|file|max:10240',
+            'remove_file' => 'sometimes|boolean',
+            'empty_content' => 'sometimes|boolean',
         ];
     }
 }

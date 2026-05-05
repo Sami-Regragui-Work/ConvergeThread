@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Http\Requests\Api;
+namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
-class AcceptInvitationRequest extends FormRequest
+class AddGroupMemberRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -23,8 +23,7 @@ class AcceptInvitationRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'password' => 'required|string|min:8|confirmed',
-            'display_name' => 'nullable|string|max:100',
+            'user_id' => 'required|exists:users,id',
         ];
     }
 }

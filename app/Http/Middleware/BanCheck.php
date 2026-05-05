@@ -3,8 +3,8 @@
 namespace App\Http\Middleware;
 
 use Closure;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
 class BanCheck
@@ -14,7 +14,7 @@ class BanCheck
      *
      * @param  Closure(Request): (Response)  $next
      */
-    public function handle(Request $request, Closure $next): Response|JsonResponse
+    public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
 
@@ -23,9 +23,16 @@ class BanCheck
         }
 
         if ($user->banned_by_id !== null) {
-            return response()->json([
-                'message' => 'Your account is banned.',
-            ], 403);
+            Auth::logout();
+
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()
+                ->route('auth.login')
+                ->withErrors([
+                    'email' => 'Your account is banned.',
+                ]);
         }
 
         return $next($request);

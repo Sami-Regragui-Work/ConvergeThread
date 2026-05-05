@@ -1,17 +1,16 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
-use App\Http\Requests\Api\StoreMessageRequest;
-use App\Http\Requests\Api\UpdateMessageRequest;
+use App\Http\Requests\StoreMessageRequest;
+use App\Http\Requests\UpdateMessageRequest;
 use App\Models\Duo;
 use App\Models\Group;
 use App\Models\MergeSession;
 use App\Models\Message;
 use App\Services\MessageService;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 
 class MessageController extends Controller
@@ -23,9 +22,9 @@ class MessageController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(Request $request, string $chatType, int $chatId): JsonResponse
+    public function index(Request $request, string $chatType, int $chatId)
     {
-        $user = $request->user();
+        $user = Auth::user();
 
         $chatable = match ($chatType) {
             'group' => Group::where('tenant_id', $user->tenant_id)->findOrFail($chatId),
@@ -43,16 +42,16 @@ class MessageController extends Controller
             ->latest()
             ->paginate(50);
 
-        return response()->json($messages);
+        return view('messages.index', compact('messages', 'chatable', 'chatType', 'chatId'));
     }
 
     /**
      * Store a newly created resource in storage.
      */
-    public function store(StoreMessageRequest $request, string $chatType, int $chatId): JsonResponse
+    public function store(StoreMessageRequest $request, string $chatType, int $chatId)
     {
         $cridentials = $request->validated();
-        $user = $request->user();
+        $user = Auth::user();
 
         $chatable = match ($chatType) {
             'group' => Group::where('tenant_id', $user->tenant_id)->findOrFail($chatId),
@@ -71,7 +70,7 @@ class MessageController extends Controller
                 ->findOrFail($cridentials['parent_id'])
             : null;
 
-        $message = $this->messageService->create(
+        $this->messageService->create(
             $chatable,
             $user,
             $cridentials['content'] ?? null,
@@ -79,13 +78,15 @@ class MessageController extends Controller
             $parent
         );
 
-        return response()->json($message->load(['user', 'parent']), 201);
+        return redirect()
+            ->route('messages.index', [$chatType, $chatId])
+            ->with('success', 'Message sent successfully.');
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(UpdateMessageRequest $request, Message $message): JsonResponse
+    public function update(UpdateMessageRequest $request, Message $message)
     {
         $cridentials = $request->validated();
         Gate::authorize('update', $message);
@@ -98,22 +99,26 @@ class MessageController extends Controller
             $cridentials['empty_content'] ?? false
         );
 
-        return response()->json($message->fresh()->load('user'));
+        return redirect()
+            ->back()
+            ->with('success', 'Message updated successfully.');
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Message $message): JsonResponse
+    public function destroy(Message $message)
     {
         Gate::authorize('delete', $message);
 
         $this->messageService->delete($message);
 
-        return response()->json(null, 204);
+        return redirect()
+            ->back()
+            ->with('success', 'Message deleted successfully.');
     }
 
-    public function thread(Message $message): JsonResponse
+    public function thread(Message $message)
     {
         Gate::authorize('thread', $message);
 
@@ -122,6 +127,6 @@ class MessageController extends Controller
         $thread['message']->load(['user', 'parent']);
         $thread['replies']->load('user');
 
-        return response()->json($thread);
+        return view('messages.thread', $thread);
     }
 }

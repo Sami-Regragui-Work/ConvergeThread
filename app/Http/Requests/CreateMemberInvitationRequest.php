@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Http\Requests\Api;
+namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
-class StoreGroupRequest extends FormRequest
+class CreateMemberInvitationRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -23,7 +23,10 @@ class StoreGroupRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email',
+            'tenant_id' => 'required|exists:tenants,id',
+            'group_id' => 'nullable|exists:groups,id',
+            'tenant_role_id' => 'nullable|exists:tenant_roles,id',
         ];
     }
 }

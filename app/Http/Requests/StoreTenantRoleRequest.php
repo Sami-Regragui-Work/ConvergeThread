@@ -1,11 +1,12 @@
 <?php
 
-namespace App\Http\Requests\Api;
+namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Auth;
 
-class CreateAdminInvitationRequest extends FormRequest
+class StoreTenantRoleRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -23,7 +24,9 @@ class CreateAdminInvitationRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'email' => 'required|email|unique:users,email',
+            'name' => 'required|string|max:100|unique:tenant_roles,name,NULL,id,tenant_id,' . Auth::user()->tenant_id,
+            'permissions' => 'required|array',
+            'permissions.*' => 'string',
         ];
     }
 }

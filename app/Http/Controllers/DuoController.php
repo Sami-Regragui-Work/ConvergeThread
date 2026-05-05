@@ -1,15 +1,13 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
-use App\Http\Requests\Api\StoreDuoRequest;
+use App\Http\Requests\StoreDuoRequest;
 use App\Models\Duo;
 use App\Models\Group;
 use App\Models\User;
 use App\Services\DuoService;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 
 class DuoController extends Controller
@@ -21,19 +19,20 @@ class DuoController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(Request $request, Group $group): JsonResponse
+    public function index(Group $group)
     {
-        $user = $request->user();
+        $user = Auth::user();
         Gate::authorize('viewAny', [Duo::class, $group]);
 
         $duos = $this->duoService->getUserDuos($group, $user);
-        return response()->json($duos);
+
+        return view('duos.index', compact('duos', 'group'));
     }
 
     /**
      * Store a newly created resource in storage.
      */
-    public function store(StoreDuoRequest $request, Group $group): JsonResponse
+    public function store(StoreDuoRequest $request, Group $group)
     {
         $cridentials = $request->validated();
         Gate::authorize('create', [Duo::class, $group]);
@@ -41,19 +40,24 @@ class DuoController extends Controller
         $user1 = User::where('tenant_id', $group->tenant_id)->findOrFail($cridentials['user1_id']);
         $user2 = User::where('tenant_id', $group->tenant_id)->findOrFail($cridentials['user2_id']);
 
-        $duo = $this->duoService->create($group, $user1, $user2, $cridentials['name']);
+        $this->duoService->create($group, $user1, $user2, $cridentials['name']);
 
-        return response()->json($duo->load(['user1', 'user2']), 201);
+        return redirect()
+            ->route('groups.duos.index', $group)
+            ->with('success', 'Duo created successfully.');
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Group $group, Duo $duo): JsonResponse
+    public function destroy(Group $group, Duo $duo)
     {
         Gate::authorize('delete', [Duo::class, $group]);
-        
+
         $this->duoService->delete($duo);
-        return response()->json(null, 204);
+
+        return redirect()
+            ->route('groups.duos.index', $group)
+            ->with('success', 'Duo deleted successfully.');
     }
 }

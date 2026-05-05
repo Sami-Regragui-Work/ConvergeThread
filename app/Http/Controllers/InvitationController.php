@@ -1,17 +1,16 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
-use App\Http\Requests\Api\AcceptInvitationRequest;
-use App\Http\Requests\Api\CreateAdminInvitationRequest;
-use App\Http\Requests\Api\CreateMemberInvitationRequest;
+use App\Http\Requests\AcceptInvitationRequest;
+use App\Http\Requests\CreateAdminInvitationRequest;
+use App\Http\Requests\CreateMemberInvitationRequest;
 use App\Models\Group;
 use App\Models\Invitation;
 use App\Models\Tenant;
 use App\Models\TenantRole;
 use App\Services\InvitationService;
-use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
@@ -22,30 +21,30 @@ class InvitationController extends Controller
     ) {
     }
 
-    public function createAdminInvitation(CreateAdminInvitationRequest $request): JsonResponse
+    public function createAdminInvitation(CreateAdminInvitationRequest $request)
     {
         $cridentials = $request->validated();
         Gate::authorize('createAdmin', Invitation::class);
 
-        $owner = $request->user();
+        $owner = Auth::user();
 
         $invitation = $this->invitationService->createAdminInvitation(
             $cridentials['email'],
             $owner
         );
 
-        return response()->json([
-            'invitation' => $invitation->load('invitedBy'),
-            'accept_url' => config('app.url') . '/api/invitations/' . $invitation->token . '/accept',
-        ], 201);
+        return redirect()
+            ->back()
+            ->with('success', 'Admin invitation created successfully.')
+            ->with('accept_url', route('invitations.accept', $invitation->token));
     }
 
-    public function createMemberInvitation(CreateMemberInvitationRequest $request): JsonResponse
+    public function createMemberInvitation(CreateMemberInvitationRequest $request)
     {
         $cridentials = $request->validated();
         Gate::authorize('createMember', Invitation::class);
 
-        $invitedBy = $request->user();
+        $invitedBy = Auth::user();
 
         $tenant = Tenant::findOrFail($cridentials['tenant_id']);
 
@@ -65,13 +64,13 @@ class InvitationController extends Controller
             $tenantRole
         );
 
-        return response()->json([
-            'invitation' => $invitation->load(['tenant', 'group', 'tenantRole', 'invitedBy']),
-            'accept_url' => config('app.url') . '/api/invitations/' . $invitation->token . '/accept',
-        ], 201);
+        return redirect()
+            ->back()
+            ->with('success', 'Member invitation created successfully.')
+            ->with('accept_url', route('invitations.accept', $invitation->token));
     }
 
-    public function show(string $token): JsonResponse
+    public function show(string $token)
     {
         $invitation = Invitation::where('token', $token)
             ->with(['tenant', 'group', 'tenantRole', 'invitedBy'])
@@ -89,13 +88,34 @@ class InvitationController extends Controller
             ]);
         }
 
-        return response()->json([
+        return view('invitations.show', [
             'invitation' => $invitation,
-            'accept_url' => config('app.url') . '/api/invitations/' . $token . '/accept',
+            'acceptUrl' => route('invitations.accept', $token),
         ]);
     }
 
-    public function accept(AcceptInvitationRequest $request, string $token): JsonResponse
+    public function showAccept(string $token)
+    {
+        $invitation = Invitation::where('token', $token)
+            ->with(['tenant', 'group', 'tenantRole', 'invitedBy'])
+            ->firstOrFail();
+
+        if ($invitation->accepted_at) {
+            throw ValidationException::withMessages([
+                'token' => 'Invitation already accepted.',
+            ]);
+        }
+
+        if ($invitation->expires_at < now()) {
+            throw ValidationException::withMessages([
+                'token' => 'Invitation expired.',
+            ]);
+        }
+
+        return view('invitations.accept', compact('invitation'));
+    }
+
+    public function accept(AcceptInvitationRequest $request, string $token)
     {
         $cridentials = $request->validated();
 
@@ -113,6 +133,8 @@ class InvitationController extends Controller
             $result['invitation']->load(['invitedBy', 'tenant', 'tenantRole', 'group']);
         }
 
-        return response()->json($result, 201);
+        return redirect()
+            ->route('auth.login')
+            ->with('success', 'Invitation accepted successfully. You can now log in.');
     }
 }

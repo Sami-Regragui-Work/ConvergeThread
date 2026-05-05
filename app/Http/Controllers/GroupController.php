@@ -1,14 +1,14 @@
 <?php
 
-namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
-use App\Http\Requests\Api\StoreGroupRequest;
-use App\Http\Requests\Api\UpdateGroupRequest;
+namespace App\Http\Controllers;
+
+use App\Http\Requests\StoreGroupRequest;
+use App\Http\Requests\UpdateGroupRequest;
 use App\Models\Group;
 use App\Services\GroupService;
 use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 
 class GroupController extends Controller
@@ -20,9 +20,9 @@ class GroupController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(Request $request): JsonResponse
+    public function index()
     {
-        $user = $request->user();
+        $user = Auth::user();
         Gate::authorize('viewAny', Group::class);
 
         $groups = Group::where('tenant_id', $user->tenant_id)
@@ -30,49 +30,74 @@ class GroupController extends Controller
             ->with('creator:id,display_name')
             ->get();
 
-        return response()->json($groups);
+        return view('groups.index', compact('groups'));
+    }
+
+    /**
+     * Show the form for creating a newly created resource.
+     */
+    public function create()
+    {
+        Gate::authorize('create', Group::class);
+
+        return view('groups.create');
     }
 
     /**
      * Store a newly created resource in storage.
      */
-    public function store(StoreGroupRequest $request): JsonResponse
+    public function store(StoreGroupRequest $request)
     {
         $cridentials = $request->validated();
         Gate::authorize('create', Group::class);
 
-        $user = $request->user();
+        $user = Auth::user();
 
         $group = $this->groupService->create(
             $cridentials['name'],
             $user
         );
 
-        return response()->json($group->load(['creator', 'tenant']), 201);
+        return redirect()
+            ->route('groups.show', $group)
+            ->with('success', 'Group created successfully.');
     }
 
     /**
      * Display the specified resource.
      */
-    public function show(Group $group): JsonResponse
+    public function show(Group $group)
     {
         Gate::authorize('view', $group);
-        return response()->json($group->load([
+
+        $group->load([
             'creator:id,display_name',
             'activeMembers:id,display_name,username',
             'tenant:id,name'
-        ]));
+        ]);
+
+        return view('groups.show', compact('group'));
+    }
+
+    /**
+     * Show the form for editing the specified resource.
+     */
+    public function edit(Group $group)
+    {
+        Gate::authorize('update', $group);
+
+        return view('groups.edit', compact('group'));
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(UpdateGroupRequest $request, Group $group): JsonResponse
+    public function update(UpdateGroupRequest $request, Group $group)
     {
         $cridentials = $request->validated();
         Gate::authorize('update', $group);
 
-        $user = $request->user();
+        $user = Auth::user();
 
         $group = $this->groupService->updateName(
             $group,
@@ -80,19 +105,23 @@ class GroupController extends Controller
             $cridentials['name']
         );
 
-        return response()->json($group->load('creator'));
+        return redirect()
+            ->route('groups.show', $group)
+            ->with('success', 'Group updated successfully.');
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Request $request, Group $group): JsonResponse
+    public function destroy(Request $request, Group $group)
     {
-        $deleter = $request->user();
+        $deleter = Auth::user();
         Gate::authorize('delete', $group);
 
         $this->groupService->delete($group, $deleter);
 
-        return response()->json(null, 204);
+        return redirect()
+            ->route('groups.index')
+            ->with('success', 'Group deleted successfully.');
     }
 }

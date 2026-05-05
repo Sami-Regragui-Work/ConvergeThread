@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Http\Requests\Api;
+namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
-class StoreMergeSessionRequest extends FormRequest
+class StoreGroupRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -23,8 +23,7 @@ class StoreMergeSessionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'group1_id' => 'required|integer|different:group2_id',
-            'group2_id' => 'required|integer|different:group1_id',
+            'name' => 'required|string|max:255',
         ];
     }
 }

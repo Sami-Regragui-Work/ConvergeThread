@@ -4,7 +4,6 @@ namespace App\Http\Middleware;
 
 use App\Models\Tenant;
 use Closure;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -15,7 +14,7 @@ class IdentifyTenant
      *
      * @param  Closure(Request): (Response)  $next
      */
-    public function handle(Request $request, Closure $next): Response|JsonResponse
+    public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
 
@@ -24,17 +23,13 @@ class IdentifyTenant
         }
 
         if ($user->tenant_id === null) {
-            return response()->json([
-                'message' => 'User is not attached to any tenant.',
-            ], 403);
+            abort(403, 'User is not attached to any tenant.');
         }
 
         $tenant = Tenant::find($user->tenant_id);
 
         if (!$tenant) {
-            return response()->json([
-                'message' => 'Tenant not found.',
-            ], 404);
+            abort(404, 'Tenant not found.');
         }
 
         $request->attributes->set('tenant', $tenant);

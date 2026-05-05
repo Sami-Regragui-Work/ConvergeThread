@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Http\Requests\Api;
+namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
-class StoreMessageRequest extends FormRequest
+class LoginRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -23,9 +23,8 @@ class StoreMessageRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'content' => 'required_without:file|string|max:5000',
-            'file' => 'nullable|file|max:10240',
-            'parent_id' => 'nullable|exists:messages,id',
+            'email' => 'required|email',
+            'password' => 'required|string',
         ];
     }
 }
