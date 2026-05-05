@@ -8,6 +8,7 @@ use App\Http\Controllers\GroupRoleOverrideController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\MergeSessionController;
 use App\Http\Controllers\MessageController;
+use App\Http\Controllers\Owner\OwnerController;
 use App\Http\Controllers\TenantRoleController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
