@@ -45,7 +45,7 @@ class MessagePolicy
      */
     public function update(User $editor, Message $message): bool
     {
-        return (string) $message->user_id == (string) $editor->id
+        return $message->user_id === $editor->id
             && $this->view($editor, $message);
     }
 
@@ -54,7 +54,7 @@ class MessagePolicy
      */
     public function delete(User $deleter, Message $message): bool
     {
-        return (string) $message->user_id == (string) $deleter->id
+        return $message->user_id === $deleter->id
             && $this->view($deleter, $message);
     }
 

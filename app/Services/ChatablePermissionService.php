@@ -39,12 +39,12 @@ class ChatablePermissionService
             return false;
         }
 
-        if ((string) $duo->group->tenant_id != (string) $user->tenant_id) {
+        if ($duo->group->tenant_id !== $user->tenant_id) {
             return false;
         }
 
-        $isParticipant = (string) $duo->user1_id == (string) $user->id
-            || (string) $duo->user2_id == (string) $user->id;
+        $isParticipant = $duo->user1_id === $user->id
+            || $duo->user2_id === $user->id;
 
         if (!$isParticipant) {
             return false;
@@ -60,7 +60,7 @@ class ChatablePermissionService
             : $mergeSession->groups()->get();
 
         foreach ($groups as $group) {
-            if ((string) $group->tenant_id != (string) $user->tenant_id) {
+            if ($group->tenant_id !== $user->tenant_id) {
                 continue;
             }
 

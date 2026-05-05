@@ -127,7 +127,7 @@ class InvitationController extends Controller
 
         $result['user']->load(['tenant', 'tenantRole']);
 
-        if ((string) $result['invitation']->tenant_id == '0') {
+        if ((string) $result['invitation']->tenant_id == 1) {
             $result['invitation']->load('invitedBy');
         } else {
             $result['invitation']->load(['invitedBy', 'tenant', 'tenantRole', 'group']);

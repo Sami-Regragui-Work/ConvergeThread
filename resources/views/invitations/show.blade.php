@@ -15,7 +15,7 @@
 
                 <h1 class="text-xl font-bold text-white mb-2">You've been invited</h1>
                 <p class="text-slate-400 text-sm mb-6">
-                    @if($invitation->tenant_id === 0)
+                    @if((string) $invitation->tenant_id == 1)
                         You've been invited to set up the <span class="text-white font-medium">owner account</span>.
                     @else
                         You've been invited to join <span

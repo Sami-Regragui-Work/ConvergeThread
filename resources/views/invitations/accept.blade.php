@@ -43,7 +43,7 @@
                             placeholder="••••••••">
                     </div>
 
-                    @if($invitation->tenant_id === 0)
+                    @if((string) $invitation->tenant_id == 1)
                         <div class="bg-brand-500/5 border border-brand-500/20 rounded-xl px-4 py-3 text-sm text-brand-400">
                             You are setting up the <strong>owner account</strong>. You'll be prompted to create a tenant next.
                         </div>
