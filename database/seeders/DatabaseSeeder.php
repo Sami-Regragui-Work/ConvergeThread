@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\User;
+use Database\Seeders\permaments\OwnerSeeder;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -22,8 +23,12 @@ class DatabaseSeeder extends Seeder
         //     'email' => 'test@example.com',
         // ]);
 
+        // $this->call([
+        //     TenantSeeder::class
+        // ]);
+
         $this->call([
-            TenantSeeder::class
+            OwnerSeeder::class
         ]);
     }
 }
