@@ -84,7 +84,4 @@ Route::middleware(['auth:api', 'ban.check', 'identify.tenant'])->group(function 
         Route::delete('{message}', [MessageController::class, 'destroy']);
         Route::get('{message}/thread', [MessageController::class, 'thread']);
     });
-
-    Route::delete('duos/{duo}', [DuoController::class, 'destroy']);
-    Route::delete('group-role-overrides/{groupRoleOverride}', [GroupRoleOverrideController::class, 'destroy']);
 });

@@ -3,10 +3,11 @@
 namespace App\Policies;
 
 use App\Models\Group;
+use App\Models\GroupRoleOverride;
 use App\Models\User;
 use App\Services\GroupPermissionService;
 
-class GroupPolicy
+class GroupRoleOverridePolicy
 {
     public function __construct(
         private readonly GroupPermissionService $groupPermissionService
@@ -16,9 +17,9 @@ class GroupPolicy
     /**
      * Determine whether the user can view any models.
      */
-    public function viewAny(User $user): bool
+    public function viewAny(User $user, Group $group): bool
     {
-        return $user->banned_by_id === null && (string) $user->tenant_id != 0;
+        return $this->groupPermissionService->hasPermission($group, $user, 'group_role_overrides.manage');
     }
 
     /**
@@ -26,15 +27,15 @@ class GroupPolicy
      */
     public function view(User $user, Group $group): bool
     {
-        return $this->groupPermissionService->hasPermission($group, $user, 'group.view');
+        return false;
     }
 
     /**
      * Determine whether the user can create models.
      */
-    public function create(User $user): bool
+    public function create(User $user, Group $group): bool
     {
-        return $user->banned_by_id === null && (string) $user->tenant_id != 0;
+        return $this->groupPermissionService->hasPermission($group, $user, 'group_role_overrides.manage');
     }
 
     /**
@@ -42,7 +43,7 @@ class GroupPolicy
      */
     public function update(User $user, Group $group): bool
     {
-        return $this->groupPermissionService->hasPermission($group, $user, 'group.update');
+        return false;
     }
 
     /**
@@ -50,11 +51,6 @@ class GroupPolicy
      */
     public function delete(User $user, Group $group): bool
     {
-        return $this->groupPermissionService->hasPermission($group, $user, 'group.delete');
-    }
-
-    public function createMessage(User $user, Group $group): bool
-    {
-        return $this->groupPermissionService->hasPermission($group, $user, 'messages.create');
+        return $this->groupPermissionService->hasPermission($group, $user, 'group_role_overrides.manage');
     }
 }

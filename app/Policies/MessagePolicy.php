@@ -2,31 +2,42 @@
 
 namespace App\Policies;
 
+use App\Models\Duo;
 use App\Models\Group;
+use App\Models\MergeSession;
 use App\Models\Message;
 use App\Models\User;
-use App\Services\GroupPermissionService;
-use Illuminate\Auth\Access\Response;
+use App\Services\ChatablePermissionService;
 
 class MessagePolicy
 {
     public function __construct(
-        private readonly GroupPermissionService $groupPermissionService
+        private readonly ChatablePermissionService $chatablePermissionService
     ) {
     }
 
     /**
      * Determine whether the user can view the model.
      */
-    public function view(User $viewer, Message $message): bool
+    public function view(User $user, Message $message): bool
     {
-        $group = $this->resolveGroup($message);
+        return $this->chatablePermissionService->hasPermission(
+            $message->chatable,
+            $user,
+            'messages.view'
+        );
+    }
 
-        if (!$group) {
-            return false;
-        }
-
-        return $this->groupPermissionService->hasPermission($group, $viewer, 'messages.view');
+    /**
+     * Determine whether the user can create models.
+     */
+    public function create(User $creator, Group|Duo|MergeSession $chatable): bool
+    {
+        return $this->chatablePermissionService->hasPermission(
+            $chatable,
+            $creator,
+            'messages.create'
+        );
     }
 
     /**
@@ -34,17 +45,11 @@ class MessagePolicy
      */
     public function update(User $editor, Message $message): bool
     {
-        if ($message->user_id === $editor->id) {
-            return true;
-        }
-
-        $group = $this->resolveGroup($message);
-
-        if (!$group) {
+        if ((string) $message->user_id !== (string) $editor->id) {
             return false;
         }
 
-        return $this->groupPermissionService->hasPermission($group, $editor, 'messages.update_any');
+        return $this->view($editor, $message);
     }
 
     /**
@@ -52,35 +57,15 @@ class MessagePolicy
      */
     public function delete(User $deleter, Message $message): bool
     {
-        if ($message->user_id === $deleter->id) {
-            return true;
-        }
-
-        $group = $this->resolveGroup($message);
-
-        if (!$group) {
+        if ((string) $message->user_id !== (string) $deleter->id) {
             return false;
         }
 
-        return $this->groupPermissionService->hasPermission($group, $deleter, 'messages.delete_any');
+        return $this->view($deleter, $message);
     }
 
-    private function resolveGroup(Message $message): ?Group
+    public function thread(User $user, Message $message): bool
     {
-        $chatable = $message->chatable;
-
-        if ($chatable instanceof Group) {
-            return $chatable;
-        }
-
-        if (method_exists($chatable, 'group') && $chatable->group) {
-            return $chatable->group;
-        }
-
-        if (method_exists($chatable, 'groups') && $chatable->groups()->count() > 0) {
-            return $chatable->groups()->first();
-        }
-
-        return null;
+        return $this->view($user, $message);
     }
 }
