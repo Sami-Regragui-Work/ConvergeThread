@@ -93,7 +93,7 @@
         </div>
 
         {{-- Group Chat --}}
-        @can('view', [App\Models\Message::class, $group])
+        @can('viewAny', [App\Models\Message::class, $group])
             <div class="bg-surface-200 border border-white/5 rounded-2xl overflow-hidden">
                 <div class="px-5 py-4 border-b border-white/5 flex items-center justify-between">
                     <h2 class="text-sm font-semibold text-white">Group Chat</h2>
@@ -119,27 +119,6 @@
                         </a>
                     </div>
                 @endif
-            </div>
-        @endcan
-
-        {{-- Invite to group --}}
-        @can('invite', $group)
-            <div class="bg-surface-200 border border-white/5 rounded-2xl px-6 py-5">
-                <h2 class="text-sm font-semibold text-white mb-4">Invite to this group</h2>
-                <form method="POST" action="{{ route('invitations.tenant.store') }}" class="flex gap-3">
-                    @csrf
-                    <input type="hidden" name="tenant_id" value="{{ $group->tenant_id }}">
-                    <input type="hidden" name="group_id" value="{{ $group->id }}">
-                    <input type="email" name="email" placeholder="colleague@example.com" required
-                        class="flex-1 bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 placeholder-slate-500">
-                    <button type="submit"
-                        class="bg-brand-500 hover:bg-brand-600 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition">
-                        Send invite
-                    </button>
-                </form>
-                @error('email')
-                    <p class="mt-2 text-xs text-red-400">{{ $message }}</p>
-                @enderror
             </div>
         @endcan
 

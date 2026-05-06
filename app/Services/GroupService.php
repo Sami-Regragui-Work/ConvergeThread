@@ -6,9 +6,7 @@ use App\Models\Group;
 use App\Models\GroupMember;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Validation\ValidationException;
 
 class GroupService
@@ -24,13 +22,6 @@ class GroupService
                 'tenant_id' => $creator->tenant_id,
                 'name' => $name,
                 'creator_id' => $creator->id,
-            ]);
-
-            $group->members()->attach($creator->id, [
-                'tenant_role_id' => $creator->tenant_role_id,
-                'group_role_override_id' => null,
-                'permissions' => null,
-                'left_at' => null,
             ]);
 
             return $group;

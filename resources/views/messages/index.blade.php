@@ -11,7 +11,7 @@
             </div>
             <div>
                 <p class="text-sm font-semibold text-white">{{ $chatable->name ?? 'Messages' }}</p>
-                <p class="text-xs text-slate-500 capitalize">{{ $chatableType }}</p>
+                <p class="text-xs text-slate-500 capitalize">{{ $chatType }}</p>
             </div>
         </div>
 
@@ -32,15 +32,15 @@
                         <div class="relative">
                             <div
                                 class="px-4 py-2.5 rounded-2xl text-sm {{ $message->user_id === auth()->id() ? 'bg-brand-500 text-white rounded-tr-sm' : 'bg-surface-100 text-slate-200 rounded-tl-sm' }}">
-                                {{ $message->body }}
-                                @if($message->thread_id)
+                                {{ $message->content }}
+                                @if($message->parent_id)
                                     <span class="block text-xs opacity-60 mt-1">↩ thread</span>
                                 @endif
                             </div>
                             @can('delete', $message)
                                 <div x-show="showActions" x-cloak
                                     class="absolute {{ $message->user_id === auth()->id() ? 'right-full mr-2' : 'left-full ml-2' }} top-1/2 -translate-y-1/2 flex items-center">
-                                    <form method="POST" action="{{ url('/messages/' . $message->id) }}">
+                                    <form method="POST" action="{{ route('messages.destroy', $message) }}">
                                         @csrf @method('DELETE')
                                         <button type="submit"
                                             class="p-1.5 rounded-lg bg-surface-300 hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition">
@@ -65,15 +65,19 @@
 
         {{-- Compose --}}
         <div class="pt-4 border-t border-white/5 mt-4 shrink-0">
-            <form method="POST" action="{{ url('/messages') }}" class="flex gap-3">
-                @csrf
-                <input type="hidden" name="chatable_type" value="{{ $chatableType }}">
-                <input type="hidden" name="chatable_id" value="{{ $chatable->id }}">
-                <input type="text" name="body" required autocomplete="off" placeholder="Write a message..."
-                    class="flex-1 bg-surface-200 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition placeholder-slate-500">
-                <button type="submit"
-                    class="bg-brand-500 hover:bg-brand-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition">Send</button>
-            </form>
+            @can('create', [App\Models\Message::class, $chatable])
+                <form method="POST" action="{{ route('messages.store', [$chatType, $chatId]) }}" class="flex gap-3">
+                    @csrf
+                    <input type="text" name="content" required autocomplete="off" placeholder="Write a message..."
+                        class="flex-1 bg-surface-200 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition placeholder-slate-500">
+                    <button type="submit"
+                        class="bg-brand-500 hover:bg-brand-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition">
+                        Send
+                    </button>
+                </form>
+            @else
+                <p class="text-sm text-slate-500 text-center">You don't have permission to send messages here.</p>
+            @endcan
         </div>
     </div>
 

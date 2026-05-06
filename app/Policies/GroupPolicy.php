@@ -35,7 +35,9 @@ class GroupPolicy
      */
     public function create(User $creator): bool
     {
-        return $creator->banned_by_id === null && !$creator->isOwner();
+        return $creator->banned_by_id === null
+            && !$creator->isOwner()
+            && $this->groupPermissionService->hasPermission(null, $creator, Permissions::GROUP_CREATE);
     }
 
     /**

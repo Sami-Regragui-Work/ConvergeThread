@@ -10,6 +10,8 @@ class GroupMember extends Pivot
     protected $table = 'group_members';
 
     protected $fillable = [
+        'group_id',
+        'user_id',
         'group_role_override_id',
         'permissions',
         'left_at',

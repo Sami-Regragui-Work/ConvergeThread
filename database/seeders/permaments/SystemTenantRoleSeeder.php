@@ -22,6 +22,7 @@ class SystemTenantRoleSeeder extends Seeder
             [
                 'permissions' => [
                     Permissions::GROUP_VIEW,
+                    Permissions::GROUP_CREATE,
                     Permissions::GROUP_UPDATE,
                     Permissions::GROUP_DELETE,
                     Permissions::GROUP_INVITE,
@@ -67,6 +68,7 @@ class SystemTenantRoleSeeder extends Seeder
             [
                 'permissions' => [
                     Permissions::GROUP_VIEW,
+                    Permissions::GROUP_CREATE,
                     Permissions::GROUP_UPDATE,
                     Permissions::GROUP_DELETE,
                     Permissions::GROUP_INVITE,

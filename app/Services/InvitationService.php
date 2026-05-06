@@ -127,6 +127,7 @@ class InvitationService
                 'username' => $username,
                 'display_name' => $displayName,
                 'tenant_id' => $tenant->id,
+                'tenant_role_id' => TenantRole::where('is_system', true)->where('name', 'Admin')->value('id'),
             ]);
 
             $invitation->update([

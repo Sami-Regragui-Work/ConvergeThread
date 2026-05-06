@@ -9,7 +9,6 @@ use App\Models\Group;
 use App\Models\MergeSession;
 use App\Models\Message;
 use App\Services\MessageService;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 
@@ -22,7 +21,7 @@ class MessageController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(Request $request, string $chatType, int $chatId)
+    public function index(string $chatType, int $chatId)
     {
         $user = Auth::user();
 
@@ -33,7 +32,7 @@ class MessageController extends Controller
             default => abort(404, 'Invalid chat type'),
         };
 
-        Gate::authorize('view', [Message::class, $chatable]);
+        Gate::authorize('viewAny', [Message::class, $chatable]);
 
         $messages = Message::where('chatable_type', $chatable->getMorphClass())
             ->where('chatable_id', $chatable->id)

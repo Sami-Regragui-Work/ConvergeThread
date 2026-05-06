@@ -28,7 +28,7 @@ class GroupMemberController extends Controller
 
         $members = $this->groupMemberService->getActive($group);
 
-        return view('group_members.index', compact('members', 'group'));
+        return view('groups.members.index', compact('members', 'group'));
     }
 
     /**
