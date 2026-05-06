@@ -16,7 +16,17 @@
 
             @if (session('success'))
                 <div class="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-                    {{ session('success') }}
+                    <p>{{ session('success') }}</p>
+
+                    @if (session('accept_url'))
+                        <div class="mt-3 rounded-xl border border-emerald-500/10 bg-black/20 px-3 py-2">
+                            <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-400">Invitation Link</p>
+                            <a href="{{ session('accept_url') }}" target="_blank" rel="noopener noreferrer"
+                                class="mt-1 block break-all font-mono text-xs text-emerald-200 underline underline-offset-2 transition hover:text-white">
+                                {{ session('accept_url') }}
+                            </a>
+                        </div>
+                    @endif
                 </div>
             @endif
 

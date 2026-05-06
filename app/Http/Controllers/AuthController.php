@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
+use App\Models\User;
 use App\Services\AuthService;
 use Illuminate\Support\Facades\Auth;
 
@@ -55,7 +56,9 @@ class AuthController extends Controller
             return back()->withErrors(['email' => $e->getMessage()])->withInput();
         }
 
-        if (Auth::user()->tenant_id == 1) {
+        /** @var User $user */
+        $user = Auth::user();
+        if ($user->isOwner()) {
             return redirect()->intended(route('owner.index'));
         }
 

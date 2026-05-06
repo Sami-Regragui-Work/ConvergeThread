@@ -11,7 +11,7 @@ class GroupService
 {
     public function create(string $name, User $creator): Group
     {
-        if ((string) $creator->tenant_id == 1) {
+        if ($creator->isOwner()) {
             throw new AuthorizationException('Owners cannot create tenant groups.');
         }
 

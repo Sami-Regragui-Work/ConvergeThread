@@ -8,7 +8,7 @@ class InvitationPolicy
 {
     public function createAdmin(User $owner): bool
     {
-        return $owner->banned_by_id === null && (string) $owner->tenant_id == 1;
+        return $owner->banned_by_id === null && $owner->isOwner();
     }
 
     public function createMember(User $inviter): bool

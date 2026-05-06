@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    return Auth::check() ? redirect(route('groups.index')) : redirect(route('auth.login'));
+    return Auth::check() ? redirect()->route('groups.index') : redirect()->route('auth.login');
 });
 
 Route::middleware('guest')->prefix('auth')->name('auth.')->group(function () {

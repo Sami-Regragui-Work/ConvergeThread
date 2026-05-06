@@ -17,7 +17,7 @@ class IsOwner
     {
         $user = $request->user();
 
-        abort_unless($user && (string) $user->tenant_id == 1, 403);
+        abort_unless($user && $user->IsOwner(), 403);
 
         return $next($request);
     }

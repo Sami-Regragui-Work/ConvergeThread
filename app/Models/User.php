@@ -111,4 +111,9 @@ class User extends Authenticatable /*implements JWTSubject*/
     {
         return $this->hasMany(User::class, 'banned_by_id');
     }
+
+    public function isOwner(): bool
+    {
+        return (string) $this->tenant_id == 1;
+    }
 }
