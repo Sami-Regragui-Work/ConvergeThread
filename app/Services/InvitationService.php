@@ -34,25 +34,10 @@ class InvitationService
             ]);
         }
 
-        $tenant = Tenant::findOrFail($owner->tenant_id);
-
-        if ($tenant->id !== 1) {
-            throw ValidationException::withMessages([
-                'email' => 'Admin invitations are only allowed for the owner tenant.',
-            ]);
-        }
-
         $this->expireOld($email);
 
-        // ensures none duplicate owner
-        if (User::where('tenant_id', $tenant->id)->exists()) {
-            throw ValidationException::withMessages([
-                'token' => 'The owner account already exists.',
-            ]);
-        }
-
         return Invitation::create([
-            'tenant_id' => $tenant->id,
+            'tenant_id' => null,
             'invited_by_id' => $owner->id,
             'email' => $email,
             'token' => Str::random(60),
@@ -104,13 +89,65 @@ class InvitationService
         ]);
     }
 
+    public function acceptAdminInvitation(
+        string $token,
+        string $password,
+        string $tenantName,
+        ?string $displayName = null,
+    ): array {
+        /** @var Invitation */
+        $invitation = Invitation::where('token', $token)
+            ->whereNull('tenant_id')
+            ->whereNull('accepted_at')
+            ->where('expires_at', '>', now())
+            ->firstOrFail();
+
+        if (User::where('email', $invitation->email)->exists()) {
+            throw ValidationException::withMessages([
+                'email' => 'A user with this email already exists.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($invitation, $password, $tenantName, $displayName) {
+            $slug = $this->generateUniqueSlug($tenantName);
+
+            $tenant = Tenant::create([
+                'slug' => $slug,
+                'admin_email' => $invitation->email,
+            ]);
+
+            $username = $this->tenantUserService->generateUniqueTenantUsername(
+                $displayName ?: Str::before($invitation->email, '@'),
+                $tenant
+            );
+
+            $user = User::create([
+                'email' => $invitation->email,
+                'password' => Hash::make($password),
+                'username' => $username,
+                'display_name' => $displayName,
+                'tenant_id' => $tenant->id,
+            ]);
+
+            $invitation->update([
+                'tenant_id' => $tenant->id,
+                'accepted_at' => now(),
+            ]);
+
+            return [
+                'user' => $user,
+                'tenant' => $tenant,
+                'invitation' => $invitation->fresh(['tenant', 'invitedBy']),
+            ];
+        });
+    }
+
     public function acceptInvitation(string $token, string $password, ?string $displayName = null): array
     {
-        /**
-         * @var Invitation
-         */
+        /** @var Invitation */
         $invitation = Invitation::with(['tenant', 'group', 'tenantRole', 'invitedBy'])
             ->where('token', $token)
+            ->whereNotNull('tenant_id')
             ->whereNull('accepted_at')
             ->where('expires_at', '>', now())
             ->firstOrFail();
@@ -122,12 +159,6 @@ class InvitationService
             if (User::where('email', $invitation->email)->exists()) {
                 throw ValidationException::withMessages([
                     'email' => 'A user with this email already exists.',
-                ]);
-            }
-
-            if ($invitation->tenant_id === 1 && User::where('tenant_id', 1)->exists()) {
-                throw ValidationException::withMessages([
-                    'token' => 'The owner account has already been created.',
                 ]);
             }
 
@@ -168,6 +199,19 @@ class InvitationService
                 'invitation' => $invitation->fresh(['tenant', 'group', 'tenantRole', 'invitedBy']),
             ];
         });
+    }
+
+    private function generateUniqueSlug(string $name): string
+    {
+        $base = Str::slug($name);
+        $slug = $base;
+        $i = 2;
+
+        while (Tenant::where('slug', $slug)->exists()) {
+            $slug = $base . '_' . $i++;
+        }
+
+        return $slug;
     }
 
     private function expireOld(string $email): void

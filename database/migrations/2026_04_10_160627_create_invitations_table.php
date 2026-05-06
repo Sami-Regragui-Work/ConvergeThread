@@ -11,7 +11,7 @@ return new class extends Migration {
     {
         Schema::create('invitations', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('tenant_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('tenant_id')->nullable()->constrained()->cascadeOnDelete();
             $table->foreignId('group_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('invited_by_id')->constrained('users')->cascadeOnDelete();
             $table->foreignId('tenant_role_id')->nullable()->constrained()->nullOnDelete();

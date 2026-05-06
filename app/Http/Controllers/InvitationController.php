@@ -12,7 +12,6 @@ use App\Models\TenantRole;
 use App\Services\InvitationService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\ValidationException;
 
 class InvitationController extends Controller
 {
@@ -91,18 +90,23 @@ class InvitationController extends Controller
     {
         $cridentials = $request->validated();
 
-        $result = $this->invitationService->acceptInvitation(
-            $token,
-            $cridentials['password'],
-            $cridentials['display_name'] ?? null
-        );
+        $isAdminInvite = (bool) ($cridentials['is_admin_invite'] ?? false);
 
-        $result['user']->load(['tenant', 'tenantRole']);
-
-        if ($result['user']->isOwner()) {
-            $result['invitation']->load('invitedBy');
+        if ($isAdminInvite) {
+            $this->invitationService->acceptAdminInvitation(
+                $token,
+                $cridentials['password'],
+                $cridentials['tenant_name'],
+                $cridentials['display_name'] ?? null,
+            );
         } else {
-            $result['invitation']->load(['invitedBy', 'tenant', 'tenantRole', 'group']);
+            $result = $this->invitationService->acceptInvitation(
+                $token,
+                $cridentials['password'],
+                $cridentials['display_name'] ?? null
+            );
+
+            $result['user']->load(['tenant', 'tenantRole']);
         }
 
         return redirect()

@@ -25,6 +25,8 @@ class AcceptInvitationRequest extends FormRequest
         return [
             'password' => 'required|string|min:8|confirmed',
             'display_name' => 'nullable|string|max:100',
+            'tenant_name' => 'required_if:is_admin_invite,1|nullable|string|max:100',
+            'is_admin_invite' => 'nullable|boolean',
         ];
     }
 }

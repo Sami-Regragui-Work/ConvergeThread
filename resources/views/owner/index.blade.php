@@ -30,7 +30,7 @@
                 </div>
             @endif
 
-            @if ($errors->any())
+            {{-- @if ($errors->any())
                 <div class="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
                     <p class="mb-2 font-semibold text-red-200">Please fix the following errors:</p>
                     <ul class="space-y-1">
@@ -39,7 +39,7 @@
                         @endforeach
                     </ul>
                 </div>
-            @endif
+            @endif --}}
         </section>
 
         <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">

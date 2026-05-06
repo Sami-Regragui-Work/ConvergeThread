@@ -5,11 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 class Tenant extends Model
 {
     protected $fillable = [
-        'name',
+        'slug',
         'admin_email',
     ];
 
@@ -44,5 +45,10 @@ class Tenant extends Model
     public function isClosed(): bool
     {
         return $this->closed_by_id !== null;
+    }
+
+    public function getNameAttribute(): string
+    {
+        return Str::title(str_replace('_', ' ', $this->slug));
     }
 }
