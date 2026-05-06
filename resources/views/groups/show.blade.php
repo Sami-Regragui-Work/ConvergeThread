@@ -2,7 +2,10 @@
 @section('title', $group->name)
 
 @section('content')
+    @php $memberCount = $group->activeMembers->count(); @endphp
+
     <div class="max-w-5xl mx-auto space-y-6">
+
         {{-- Header --}}
         <div
             class="bg-surface-200 border border-white/5 rounded-2xl px-6 py-5 flex flex-col sm:flex-row sm:items-center gap-4">
@@ -13,7 +16,7 @@
                 </div>
                 <div>
                     <h1 class="text-lg font-bold text-white">{{ $group->name }}</h1>
-                    <p class="text-slate-500 text-xs">{{ $group->activeMembers->count() }} members</p>
+                    <p class="text-slate-500 text-xs">{{ $memberCount }} members</p>
                 </div>
             </div>
             <div class="flex items-center gap-2">
@@ -45,6 +48,7 @@
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
             {{-- Members --}}
             <div class="bg-surface-200 border border-white/5 rounded-2xl overflow-hidden">
                 <div class="px-5 py-4 border-b border-white/5 flex items-center justify-between">
@@ -78,9 +82,8 @@
                 </div>
                 <div class="divide-y divide-white/5">
                     @forelse($group->duos ?? [] as $duo)
-                        <a href="{{ route('groups.duos.destroy', [$group, $duo]) }}"
-                            class="block px-5 py-3 hover:bg-white/5 transition">
-                            <p class="text-sm text-slate-300">Duo #{{ $duo->id }}</p>
+                        <a href="{{ route('groups.duos.index', $group) }}" class="block px-5 py-3 hover:bg-white/5 transition">
+                            <p class="text-sm text-slate-300">{{ $duo->name }}</p>
                         </a>
                     @empty
                         <p class="px-5 py-4 text-sm text-slate-500">No duos yet.</p>
@@ -89,8 +92,38 @@
             </div>
         </div>
 
-        {{-- Group invite form --}}
-        @can('createMember', App\Models\Invitation::class)
+        {{-- Group Chat --}}
+        @can('view', [App\Models\Message::class, $group])
+            <div class="bg-surface-200 border border-white/5 rounded-2xl overflow-hidden">
+                <div class="px-5 py-4 border-b border-white/5 flex items-center justify-between">
+                    <h2 class="text-sm font-semibold text-white">Group Chat</h2>
+                    @if($memberCount >= 3)
+                        <a href="{{ route('messages.index', ['group', $group->id]) }}"
+                            class="text-xs text-brand-400 hover:text-brand-300 transition">Open chat</a>
+                    @endif
+                </div>
+                @if($memberCount < 3)
+                    <div class="px-5 py-6 flex flex-col items-center gap-2 text-center">
+                        <p class="text-sm text-slate-500">
+                            Group chat is available once there are at least 3 members.
+                        </p>
+                        <p class="text-xs text-slate-600">
+                            {{ 3 - $memberCount }} more {{ Str::plural('member', 3 - $memberCount) }} needed.
+                        </p>
+                    </div>
+                @else
+                    <div class="px-5 py-4">
+                        <a href="{{ route('messages.index', ['group', $group->id]) }}"
+                            class="inline-flex items-center gap-2 bg-brand-500/10 hover:bg-brand-500/20 text-brand-400 text-sm px-4 py-2 rounded-xl transition">
+                            Go to chat
+                        </a>
+                    </div>
+                @endif
+            </div>
+        @endcan
+
+        {{-- Invite to group --}}
+        @can('invite', $group)
             <div class="bg-surface-200 border border-white/5 rounded-2xl px-6 py-5">
                 <h2 class="text-sm font-semibold text-white mb-4">Invite to this group</h2>
                 <form method="POST" action="{{ route('invitations.tenant.store') }}" class="flex gap-3">
@@ -104,8 +137,11 @@
                         Send invite
                     </button>
                 </form>
-                @error('email')<p class="mt-2 text-xs text-red-400">{{ $message }}</p>@enderror
+                @error('email')
+                    <p class="mt-2 text-xs text-red-400">{{ $message }}</p>
+                @enderror
             </div>
         @endcan
+
     </div>
 @endsection

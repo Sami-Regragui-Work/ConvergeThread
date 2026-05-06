@@ -53,4 +53,9 @@ class GroupPolicy
     {
         return $this->groupPermissionService->hasPermission($group, $deleter, Permissions::GROUP_DELETE);
     }
+
+    public function invite(User $inviter, Group $group): bool
+    {
+        return $this->groupPermissionService->hasPermission($group, $inviter, Permissions::GROUP_INVITE);
+    }
 }
