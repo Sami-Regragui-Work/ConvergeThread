@@ -5,6 +5,7 @@ namespace App\Policies;
 use App\Models\Group;
 use App\Models\User;
 use App\Services\GroupPermissionService;
+use App\Support\Permissions;
 
 class GroupPolicy
 {
@@ -26,7 +27,7 @@ class GroupPolicy
      */
     public function view(User $viewer, Group $group): bool
     {
-        return $this->groupPermissionService->hasPermission($group, $viewer, 'group.view');
+        return $this->groupPermissionService->hasPermission($group, $viewer, Permissions::GROUP_VIEW);
     }
 
     /**
@@ -42,7 +43,7 @@ class GroupPolicy
      */
     public function update(User $editor, Group $group): bool
     {
-        return $this->groupPermissionService->hasPermission($group, $editor, 'group.update');
+        return $this->groupPermissionService->hasPermission($group, $editor, Permissions::GROUP_UPDATE);
     }
 
     /**
@@ -50,6 +51,6 @@ class GroupPolicy
      */
     public function delete(User $deleter, Group $group): bool
     {
-        return $this->groupPermissionService->hasPermission($group, $deleter, 'group.delete');
+        return $this->groupPermissionService->hasPermission($group, $deleter, Permissions::GROUP_DELETE);
     }
 }
