@@ -49,6 +49,14 @@ class GroupPermissionService
             ];
         }
 
+        if ($group->creator_id === $user->id) {
+            $directPermissions = [
+                ...$directPermissions,
+                Permissions::GROUP_UPDATE,
+                Permissions::GROUP_DELETE,
+            ];
+        }
+
         return array_values(array_unique($directPermissions));
     }
 

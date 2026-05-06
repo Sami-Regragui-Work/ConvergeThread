@@ -53,6 +53,8 @@ Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
         Route::get('create', [GroupController::class, 'create'])->name('create');
         Route::post('', [GroupController::class, 'store'])->name('store');
 
+        Route::post('{group}/join', [GroupController::class, 'join'])->name('join');
+
         Route::middleware('group.member')->prefix('{group}')->group(function () {
             Route::get('', [GroupController::class, 'show'])->name('show');
             Route::get('edit', [GroupController::class, 'edit'])->name('edit');
