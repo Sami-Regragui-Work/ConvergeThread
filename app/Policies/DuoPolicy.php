@@ -5,12 +5,13 @@ namespace App\Policies;
 use App\Models\Duo;
 use App\Models\Group;
 use App\Models\User;
-use App\Services\GroupPermissionService;
+use App\Services\ChatablePermissionService;
+use App\Support\Permissions;
 
 class DuoPolicy
 {
     public function __construct(
-        private readonly GroupPermissionService $groupPermissionService
+        private readonly ChatablePermissionService $chatablePermissionService
     ) {
     }
 
@@ -19,7 +20,7 @@ class DuoPolicy
      */
     public function viewAny(User $viewer, Group $group): bool
     {
-        return $this->groupPermissionService->hasPermission($group, $viewer, 'duos.view');
+        return $this->chatablePermissionService->hasPermission($group, $viewer, Permissions::DUOS_VIEW);
     }
 
     /**
@@ -27,14 +28,18 @@ class DuoPolicy
      */
     public function create(User $creator, Group $group): bool
     {
-        return $this->groupPermissionService->hasPermission($group, $creator, 'duos.create');
+        return $this->chatablePermissionService->hasPermission($group, $creator, Permissions::DUOS_CREATE);
     }
 
     /**
      * Determine whether the user can delete the model.
      */
-    public function delete(User $deleter, Group $group): bool
+    public function delete(User $deleter, Group $group, Duo $duo): bool
     {
-        return $this->groupPermissionService->hasPermission($group, $deleter, 'duos.delete');
+        if ($duo->group_id !== $group->id) {
+            return false;
+        }
+
+        return $this->chatablePermissionService->hasPermission($duo, $deleter, Permissions::DUOS_DELETE);
     }
 }
