@@ -35,11 +35,9 @@ class ChatablePermissionService
 
     private function hasDuoPermission(Duo $duo, User $user, string $permission): bool
     {
-        if (!$duo->group) {
-            return false;
-        }
+        $group = $duo->group;
 
-        if ($duo->group->tenant_id !== $user->tenant_id) {
+        if (!$group || $group->tenant_id !== $user->tenant_id) {
             return false;
         }
 
@@ -50,25 +48,23 @@ class ChatablePermissionService
             return false;
         }
 
-        return $this->groupPermissionService->hasPermission($duo->group, $user, $permission);
+        return $this->groupPermissionService->hasPermission($group, $user, $permission);
     }
 
     private function hasMergeSessionPermission(MergeSession $mergeSession, User $user, string $permission): bool
     {
-        $groups = $mergeSession->relationLoaded('groups')
-            ? $mergeSession->groups
-            : $mergeSession->groups()->get();
+        if (!$mergeSession->isActive()) {
+            return false;
+        }
+
+        $groups = $mergeSession->groups;
 
         foreach ($groups as $group) {
             if ($group->tenant_id !== $user->tenant_id) {
                 continue;
             }
 
-            $isActiveMember = $group->activeMembers()
-                ->whereKey($user->id)
-                ->exists();
-
-            if (!$isActiveMember) {
+            if (!$this->groupPermissionService->isActiveMember($group, $user)) {
                 continue;
             }
 
