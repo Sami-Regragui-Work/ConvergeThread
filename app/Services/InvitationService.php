@@ -116,7 +116,7 @@ class InvitationService
             ->firstOrFail();
 
         return DB::transaction(function () use ($invitation, $password, $displayName) {
-            
+
             $this->checkInvite($invitation);
 
             if (User::where('email', $invitation->email)->exists()) {
@@ -200,5 +200,26 @@ class InvitationService
                 'token' => 'Invitation role does not belong to the invitation tenant.',
             ]);
         }
+    }
+
+    public function findOpen(string $token): Invitation
+    {
+        $invitation = Invitation::where('token', $token)
+            ->with(['tenant', 'group', 'tenantRole', 'invitedBy'])
+            ->firstOrFail();
+
+        if ($invitation->accepted_at) {
+            throw ValidationException::withMessages([
+                'token' => 'Invitation already accepted.',
+            ]);
+        }
+
+        if ($invitation->expires_at && $invitation->expires_at < now()) {
+            throw ValidationException::withMessages([
+                'token' => 'Invitation expired.',
+            ]);
+        }
+
+        return $invitation;
     }
 }

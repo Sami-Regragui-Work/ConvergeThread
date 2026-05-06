@@ -72,21 +72,7 @@ class InvitationController extends Controller
 
     public function show(string $token)
     {
-        $invitation = Invitation::where('token', $token)
-            ->with(['tenant', 'group', 'tenantRole', 'invitedBy'])
-            ->firstOrFail();
-
-        if ($invitation->accepted_at) {
-            throw ValidationException::withMessages([
-                'token' => 'Invitation already accepted.',
-            ]);
-        }
-
-        if ($invitation->expires_at < now()) {
-            throw ValidationException::withMessages([
-                'token' => 'Invitation expired.',
-            ]);
-        }
+        $invitation = $this->invitationService->findOpen($token);
 
         return view('invitations.show', [
             'invitation' => $invitation,
@@ -96,21 +82,7 @@ class InvitationController extends Controller
 
     public function showAccept(string $token)
     {
-        $invitation = Invitation::where('token', $token)
-            ->with(['tenant', 'group', 'tenantRole', 'invitedBy'])
-            ->firstOrFail();
-
-        if ($invitation->accepted_at) {
-            throw ValidationException::withMessages([
-                'token' => 'Invitation already accepted.',
-            ]);
-        }
-
-        if ($invitation->expires_at < now()) {
-            throw ValidationException::withMessages([
-                'token' => 'Invitation expired.',
-            ]);
-        }
+        $invitation = $this->invitationService->findOpen($token);
 
         return view('invitations.accept', compact('invitation'));
     }
