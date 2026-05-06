@@ -33,9 +33,11 @@ Route::prefix('invitations')->name('invitations.')->group(function () {
         ->middleware(['auth', 'ban.check', 'identify.tenant'])
         ->name('tenant.store');
 
-    Route::get('{token}', [InvitationController::class, 'show'])->name('show');
-    Route::get('{token}/accept', [InvitationController::class, 'showAccept'])->name('accept');
-    Route::post('{token}/accept', [InvitationController::class, 'accept'])->name('accept.store');
+    Route::middleware('guest')->prefix('{token}')->group(function () {
+        Route::get('', [InvitationController::class, 'show'])->name('show');
+        Route::get('accept', [InvitationController::class, 'showAccept'])->name('accept');
+        Route::post('accept', [InvitationController::class, 'accept'])->name('accept.store');
+    });
 });
 
 Route::middleware(['auth', 'is.owner'])->prefix('owner')->name('owner.')->group(function () {
