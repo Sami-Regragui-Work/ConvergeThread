@@ -4,15 +4,22 @@ namespace App\Policies;
 
 use App\Models\TenantRole;
 use App\Models\User;
+use App\Services\TenantPermissionService;
+use App\Support\Permissions;
 
 class TenantRolePolicy
 {
+    public function __construct(
+        private readonly TenantPermissionService $tenantPermissionService
+    ) {
+    }
+
     /**
      * Determine whether the user can view any models.
      */
     public function viewAny(User $viewer): bool
     {
-        return $this->isTenantAdmin($viewer);
+        return $this->tenantPermissionService->hasPermission($viewer, Permissions::TENANT_ROLES_VIEW);
     }
 
     /**
@@ -20,7 +27,19 @@ class TenantRolePolicy
      */
     public function create(User $creator): bool
     {
-        return $this->isTenantAdmin($creator);
+        return $this->tenantPermissionService->hasPermission($creator, Permissions::TENANT_ROLES_CREATE);
+    }
+
+    /**
+     * Determine whether the user can update the model.
+     */
+    public function update(User $editor, TenantRole $tenantRole): bool
+    {
+        if ($editor->tenant_id !== $tenantRole->tenant_id) {
+            return false;
+        }
+
+        return $this->tenantPermissionService->hasPermission($editor, Permissions::TENANT_ROLES_UPDATE);
     }
 
     /**
@@ -28,19 +47,10 @@ class TenantRolePolicy
      */
     public function delete(User $deleter, TenantRole $tenantRole): bool
     {
-        if (!$this->isTenantAdmin($deleter)) {
+        if ($deleter->tenant_id !== $tenantRole->tenant_id) {
             return false;
         }
 
-        return $deleter->tenant_id === $tenantRole->tenant_id;
-    }
-
-    private function isTenantAdmin(User $user): bool
-    {
-        if ($user->banned_by_id !== null || !$user->tenantRole) {
-            return false;
-        }
-
-        return $user->tenantRole->name === 'admin';
+        return $this->tenantPermissionService->hasPermission($deleter, Permissions::TENANT_ROLES_DELETE);
     }
 }
