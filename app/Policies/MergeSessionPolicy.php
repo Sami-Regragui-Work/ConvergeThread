@@ -4,12 +4,13 @@ namespace App\Policies;
 
 use App\Models\MergeSession;
 use App\Models\User;
-use App\Services\GroupPermissionService;
+use App\Services\ChatablePermissionService;
+use App\Support\Permissions;
 
 class MergeSessionPolicy
 {
     public function __construct(
-        private readonly GroupPermissionService $groupPermissionService
+        private readonly ChatablePermissionService $chatablePermissionService
     ) {
     }
 
@@ -26,13 +27,7 @@ class MergeSessionPolicy
      */
     public function view(User $viewer, MergeSession $mergeSession): bool
     {
-        foreach ($mergeSession->groups as $group) {
-            if ($this->groupPermissionService->hasPermission($group, $viewer, 'merge_sessions.view')) {
-                return true;
-            }
-        }
-
-        return false;
+        return $this->chatablePermissionService->hasPermission($mergeSession, $viewer, Permissions::MERGE_SESSIONS_VIEW);
     }
 
     /**
@@ -48,12 +43,6 @@ class MergeSessionPolicy
      */
     public function delete(User $ender, MergeSession $mergeSession): bool
     {
-        foreach ($mergeSession->groups as $group) {
-            if (!$this->groupPermissionService->hasPermission($group, $ender, 'merge_sessions.delete')) {
-                return false;
-            }
-        }
-
-        return $mergeSession->groups->isNotEmpty();
+        return $this->chatablePermissionService->hasPermission($mergeSession, $ender, Permissions::MERGE_SESSIONS_DELETE);
     }
 }
