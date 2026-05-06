@@ -5,49 +5,74 @@ namespace App\Services;
 use App\Models\Group;
 use App\Models\GroupMember;
 use App\Models\User;
+use App\Support\Permissions;
 
 class GroupPermissionService
 {
     public function getMembership(Group $group, User $member): ?GroupMember
     {
-        return GroupMember::where('group_id', $group->id)
+        return GroupMember::query()
+            ->where('group_id', $group->id)
             ->where('user_id', $member->id)
             ->whereNull('left_at')
+            ->with('groupRoleOverride')
             ->first();
     }
 
-    public function getEffectivePermissions(Group $group, User $member): array
+    public function isActiveMember(Group $group, User $user): bool
     {
-        if ($member->banned_by_id !== null || $member->tenant_id !== $group->tenant_id) {
-            return [];
-        }
-
-        if ($group->creator_id === $member->id) {
-            return ['*'];
-        }
-
-        $membership = $this->getMembership($group, $member);
-
-        if (!$membership) {
-            return [];
-        }
-
-        $rolePermissions = $membership->groupRoleOverride?->permissions
-            ?? $member->tenantRole?->permissions
-            ?? [];
-
-        $membershipPermissions = $membership->permissions ?? [];
-
-        return array_values(array_unique([
-            ...$rolePermissions,
-            ...$membershipPermissions,
-        ]));
+        return $this->getMembership($group, $user) !== null;
     }
 
-    public function hasPermission(Group $group, User $member, string $permission): bool
+    public function getDirectPermissions(Group $group, User $user): array
     {
-        $permissions = $this->getEffectivePermissions($group, $member);
+        if ($user->banned_by_id !== null || $user->tenant_id !== $group->tenant_id) {
+            return [];
+        }
 
-        return in_array('*', $permissions) || in_array($permission, $permissions);
+        $membership = $this->getMembership($group, $user);
+
+        $tenantPermissions = $user->tenantRole?->permissions ?? [];
+        $groupRolePermissions = $membership?->groupRoleOverride?->permissions ?? [];
+        $membershipPermissions = $membership?->permissions ?? [];
+
+        $directPermissions = [
+            ...$tenantPermissions,
+            ...$groupRolePermissions,
+            ...$membershipPermissions,
+        ];
+
+        if ($membership) {
+            $directPermissions = [
+                ...$directPermissions,
+                ...Permissions::memberDefaults(),
+            ];
+        }
+
+        return array_values(array_unique($directPermissions));
+    }
+
+    public function getEffectivePermissions(Group $group, User $user): array
+    {
+        return Permissions::expand($this->getDirectPermissions($group, $user));
+    }
+
+    public function hasPermission(Group $group, User $user, string $permission): bool
+    {
+        if ($user->banned_by_id !== null || $user->tenant_id !== $group->tenant_id) {
+            return false;
+        }
+
+        $permissions = $this->getEffectivePermissions($group, $user);
+
+        if (!in_array($permission, $permissions, true)) {
+            return false;
+        }
+
+        if (!Permissions::requiresGroupMembership($permission)) {
+            return true;
+        }
+
+        return $this->isActiveMember($group, $user);
     }
 }
