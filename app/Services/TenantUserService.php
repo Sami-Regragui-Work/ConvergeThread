@@ -38,7 +38,7 @@ class TenantUserService
 
     public function findTenantBySlug(string $slug): Tenant
     {
-        $tenant = Tenant::where('name', $slug)->first();
+        $tenant = Tenant::where('slug', $slug)->first();
         if (!$tenant) {
             throw new InvalidArgumentException("Tenant '{$slug}' not found", 422);
         }
