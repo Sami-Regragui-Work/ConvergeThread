@@ -24,7 +24,7 @@ class MergeSessionController extends Controller
 
         $sessions = $this->mergeService->getActive()->load('groups');
 
-        return view('merge_sessions.index', compact('sessions'));
+        return view('merge-sessions.index', compact('sessions'));
     }
 
     /**
@@ -34,7 +34,7 @@ class MergeSessionController extends Controller
     {
         Gate::authorize('create', MergeSession::class);
 
-        return view('merge_sessions.create');
+        return view('merge-sessions.create');
     }
 
     /**
@@ -69,7 +69,7 @@ class MergeSessionController extends Controller
 
         $mergeSession->load('groups');
 
-        return view('merge_sessions.show', compact('mergeSession'));
+        return view('merge-sessions.show', compact('mergeSession'));
     }
 
     /**
