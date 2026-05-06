@@ -11,16 +11,48 @@ use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class InvitationService
 {
-    public function __construct(private TenantUserService $tenantUserService)
-    {
+    public function __construct(
+        private readonly TenantUserService $tenantUserService,
+    ) {
     }
+
     public function createAdminInvitation(string $email, User $owner): Invitation
     {
+        if (!$owner->isOwner()) {
+            throw ValidationException::withMessages([
+                'email' => 'Only the owner can create admin invitations.',
+            ]);
+        }
+
+        if (User::where('email', $email)->exists()) {
+            throw ValidationException::withMessages([
+                'email' => 'A user with this email already exists.',
+            ]);
+        }
+
+        $tenant = Tenant::findOrFail($owner->tenant_id);
+
+        if ((string) $tenant->id !== '1') {
+            throw ValidationException::withMessages([
+                'email' => 'Admin invitations are only allowed for the owner tenant.',
+            ]);
+        }
+
+        $this->expireOld($email);
+
+        // ensures none duplicate owner
+        if (User::where('tenant_id', $tenant->id)->exists()) {
+            throw ValidationException::withMessages([
+                'token' => 'The owner account already exists.',
+            ]);
+        }
+
         return Invitation::create([
-            'tenant_id' => 1,
+            'tenant_id' => $tenant->id,
             'invited_by_id' => $owner->id,
             'email' => $email,
             'token' => Str::random(60),
@@ -33,8 +65,34 @@ class InvitationService
         User $invitedBy,
         Tenant $tenant,
         ?Group $group = null,
-        ?TenantRole $tenantRole = null
+        ?TenantRole $tenantRole = null,
     ): Invitation {
+        if ($invitedBy->tenant_id !== $tenant->id) {
+            throw ValidationException::withMessages([
+                'email' => 'Inviter does not belong to this tenant.',
+            ]);
+        }
+
+        if ($group && $group->tenant_id !== $tenant->id) {
+            throw ValidationException::withMessages([
+                'email' => 'Selected group does not belong to this tenant.',
+            ]);
+        }
+
+        if ($tenantRole && $tenantRole->tenant_id !== $tenant->id) {
+            throw ValidationException::withMessages([
+                'email' => 'Selected tenant role does not belong to this tenant.',
+            ]);
+        }
+
+        if (User::where('email', $email)->exists()) {
+            throw ValidationException::withMessages([
+                'email' => 'A user with this email already exists.',
+            ]);
+        }
+
+        $this->expireOld($email);
+
         return Invitation::create([
             'tenant_id' => $tenant->id,
             'group_id' => $group?->id,
@@ -48,18 +106,30 @@ class InvitationService
 
     public function acceptInvitation(string $token, string $password, ?string $displayName = null): array
     {
-        /**
-         * @var Invitation
-         */
-        $invitation = Invitation::with('tenant')
+        $invitation = Invitation::with(['tenant', 'group', 'tenantRole', 'invitedBy'])
             ->where('token', $token)
             ->whereNull('accepted_at')
             ->where('expires_at', '>', now())
             ->firstOrFail();
 
         return DB::transaction(function () use ($invitation, $password, $displayName) {
+            // Validate invite data before creating the user.
+            $this->checkInvite($invitation);
+
+            if (User::where('email', $invitation->email)->exists()) {
+                throw ValidationException::withMessages([
+                    'email' => 'A user with this email already exists.',
+                ]);
+            }
+
+            if ((string) $invitation->tenant_id === '1' && User::where('tenant_id', 1)->exists()) {
+                throw ValidationException::withMessages([
+                    'token' => 'The owner account has already been created.',
+                ]);
+            }
+
             $username = $this->tenantUserService->generateUniqueTenantUsername(
-                $displayName ?? $invitation->email,
+                $displayName ?: Str::before($invitation->email, '@'),
                 $invitation->tenant
             );
 
@@ -86,12 +156,46 @@ class InvitationService
                 );
             }
 
-            $invitation->update(['accepted_at' => now()]);
+            $invitation->update([
+                'accepted_at' => now(),
+            ]);
 
             return [
                 'user' => $user,
-                'invitation' => $invitation,
+                'invitation' => $invitation->fresh(['tenant', 'group', 'tenantRole', 'invitedBy']),
             ];
         });
+    }
+
+    private function expireOld(string $email): void
+    {
+        Invitation::query()
+            ->where('email', $email)
+            ->whereNull('accepted_at')
+            ->where('expires_at', '>', now())
+            ->update([
+                'expires_at' => now(),
+            ]);
+    }
+
+    private function checkInvite(Invitation $invitation): void
+    {
+        if (!$invitation->tenant) {
+            throw ValidationException::withMessages([
+                'token' => 'Invitation tenant was not found.',
+            ]);
+        }
+
+        if ($invitation->group && $invitation->group->tenant_id !== $invitation->tenant_id) {
+            throw ValidationException::withMessages([
+                'token' => 'Invitation group does not belong to the invitation tenant.',
+            ]);
+        }
+
+        if ($invitation->tenantRole && $invitation->tenantRole->tenant_id !== $invitation->tenant_id) {
+            throw ValidationException::withMessages([
+                'token' => 'Invitation role does not belong to the invitation tenant.',
+            ]);
+        }
     }
 }
