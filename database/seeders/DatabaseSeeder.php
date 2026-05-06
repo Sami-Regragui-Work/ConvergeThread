@@ -5,7 +5,7 @@ namespace Database\Seeders;
 use App\Models\User;
 use Database\Seeders\permaments\OwnerSeeder;
 use Database\Seeders\permaments\SystemTenantSeeder;
-use Database\Seeders\permanents\SystemTenantRoleSeeder;
+use Database\Seeders\permaments\SystemTenantRoleSeeder;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 

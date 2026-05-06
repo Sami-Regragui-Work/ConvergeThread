@@ -1,6 +1,6 @@
 <?php
 
-namespace Database\Seeders\permanents;
+namespace Database\Seeders\permaments;
 
 use App\Models\TenantRole;
 use App\Support\Permissions;
