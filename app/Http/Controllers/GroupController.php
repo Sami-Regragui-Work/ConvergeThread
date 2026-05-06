@@ -1,11 +1,11 @@
 <?php
 
-
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreGroupRequest;
 use App\Http\Requests\UpdateGroupRequest;
 use App\Models\Group;
+use App\Models\User;
 use App\Services\GroupService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -20,8 +20,14 @@ class GroupController extends Controller
     /**
      * Display a listing of the resource.
      */
+    /**
+     * Display a listing of the resource.
+     */
     public function index()
     {
+        /**
+         * @var User
+         */
         $user = Auth::user();
         Gate::authorize('viewAny', Group::class);
 
@@ -30,7 +36,9 @@ class GroupController extends Controller
             ->with('creator:id,display_name')
             ->get();
 
-        return view('groups.index', compact('groups'));
+        $memberGroupIds = $user->groups()->pluck('group_members.group_id');
+
+        return view('groups.index', compact('groups', 'memberGroupIds'));
     }
 
     /**
@@ -59,7 +67,7 @@ class GroupController extends Controller
         );
 
         return redirect()
-            ->route('groups.show', $group)
+            ->route('groups.index', $group)
             ->with('success', 'Group created successfully.');
     }
 
@@ -73,7 +81,7 @@ class GroupController extends Controller
         $group->load([
             'creator:id,display_name',
             'activeMembers:id,display_name,username',
-            'tenant:id,name'
+            'tenant:id,name',
         ]);
 
         return view('groups.show', compact('group'));
@@ -108,6 +116,19 @@ class GroupController extends Controller
         return redirect()
             ->route('groups.show', $group)
             ->with('success', 'Group updated successfully.');
+    }
+
+    public function join(Group $group)
+    {
+        Gate::authorize('create', Group::class);
+
+        $user = Auth::user();
+
+        $this->groupService->joinGroup($group, $user);
+
+        return redirect()
+            ->route('groups.index')
+            ->with('success', "You have joined {$group->name}.");
     }
 
     /**

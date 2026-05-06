@@ -3,9 +3,11 @@
 namespace App\Services;
 
 use App\Models\Group;
+use App\Models\GroupMember;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class GroupService
 {
@@ -24,6 +26,30 @@ class GroupService
 
             return $group;
         });
+    }
+
+    public function joinGroup(Group $group, User $user): GroupMember
+    {
+        if ($user->tenant_id !== $group->tenant_id) {
+            throw new AuthorizationException('You cannot join a group outside your tenant.');
+        }
+
+        $already = $group->activeMembers()->where('users.id', $user->id)->exists();
+
+        if ($already) {
+            throw ValidationException::withMessages([
+                'group' => 'You are already a member of this group.',
+            ]);
+        }
+
+        $group->members()->attach($user->id, [
+            'tenant_role_id' => $user->tenant_role_id,
+            'group_role_override_id' => null,
+            'permissions' => null,
+            'left_at' => null,
+        ]);
+
+        return $group->members()->where('users.id', $user->id)->first()->pivot;
     }
 
     public function updateName(Group $group, User $updater, string $name): Group
