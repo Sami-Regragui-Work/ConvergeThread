@@ -2,12 +2,10 @@
 
 namespace App\Policies;
 
-use App\Models\Duo;
-use App\Models\Group;
-use App\Models\MergeSession;
 use App\Models\Message;
 use App\Models\User;
 use App\Services\ChatablePermissionService;
+use App\Support\Permissions;
 
 class MessagePolicy
 {
@@ -16,50 +14,31 @@ class MessagePolicy
     ) {
     }
 
-    /**
-     * Determine whether the user can view the model.
-     */
-    public function view(User $viewer, Message $message): bool
+    public function viewAny(User $viewer, mixed $chatable): bool
     {
-        return $this->chatablePermissionService->hasPermission(
-            $message->chatable,
-            $viewer,
-            'messages.view'
-        );
+        return $this->chatablePermissionService->hasPermission($chatable, $viewer, Permissions::MESSAGES_VIEW);
     }
 
-    /**
-     * Determine whether the user can create models.
-     */
-    public function create(User $creator, Group|Duo|MergeSession $chatable): bool
+    public function create(User $creator, mixed $chatable): bool
     {
-        return $this->chatablePermissionService->hasPermission(
-            $chatable,
-            $creator,
-            'messages.create'
-        );
+        return $this->chatablePermissionService->hasPermission($chatable, $creator, Permissions::MESSAGES_CREATE);
     }
 
-    /**
-     * Determine whether the user can update the model.
-     */
     public function update(User $editor, Message $message): bool
     {
-        return $message->user_id === $editor->id
-            && $this->view($editor, $message);
+        if ($message->user_id !== $editor->id) {
+            return false;
+        }
+
+        return $this->chatablePermissionService->hasPermission($message->chatable, $editor, Permissions::MESSAGES_UPDATE_OWN);
     }
 
-    /**
-     * Determine whether the user can delete the model.
-     */
     public function delete(User $deleter, Message $message): bool
     {
-        return $message->user_id === $deleter->id
-            && $this->view($deleter, $message);
-    }
+        if ($message->user_id === $deleter->id) {
+            return $this->chatablePermissionService->hasPermission($message->chatable, $deleter, Permissions::MESSAGES_DELETE_OWN);
+        }
 
-    public function thread(User $viewer, Message $message): bool
-    {
-        return $this->view($viewer, $message);
+        return $this->chatablePermissionService->hasPermission($message->chatable, $deleter, Permissions::MESSAGES_DELETE_ANY);
     }
 }
