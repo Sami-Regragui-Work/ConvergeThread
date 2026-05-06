@@ -4,6 +4,7 @@ namespace Database\Seeders\permaments;
 
 use App\Models\Tenant;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
 
 class SystemTenantSeeder extends Seeder
 {
@@ -17,7 +18,7 @@ class SystemTenantSeeder extends Seeder
                 'id' => 1,
             ],
             [
-                'name' => 'ConvergeThread Owner',
+                'slug' => Str::slug('ConvergeThread Owner', '_'),
                 'admin_email' => 'sami.regragui.work@protonmail.com',
                 'closed_by_id' => null,
             ]

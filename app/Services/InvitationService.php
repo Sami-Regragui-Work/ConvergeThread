@@ -203,7 +203,7 @@ class InvitationService
 
     private function generateUniqueSlug(string $name): string
     {
-        $base = Str::slug($name);
+        $base = Str::slug($name, '_');
         $slug = $base;
         $i = 2;
 
