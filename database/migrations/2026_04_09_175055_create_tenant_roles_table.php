@@ -11,10 +11,12 @@ return new class extends Migration {
     {
         Schema::create('tenant_roles', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('tenant_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('tenant_id')->nullable()->constrained()->cascadeOnDelete();
+            $table->boolean('is_system')->default(false);
             $table->string('name', 100);
             $table->json('permissions');
             $table->unique(['tenant_id', 'name']);
+            $table->unique(['name', 'is_system']);
             $table->timestamps();
         });
     }
