@@ -26,7 +26,7 @@ class DuoController extends Controller
 
         $duos = $this->duoService->getUserDuos($group, $user);
 
-        return view('duos.index', compact('duos', 'group'));
+        return view('groups.duos.index', compact('duos', 'group'));
     }
 
     /**

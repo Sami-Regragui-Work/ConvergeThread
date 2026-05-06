@@ -73,7 +73,11 @@ class GroupController extends Controller
         $group->load([
             'creator:id,display_name',
             'activeMembers:id,display_name,username',
+<<<<<<< Updated upstream
             'tenant:id,name'
+=======
+            'tenant:id,slug',
+>>>>>>> Stashed changes
         ]);
 
         return view('groups.show', compact('group'));
