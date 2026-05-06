@@ -63,7 +63,7 @@
                 </div>
 
                 <nav class="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-                    @if((string) auth()->user()->tenant_id === '1')
+                    @if(auth()->user()->tenant_id === 1)
                         <p class="text-xs text-slate-500 uppercase tracking-widest px-2 mb-2">Owner</p>
 
                         <a href="{{ url('/owner') }}"

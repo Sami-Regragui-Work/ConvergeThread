@@ -114,6 +114,6 @@ class User extends Authenticatable /*implements JWTSubject*/
 
     public function isOwner(): bool
     {
-        return (string) $this->tenant_id == 1;
+        return $this->tenant_id === 1;
     }
 }

@@ -36,7 +36,7 @@ class InvitationService
 
         $tenant = Tenant::findOrFail($owner->tenant_id);
 
-        if ((string) $tenant->id !== '1') {
+        if ($tenant->id !== 1) {
             throw ValidationException::withMessages([
                 'email' => 'Admin invitations are only allowed for the owner tenant.',
             ]);
@@ -106,6 +106,9 @@ class InvitationService
 
     public function acceptInvitation(string $token, string $password, ?string $displayName = null): array
     {
+        /**
+         * @var Invitation
+         */
         $invitation = Invitation::with(['tenant', 'group', 'tenantRole', 'invitedBy'])
             ->where('token', $token)
             ->whereNull('accepted_at')
@@ -113,7 +116,7 @@ class InvitationService
             ->firstOrFail();
 
         return DB::transaction(function () use ($invitation, $password, $displayName) {
-            // Validate invite data before creating the user.
+            
             $this->checkInvite($invitation);
 
             if (User::where('email', $invitation->email)->exists()) {
@@ -122,7 +125,7 @@ class InvitationService
                 ]);
             }
 
-            if ((string) $invitation->tenant_id === '1' && User::where('tenant_id', 1)->exists()) {
+            if ($invitation->tenant_id === 1 && User::where('tenant_id', 1)->exists()) {
                 throw ValidationException::withMessages([
                     'token' => 'The owner account has already been created.',
                 ]);
