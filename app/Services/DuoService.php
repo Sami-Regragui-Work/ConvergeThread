@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Duo;
 use App\Models\Group;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Collection;
 
 class DuoService
 {
@@ -26,18 +27,21 @@ class DuoService
         );
     }
 
-    public function getUserDuos(Group $group, User $user): array
+    public function getGroupDuos(Group $group): Collection
     {
-        return [
-            'owned' => $group->duos()
-                ->where(
-                    fn($q) => $q
-                        ->where('user1_id', $user->id)
-                        ->orWhere('user2_id', $user->id)
-                )
-                ->get(),
-            'visible' => $group->duos()->get(),
-        ];
+        return $group->duos()->with(['userA', 'userB'])->get();
+    }
+
+    public function getUserDuos(Group $group, User $user): Collection
+    {
+        return $group->duos()
+            ->with(['userA', 'userB'])
+            ->where(
+                fn($q) => $q
+                    ->where('user1_id', $user->id)
+                    ->orWhere('user2_id', $user->id)
+            )
+            ->get();
     }
 
     public function delete(Duo $duo): bool

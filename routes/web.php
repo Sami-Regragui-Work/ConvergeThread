@@ -55,32 +55,35 @@ Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
 
         Route::post('{group}/join', [GroupController::class, 'join'])->name('join');
 
-        Route::middleware('group.member')->prefix('{group}')->group(function () {
-            Route::get('', [GroupController::class, 'show'])->name('show');
+        Route::prefix('{group}')->group(function () {
             Route::get('edit', [GroupController::class, 'edit'])->name('edit');
             Route::patch('', [GroupController::class, 'update'])->name('update');
             Route::delete('', [GroupController::class, 'destroy'])->name('destroy');
 
-            // Members
-            Route::prefix('members')->name('members.')->group(function () {
-                Route::get('', [GroupMemberController::class, 'index'])->name('index');
-                Route::post('', [GroupMemberController::class, 'store'])->name('store');
-                Route::patch('assign-role', [GroupMemberController::class, 'assignRole'])->name('assign-role');
-                Route::delete('', [GroupMemberController::class, 'destroy'])->name('destroy');
-            });
+            Route::middleware('group.member')->group(function () {
+                Route::get('', [GroupController::class, 'show'])->name('show');
 
-            // Duos
-            Route::prefix('duos')->name('duos.')->group(function () {
-                Route::get('', [DuoController::class, 'index'])->name('index');
-                Route::post('', [DuoController::class, 'store'])->name('store');
-                Route::delete('{duo}', [DuoController::class, 'destroy'])->name('destroy');
-            });
+                // Members
+                Route::prefix('members')->name('members.')->group(function () {
+                    Route::get('', [GroupMemberController::class, 'index'])->name('index');
+                    Route::post('', [GroupMemberController::class, 'store'])->name('store');
+                    Route::patch('assign-role', [GroupMemberController::class, 'assignRole'])->name('assign-role');
+                    Route::delete('', [GroupMemberController::class, 'destroy'])->name('destroy');
+                });
 
-            // Role overrides
-            Route::prefix('role-overrides')->name('role-overrides.')->group(function () {
-                Route::get('', [GroupRoleOverrideController::class, 'index'])->name('index');
-                Route::post('', [GroupRoleOverrideController::class, 'store'])->name('store');
-                Route::delete('{groupRoleOverride}', [GroupRoleOverrideController::class, 'destroy'])->name('destroy');
+                // Duos
+                Route::prefix('duos')->name('duos.')->group(function () {
+                    Route::get('', [DuoController::class, 'index'])->name('index');
+                    Route::post('', [DuoController::class, 'store'])->name('store');
+                    Route::delete('{duo}', [DuoController::class, 'destroy'])->name('destroy');
+                });
+
+                // Role overrides
+                Route::prefix('role-overrides')->name('role-overrides.')->group(function () {
+                    Route::get('', [GroupRoleOverrideController::class, 'index'])->name('index');
+                    Route::post('', [GroupRoleOverrideController::class, 'store'])->name('store');
+                    Route::delete('{groupRoleOverride}', [GroupRoleOverrideController::class, 'destroy'])->name('destroy');
+                });
             });
         });
     });

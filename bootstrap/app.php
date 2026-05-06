@@ -14,6 +14,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->redirectGuestsTo(fn() => route('auth.login'));
         $middleware->alias([
             'ban.check' => BanCheck::class,
             'group.member' => GroupMember::class,

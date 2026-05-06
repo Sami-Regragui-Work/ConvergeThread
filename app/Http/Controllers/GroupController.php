@@ -25,20 +25,11 @@ class GroupController extends Controller
      */
     public function index()
     {
-        /**
-         * @var User
-         */
+        /** @var User */
         $user = Auth::user();
         Gate::authorize('viewAny', Group::class);
 
-        $groups = Group::where('tenant_id', $user->tenant_id)
-            ->withCount(['activeMembers'])
-            ->with('creator:id,display_name')
-            ->get();
-
-        $memberGroupIds = $user->groups()->pluck('group_members.group_id');
-
-        return view('groups.index', compact('groups', 'memberGroupIds'));
+        return view('groups.index', $this->groupService->getIndexDataForUser($user));
     }
 
     /**
@@ -105,16 +96,10 @@ class GroupController extends Controller
         $cridentials = $request->validated();
         Gate::authorize('update', $group);
 
-        $user = Auth::user();
-
-        $group = $this->groupService->updateName(
-            $group,
-            $user,
-            $cridentials['name']
-        );
+        $group = $this->groupService->updateName($group, $cridentials['name']);
 
         return redirect()
-            ->route('groups.show', $group)
+            ->back()
             ->with('success', 'Group updated successfully.');
     }
 
@@ -134,12 +119,11 @@ class GroupController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Request $request, Group $group)
+    public function destroy(Group $group)
     {
-        $deleter = Auth::user();
         Gate::authorize('delete', $group);
 
-        $this->groupService->delete($group, $deleter);
+        $this->groupService->delete($group);
 
         return redirect()
             ->route('groups.index')

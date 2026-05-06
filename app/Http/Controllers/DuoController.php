@@ -24,8 +24,8 @@ class DuoController extends Controller
         $user = Auth::user();
         Gate::authorize('viewAny', [Duo::class, $group]);
 
-        $duos = $this->duoService->getUserDuos($group, $user);
-
+        $duos = $this->duoService->getGroupDuos($group);
+        
         return view('groups.duos.index', compact('duos', 'group'));
     }
 

@@ -6,7 +6,9 @@ use App\Models\Group;
 use App\Models\GroupMember;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Validation\ValidationException;
 
 class GroupService
@@ -22,6 +24,13 @@ class GroupService
                 'tenant_id' => $creator->tenant_id,
                 'name' => $name,
                 'creator_id' => $creator->id,
+            ]);
+
+            $group->members()->attach($creator->id, [
+                'tenant_role_id' => $creator->tenant_role_id,
+                'group_role_override_id' => null,
+                'permissions' => null,
+                'left_at' => null,
             ]);
 
             return $group;
@@ -52,22 +61,37 @@ class GroupService
         return $group->members()->where('users.id', $user->id)->first()->pivot;
     }
 
-    public function updateName(Group $group, User $updater, string $name): Group
+    public function updateName(Group $group, string $name): Group
     {
-        if ($updater->id !== $group->creator_id) {
-            throw new AuthorizationException('Only creator can update group name.');
-        }
-
         $group->update(['name' => $name]);
+
         return $group->fresh();
     }
 
-    public function delete(Group $group, User $deleter): void
+    public function delete(Group $group): void
     {
-        if ($deleter->id !== $group->creator_id) {
-            throw new AuthorizationException('Only creator can delete.');
-        }
-
         $group->delete();
+    }
+
+    public function getIndexDataForUser(User $user): array
+    {
+        $groups = Group::where('tenant_id', $user->tenant_id)
+            ->withCount(['activeMembers'])
+            ->with('creator:id,display_name')
+            ->get();
+
+        $memberGroupIds = $user->groups()->pluck('group_members.group_id');
+
+        $isAdminOrMod = $user->tenantRole && in_array(
+            $user->tenantRole->name,
+            ['Admin', 'Moderator'],
+            true
+        );
+
+        $managerGroupIds = $isAdminOrMod
+            ? $groups->pluck('id')
+            : $groups->where('creator_id', $user->id)->pluck('id');
+
+        return compact('groups', 'memberGroupIds', 'managerGroupIds');
     }
 }

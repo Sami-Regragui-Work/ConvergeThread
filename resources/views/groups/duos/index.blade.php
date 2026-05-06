@@ -4,7 +4,7 @@
 @section('content')
     <div class="max-w-3xl mx-auto">
         <div class="flex items-center gap-3 mb-6">
-            <a href="{{ url('/groups/' . $group->id) }}"
+            <a href="{{ route('groups.show', $group) }}"
                 class="p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -17,7 +17,7 @@
         <div class="bg-surface-200 border border-white/5 rounded-2xl overflow-hidden">
             <div class="divide-y divide-white/5">
                 @forelse($duos as $duo)
-                    <a href="{{ url('/groups/' . $group->id . '/duos/' . $duo->id) }}"
+                    <a href="{{ route('groups.duos.show', [$group, $duo]) }}"
                         class="flex items-center gap-4 px-5 py-4 hover:bg-white/5 transition group">
                         <div class="flex -space-x-2 shrink-0">
                             @foreach([$duo->userA, $duo->userB] as $u)
