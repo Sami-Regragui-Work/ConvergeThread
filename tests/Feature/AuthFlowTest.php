@@ -69,4 +69,51 @@ class AuthFlowTest extends TestCase
             'tenant_role_id' => $memberRoleId,
         ]);
     }
+
+    public function test_closed_tenant_user_cannot_login(): void
+    {
+        $owner = User::where('tenant_id', 1)->first();
+        $tenant = Tenant::create([
+            'slug' => 'closed_corp',
+            'admin_email' => 'admin@closed.com',
+            'closed_by_id' => $owner->id,
+        ]);
+        $memberRoleId = TenantRole::where('is_system', true)->where('name', 'Member')->value('id');
+
+        User::factory()->create([
+            'email' => 'member@closed.com',
+            'tenant_id' => $tenant->id,
+            'tenant_role_id' => $memberRoleId,
+        ]);
+
+        $response = $this->post(route('auth.login.store'), [
+            'email' => 'member@closed.com',
+            'password' => 'password',
+        ]);
+
+        $response->assertRedirect();
+        $this->assertGuest();
+    }
+
+    public function test_register_rejects_closed_tenant(): void
+    {
+        $owner = User::where('tenant_id', 1)->first();
+        Tenant::create([
+            'slug' => 'closed_corp',
+            'admin_email' => 'admin@closed.com',
+            'closed_by_id' => $owner->id,
+        ]);
+
+        $response = $this->post(route('auth.register.store'), [
+            'email' => 'newuser@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+            'tenant_slug' => 'closed_corp',
+            'display_name' => 'New User',
+        ]);
+
+        $response->assertRedirect();
+        $this->assertGuest();
+        $this->assertDatabaseMissing('users', ['email' => 'newuser@example.com']);
+    }
 }
