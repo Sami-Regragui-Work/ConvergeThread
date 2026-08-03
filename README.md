@@ -21,10 +21,10 @@ php artisan serve
 
 ## Documentation
 
-See [`docs/`](./docs/README.md) for architecture, roadmap, user flows, ERD, and branching rules.
+Project docs live in `references/` (gitignored, local only): architecture, roadmap, user flows, ERD, and branching rules. Start with `references/README.md`.
 
-Ground-truth scope documents live in `references/` (`.docx` files, gitignored locally).
+Scope documents in the same folder: the two `.docx` files (full project + MVP SOW).
 
 ## Branching
 
-Feature work uses `feature/*` branches merged into `main`. See [docs/branching.md](./docs/branching.md).
+Feature work uses `feature/*` branches merged into `main`. Branch rules are in `references/branching.md` (local).
