@@ -6,6 +6,7 @@ use App\Http\Requests\StoreMergeSessionRequest;
 use App\Models\Group;
 use App\Models\MergeSession;
 use App\Services\MergeSessionService;
+use App\Support\Flash;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 
@@ -59,9 +60,15 @@ class MergeSessionController extends Controller
 
         $session = $this->mergeService->start($group1, $group2);
 
-        return redirect()
-            ->route('merge-sessions.show', $session)
-            ->with('success', 'Merge session created successfully.');
+        return Flash::to(
+            'merge-sessions.show',
+            'Merge session created. Share the chat link with members of both groups.',
+            [[
+                'label' => 'Merged chat link',
+                'url' => route('messages.index', ['merge', $session->id]),
+            ]],
+            $session,
+        );
     }
 
     /**
