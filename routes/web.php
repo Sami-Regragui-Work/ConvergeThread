@@ -9,6 +9,7 @@ use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\MergeSessionController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\Owner\OwnerController;
+use App\Http\Controllers\Owner\OwnerTenantController;
 use App\Http\Controllers\Owner\OwnerUserController;
 use App\Http\Controllers\TenantRoleController;
 use Illuminate\Support\Facades\Auth;
@@ -45,6 +46,8 @@ Route::middleware(['auth', 'is.owner'])->prefix('owner')->name('owner.')->group(
     Route::get('', [OwnerController::class, 'index'])->name('index');
     Route::post('users/{user}/ban', [OwnerUserController::class, 'ban'])->name('users.ban');
     Route::delete('users/{user}/ban', [OwnerUserController::class, 'unban'])->name('users.unban');
+    Route::post('tenants/{tenant}/close', [OwnerTenantController::class, 'close'])->name('tenants.close');
+    Route::delete('tenants/{tenant}/close', [OwnerTenantController::class, 'reopen'])->name('tenants.reopen');
 });
 
 Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
@@ -112,6 +115,7 @@ Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
 
     // Messages
     Route::prefix('messages')->name('messages.')->group(function () {
+        Route::get('{chatType}/{chatId}/poll', [MessageController::class, 'poll'])->name('poll');
         Route::get('{message}/thread', [MessageController::class, 'thread'])->name('thread');
         Route::get('{chatType}/{chatId}', [MessageController::class, 'index'])->name('index');
         Route::post('{chatType}/{chatId}', [MessageController::class, 'store'])->name('store');
