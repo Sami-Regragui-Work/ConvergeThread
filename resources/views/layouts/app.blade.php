@@ -138,6 +138,8 @@
                                 d="M4 6h16M4 12h16M4 18h16" />
                         </svg>
                     </button>
+
+                    @include('partials.back-button')
                 @endauth
 
                 <div class="flex items-center gap-2 min-w-0">

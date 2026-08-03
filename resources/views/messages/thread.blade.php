@@ -21,12 +21,6 @@
         x-init="init()">
 
         <div class="flex items-center gap-3 pb-4 border-b border-white/5 mb-4 shrink-0">
-            <a href="{{ url()->previous() !== url()->current() ? url()->previous() : route('groups.index') }}"
-                class="p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-            </a>
             <div>
                 <p class="text-sm font-semibold text-white">Thread</p>
                 <p class="text-xs text-slate-500">Live replies every 3s</p>

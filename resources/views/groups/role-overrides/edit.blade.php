@@ -3,15 +3,7 @@
 
 @section('content')
     <div class="max-w-lg mx-auto">
-        <div class="flex items-center gap-3 mb-6">
-            <a href="{{ url('/groups/' . $group->id . '/role-overrides') }}"
-                class="p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-            </a>
-            <h1 class="text-xl font-bold text-white">Edit Role Override</h1>
-        </div>
+        <h1 class="text-xl font-bold text-white mb-6">Edit Role Override</h1>
 
         <div class="bg-surface-200 border border-white/5 rounded-2xl p-8 shadow-xl">
             <form method="POST" action="{{ url('/groups/' . $group->id . '/role-overrides/' . $override->id) }}"
