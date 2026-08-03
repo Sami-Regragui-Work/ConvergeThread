@@ -49,7 +49,7 @@ class MessageController extends Controller
      */
     public function store(StoreMessageRequest $request, string $chatType, int $chatId)
     {
-        $cridentials = $request->validated();
+        $credentials = $request->validated();
         $user = Auth::user();
 
         $chatable = match ($chatType) {
@@ -63,16 +63,16 @@ class MessageController extends Controller
 
         Gate::authorize('create', [Message::class, $chatable]);
 
-        $parent = isset($cridentials['parent_id'])
+        $parent = isset($credentials['parent_id'])
             ? Message::where('chatable_id', $chatId)
                 ->where('chatable_type', $chatable->getMorphClass())
-                ->findOrFail($cridentials['parent_id'])
+                ->findOrFail($credentials['parent_id'])
             : null;
 
         $this->messageService->create(
             $chatable,
             $user,
-            $cridentials['content'] ?? null,
+            $credentials['content'] ?? null,
             $request->file('file'),
             $parent
         );
@@ -87,15 +87,15 @@ class MessageController extends Controller
      */
     public function update(UpdateMessageRequest $request, Message $message)
     {
-        $cridentials = $request->validated();
+        $credentials = $request->validated();
         Gate::authorize('update', $message);
 
         $this->messageService->update(
             $message,
-            $cridentials['content'] ?? null,
+            $credentials['content'] ?? null,
             $request->file('file'),
-            $cridentials['remove_file'] ?? false,
-            $cridentials['empty_content'] ?? false
+            $credentials['remove_file'] ?? false,
+            $credentials['empty_content'] ?? false
         );
 
         return redirect()

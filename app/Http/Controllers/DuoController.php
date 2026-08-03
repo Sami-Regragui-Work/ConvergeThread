@@ -34,13 +34,13 @@ class DuoController extends Controller
      */
     public function store(StoreDuoRequest $request, Group $group)
     {
-        $cridentials = $request->validated();
+        $credentials = $request->validated();
         Gate::authorize('create', [Duo::class, $group]);
 
-        $user1 = User::where('tenant_id', $group->tenant_id)->findOrFail($cridentials['user1_id']);
-        $user2 = User::where('tenant_id', $group->tenant_id)->findOrFail($cridentials['user2_id']);
+        $user1 = User::where('tenant_id', $group->tenant_id)->findOrFail($credentials['user1_id']);
+        $user2 = User::where('tenant_id', $group->tenant_id)->findOrFail($credentials['user2_id']);
 
-        $this->duoService->create($group, $user1, $user2, $cridentials['name']);
+        $this->duoService->create($group, $user1, $user2, $credentials['name']);
 
         return redirect()
             ->route('groups.duos.index', $group)

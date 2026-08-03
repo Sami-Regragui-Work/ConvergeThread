@@ -47,13 +47,13 @@ class GroupController extends Controller
      */
     public function store(StoreGroupRequest $request)
     {
-        $cridentials = $request->validated();
+        $credentials = $request->validated();
         Gate::authorize('create', Group::class);
 
         $user = Auth::user();
 
         $group = $this->groupService->create(
-            $cridentials['name'],
+            $credentials['name'],
             $user
         );
 
@@ -93,10 +93,10 @@ class GroupController extends Controller
      */
     public function update(UpdateGroupRequest $request, Group $group)
     {
-        $cridentials = $request->validated();
+        $credentials = $request->validated();
         Gate::authorize('update', $group);
 
-        $group = $this->groupService->updateName($group, $cridentials['name']);
+        $group = $this->groupService->updateName($group, $credentials['name']);
 
         return redirect()
             ->back()

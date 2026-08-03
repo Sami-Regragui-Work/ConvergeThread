@@ -42,15 +42,15 @@ class TenantRoleController extends Controller
      */
     public function store(StoreTenantRoleRequest $request)
     {
-        $cridentials = $request->validated();
+        $credentials = $request->validated();
         Gate::authorize('create', TenantRole::class);
 
         $tenant = Auth::user()->tenant;
 
         $this->roleService->createTenantRole(
             $tenant,
-            $cridentials['name'],
-            $cridentials['permissions']
+            $credentials['name'],
+            $credentials['permissions']
         );
 
         return redirect()

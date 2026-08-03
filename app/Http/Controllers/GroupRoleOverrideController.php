@@ -32,15 +32,15 @@ class GroupRoleOverrideController extends Controller
      */
     public function store(StoreGroupRoleOverrideRequest $request, Group $group)
     {
-        $cridentials = $request->validated();
+        $credentials = $request->validated();
         Gate::authorize('create', [GroupRoleOverride::class, $group]);
 
-        $tenantRole = TenantRole::findOrFail($cridentials['tenant_role_id']);
+        $tenantRole = TenantRole::findOrFail($credentials['tenant_role_id']);
 
         $this->roleService->createGroupRoleOverride(
             $group,
             $tenantRole,
-            $cridentials['permissions'] ?? null
+            $credentials['permissions'] ?? null
         );
 
         return redirect()

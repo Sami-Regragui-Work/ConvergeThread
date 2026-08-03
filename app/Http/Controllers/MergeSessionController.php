@@ -42,16 +42,16 @@ class MergeSessionController extends Controller
      */
     public function store(StoreMergeSessionRequest $request)
     {
-        $cridentials = $request->validated();
+        $credentials = $request->validated();
         Gate::authorize('create', MergeSession::class);
 
         $user = Auth::user();
 
         $group1 = Group::where('tenant_id', $user->tenant_id)
-            ->findOrFail($cridentials['group1_id']);
+            ->findOrFail($credentials['group1_id']);
 
         $group2 = Group::where('tenant_id', $user->tenant_id)
-            ->findOrFail($cridentials['group2_id']);
+            ->findOrFail($credentials['group2_id']);
 
         $session = $this->mergeService->start($group1, $group2);
 
