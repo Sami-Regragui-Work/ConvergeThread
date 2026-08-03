@@ -37,4 +37,17 @@ class MergeSession extends Model
     {
         return $this->ended_at === null;
     }
+
+    public function getNameAttribute(): string
+    {
+        $groups = $this->relationLoaded('groups')
+            ? $this->groups
+            : $this->groups()->get();
+
+        if ($groups->count() >= 2) {
+            return $groups->get(0)->name . ' ↔ ' . $groups->get(1)->name;
+        }
+
+        return 'Merge Session #' . $this->id;
+    }
 }

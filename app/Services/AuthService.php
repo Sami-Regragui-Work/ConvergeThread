@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\TenantRole;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -24,12 +25,19 @@ class AuthService
             $tenant
         );
 
+        if ($tenant->isClosed()) {
+            throw new \Exception('This workspace is closed.', 403);
+        }
+
+        $memberRoleId = TenantRole::where('is_system', true)->where('name', 'Member')->value('id');
+
         $user = User::create([
             'email' => $email,
             'password' => Hash::make($password),
             'username' => $username,
             'display_name' => $displayName,
             'tenant_id' => $tenant->id,
+            'tenant_role_id' => $memberRoleId,
         ]);
 
         Auth::login($user);

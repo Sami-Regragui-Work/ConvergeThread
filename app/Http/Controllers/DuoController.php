@@ -25,8 +25,9 @@ class DuoController extends Controller
         Gate::authorize('viewAny', [Duo::class, $group]);
 
         $duos = $this->duoService->getGroupDuos($group);
-        
-        return view('groups.duos.index', compact('duos', 'group'));
+        $members = $group->activeMembers()->orderBy('display_name')->get();
+
+        return view('groups.duos.index', compact('duos', 'group', 'members'));
     }
 
     /**
@@ -52,7 +53,7 @@ class DuoController extends Controller
      */
     public function destroy(Group $group, Duo $duo)
     {
-        Gate::authorize('delete', [Duo::class, $group]);
+        Gate::authorize('delete', [$group, $duo]);
 
         $this->duoService->delete($duo);
 

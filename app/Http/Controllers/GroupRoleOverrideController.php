@@ -7,6 +7,7 @@ use App\Models\Group;
 use App\Models\GroupRoleOverride;
 use App\Models\TenantRole;
 use App\Services\RoleService;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 
 class GroupRoleOverrideController extends Controller
@@ -15,21 +16,19 @@ class GroupRoleOverrideController extends Controller
     {
     }
 
-    /**
-     * Display a listing of the resource.
-     */
     public function index(Group $group)
     {
         Gate::authorize('viewAny', [GroupRoleOverride::class, $group]);
 
         $overrides = $group->groupRoleOverrides()->with('tenantRole')->get();
+        $tenantRoles = TenantRole::where(function ($query) use ($group) {
+            $query->where('tenant_id', $group->tenant_id)
+                ->orWhere('is_system', true);
+        })->orderBy('name')->get();
 
-        return view('group_role_overrides.index', compact('overrides', 'group'));
+        return view('groups.role-overrides.index', compact('overrides', 'group', 'tenantRoles'));
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(StoreGroupRoleOverrideRequest $request, Group $group)
     {
         $credentials = $request->validated();
@@ -48,12 +47,9 @@ class GroupRoleOverrideController extends Controller
             ->with('success', 'Group role override created successfully.');
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
     public function destroy(Group $group, GroupRoleOverride $groupRoleOverride)
     {
-        Gate::authorize('delete', [GroupRoleOverride::class, $group]);
+        Gate::authorize('delete', [$group, $groupRoleOverride]);
 
         $this->roleService->deleteGroupRoleOverride($groupRoleOverride);
 

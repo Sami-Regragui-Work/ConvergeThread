@@ -44,10 +44,14 @@
                                     {{ $message->content }}
                                 @endif
                             </div>
-                            @if($message->replies->isNotEmpty() || ($message->is_file && !$message->parent_id))
+                            @if(!$message->parent_id)
                                 <a href="{{ route('messages.thread', $message) }}"
-                                    class="text-xs text-brand-400 hover:text-brand-300 mt-0.5">
-                                    {{ $message->replies->count() }} {{ Str::plural('reply', $message->replies->count()) }} →
+                                    class="text-xs text-brand-400 hover:text-brand-300 mt-0.5 block">
+                                    @if($message->replies->isNotEmpty())
+                                        {{ $message->replies->count() }} {{ Str::plural('reply', $message->replies->count()) }} →
+                                    @else
+                                        Open thread →
+                                    @endif
                                 </a>
                             @endif
                             @can('delete', $message)

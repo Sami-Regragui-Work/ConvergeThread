@@ -19,21 +19,29 @@ class GroupMemberController extends Controller
     ) {
     }
 
-    /**
-     * Display a listing of the resource.
-     */
     public function index(Group $group)
     {
         Gate::authorize('viewAny', [GroupMember::class, $group]);
 
-        $members = $this->groupMemberService->getActive($group);
+        $members = $this->groupMemberService->getActive($group)->load('user');
+        $memberUserIds = $members->pluck('user_id');
 
-        return view('groups.members.index', compact('members', 'group'));
+        $availableUsers = User::where('tenant_id', $group->tenant_id)
+            ->whereNotIn('id', $memberUserIds)
+            ->whereNull('banned_by_id')
+            ->orderBy('display_name')
+            ->get();
+
+        $roleOverrides = $group->groupRoleOverrides()->with('tenantRole')->get();
+
+        return view('groups.members.index', compact(
+            'members',
+            'group',
+            'availableUsers',
+            'roleOverrides',
+        ));
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(AddGroupMemberRequest $request, Group $group)
     {
         $credentials = $request->validated();
@@ -49,9 +57,6 @@ class GroupMemberController extends Controller
             ->with('success', 'Member added successfully.');
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
     public function destroy(RemoveGroupMemberRequest $request, Group $group)
     {
         $credentials = $request->validated();

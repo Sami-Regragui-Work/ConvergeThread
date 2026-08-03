@@ -34,7 +34,11 @@ class MergeSessionController extends Controller
     {
         Gate::authorize('create', MergeSession::class);
 
-        return view('merge-sessions.create');
+        $groups = Group::where('tenant_id', Auth::user()->tenant_id)
+            ->orderBy('name')
+            ->get();
+
+        return view('merge-sessions.create', compact('groups'));
     }
 
     /**

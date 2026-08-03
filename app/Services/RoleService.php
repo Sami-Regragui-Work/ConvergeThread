@@ -35,6 +35,22 @@ class RoleService
         ]);
     }
 
+    public function updateTenantRole(TenantRole $tenantRole, string $name, array $permissions): TenantRole
+    {
+        if ($tenantRole->is_system) {
+            throw ValidationException::withMessages([
+                'tenant_role' => 'System roles cannot be edited.',
+            ]);
+        }
+
+        $tenantRole->update([
+            'name' => $name,
+            'permissions' => $permissions,
+        ]);
+
+        return $tenantRole->fresh();
+    }
+
     public function deleteTenantRole(TenantRole $tenantRole): void
     {
         if ($tenantRole->is_system) {

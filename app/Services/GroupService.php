@@ -28,6 +28,8 @@ class GroupService
                 'creator_id' => $creator->id,
             ]);
 
+            $this->groupMemberService->add($group, $creator);
+
             return $group;
         });
     }

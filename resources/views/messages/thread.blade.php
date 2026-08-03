@@ -66,7 +66,7 @@
             $chatType = match ($message->chatable_type) {
                 'group', App\Models\Group::class => 'group',
                 'duo', App\Models\Duo::class => 'duo',
-                'merge_session', App\Models\MergeSession::class => 'merge',
+                'merge', 'merge_session', App\Models\MergeSession::class => 'merge',
                 default => 'group',
             };
         @endphp

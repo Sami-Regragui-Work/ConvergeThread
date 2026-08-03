@@ -9,6 +9,7 @@ use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\MergeSessionController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\Owner\OwnerController;
+use App\Http\Controllers\Owner\OwnerUserController;
 use App\Http\Controllers\TenantRoleController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -42,6 +43,8 @@ Route::prefix('invitations')->name('invitations.')->group(function () {
 
 Route::middleware(['auth', 'is.owner'])->prefix('owner')->name('owner.')->group(function () {
     Route::get('', [OwnerController::class, 'index'])->name('index');
+    Route::post('users/{user}/ban', [OwnerUserController::class, 'ban'])->name('users.ban');
+    Route::delete('users/{user}/ban', [OwnerUserController::class, 'unban'])->name('users.unban');
 });
 
 Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
@@ -93,6 +96,8 @@ Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
         Route::get('', [TenantRoleController::class, 'index'])->name('index');
         Route::get('create', [TenantRoleController::class, 'create'])->name('create');
         Route::post('', [TenantRoleController::class, 'store'])->name('store');
+        Route::get('{tenantRole}/edit', [TenantRoleController::class, 'edit'])->name('edit');
+        Route::patch('{tenantRole}', [TenantRoleController::class, 'update'])->name('update');
         Route::delete('{tenantRole}', [TenantRoleController::class, 'destroy'])->name('destroy');
     });
 

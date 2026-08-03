@@ -6,15 +6,11 @@
         <div class="flex items-center justify-between mb-6">
             <h1 class="text-xl font-bold text-white">Groups</h1>
             <div class="flex items-center gap-2">
-                @can('inviteTenant', App\Models\User::class)
-                    <a href="{{ route('groups.members.create', ['group' => '__tenant__']) }}"
+                @can('createMember', App\Models\Invitation::class)
+                    <button type="button" onclick="document.getElementById('workspace-invite').classList.toggle('hidden')"
                         class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-semibold px-4 py-2 rounded-xl transition">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                        </svg>
                         Invite to Workspace
-                    </a>
+                    </button>
                 @endcan
                 @can('create', App\Models\Group::class)
                     <a href="{{ route('groups.create') }}"
@@ -27,6 +23,22 @@
                 @endcan
             </div>
         </div>
+
+        @can('createMember', App\Models\Invitation::class)
+            <div id="workspace-invite" class="hidden mb-6 bg-surface-200 border border-white/5 rounded-2xl px-6 py-5">
+                <h2 class="text-sm font-semibold text-white mb-4">Invite someone to your workspace</h2>
+                <form method="POST" action="{{ route('invitations.tenant.store') }}" class="flex gap-3">
+                    @csrf
+                    <input type="hidden" name="tenant_id" value="{{ auth()->user()->tenant_id }}">
+                    <input type="email" name="email" placeholder="colleague@example.com" required
+                        class="flex-1 bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm placeholder-slate-500">
+                    <button type="submit"
+                        class="bg-brand-500 hover:bg-brand-600 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition">
+                        Send invite
+                    </button>
+                </form>
+            </div>
+        @endcan
 
         @if($groups->isEmpty())
             <div class="bg-surface-200 border border-white/5 rounded-2xl p-12 text-center">

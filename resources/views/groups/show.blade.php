@@ -92,6 +92,17 @@
             </div>
         </div>
 
+        @can('viewAny', [App\Models\GroupRoleOverride::class, $group])
+            <div class="bg-surface-200 border border-white/5 rounded-2xl overflow-hidden">
+                <div class="px-5 py-4 border-b border-white/5 flex items-center justify-between">
+                    <h2 class="text-sm font-semibold text-white">Role Overrides</h2>
+                    <a href="{{ route('groups.role-overrides.index', $group) }}"
+                        class="text-xs text-brand-400 hover:text-brand-300 transition">Manage</a>
+                </div>
+                <p class="px-5 py-4 text-sm text-slate-500">Customize permissions per role for this group.</p>
+            </div>
+        @endcan
+
         {{-- Group Chat --}}
         @can('viewAny', [App\Models\Message::class, $group])
             <div class="bg-surface-200 border border-white/5 rounded-2xl overflow-hidden">

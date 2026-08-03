@@ -178,6 +178,7 @@
                             <th class="px-4 py-3 text-left font-medium">Tenant</th>
                             <th class="px-4 py-3 text-left font-medium">Role</th>
                             <th class="px-4 py-3 text-left font-medium">Status</th>
+                            <th class="px-4 py-3 text-left font-medium">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/5">
@@ -202,10 +203,27 @@
                                         </span>
                                     @endif
                                 </td>
+                                <td class="px-4 py-3">
+                                    @if(!$user->isOwner())
+                                        @if($user->banned_by_id)
+                                            <form method="POST" action="{{ route('owner.users.unban', $user) }}">
+                                                @csrf @method('DELETE')
+                                                <button type="submit" class="text-xs text-emerald-400 hover:text-emerald-300">Unban</button>
+                                            </form>
+                                        @else
+                                            <form method="POST" action="{{ route('owner.users.ban', $user) }}">
+                                                @csrf
+                                                <button type="submit" class="text-xs text-red-400 hover:text-red-300">Ban</button>
+                                            </form>
+                                        @endif
+                                    @else
+                                        <span class="text-xs text-slate-600">—</span>
+                                    @endif
+                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="px-4 py-6 text-center text-slate-500">No users found.</td>
+                                <td colspan="8" class="px-4 py-6 text-center text-slate-500">No users found.</td>
                             </tr>
                         @endforelse
                     </tbody>
