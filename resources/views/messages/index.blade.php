@@ -32,11 +32,24 @@
                         <div class="relative">
                             <div
                                 class="px-4 py-2.5 rounded-2xl text-sm {{ $message->user_id === auth()->id() ? 'bg-brand-500 text-white rounded-tr-sm' : 'bg-surface-100 text-slate-200 rounded-tl-sm' }}">
-                                {{ $message->content }}
-                                @if($message->parent_id)
-                                    <span class="block text-xs opacity-60 mt-1">↩ thread</span>
+                                @if($message->is_file && $message->file_path)
+                                    <a href="{{ asset('storage/' . $message->file_path) }}" target="_blank" rel="noopener"
+                                        class="underline underline-offset-2 {{ $message->user_id === auth()->id() ? 'text-white' : 'text-brand-400' }}">
+                                        📎 File attachment
+                                    </a>
+                                    @if($message->content)
+                                        <p class="mt-1">{{ $message->content }}</p>
+                                    @endif
+                                @else
+                                    {{ $message->content }}
                                 @endif
                             </div>
+                            @if($message->replies->isNotEmpty() || ($message->is_file && !$message->parent_id))
+                                <a href="{{ route('messages.thread', $message) }}"
+                                    class="text-xs text-brand-400 hover:text-brand-300 mt-0.5">
+                                    {{ $message->replies->count() }} {{ Str::plural('reply', $message->replies->count()) }} →
+                                </a>
+                            @endif
                             @can('delete', $message)
                                 <div x-show="showActions" x-cloak
                                     class="absolute {{ $message->user_id === auth()->id() ? 'right-full mr-2' : 'left-full ml-2' }} top-1/2 -translate-y-1/2 flex items-center">
@@ -66,10 +79,13 @@
         {{-- Compose --}}
         <div class="pt-4 border-t border-white/5 mt-4 shrink-0">
             @can('create', [App\Models\Message::class, $chatable])
-                <form method="POST" action="{{ route('messages.store', [$chatType, $chatId]) }}" class="flex gap-3">
+                <form method="POST" action="{{ route('messages.store', [$chatType, $chatId]) }}"
+                    enctype="multipart/form-data" class="flex flex-col sm:flex-row gap-3">
                     @csrf
-                    <input type="text" name="content" required autocomplete="off" placeholder="Write a message..."
+                    <input type="text" name="content" autocomplete="off" placeholder="Write a message..."
                         class="flex-1 bg-surface-200 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition placeholder-slate-500">
+                    <input type="file" name="file" accept="*/*"
+                        class="text-xs text-slate-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-white/5 file:text-slate-300 hover:file:bg-white/10">
                     <button type="submit"
                         class="bg-brand-500 hover:bg-brand-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition">
                         Send

@@ -77,6 +77,12 @@ class MessageController extends Controller
             $parent
         );
 
+        if ($parent) {
+            return redirect()
+                ->route('messages.thread', $parent)
+                ->with('success', 'Reply sent successfully.');
+        }
+
         return redirect()
             ->route('messages.index', [$chatType, $chatId])
             ->with('success', 'Message sent successfully.');
@@ -121,6 +127,7 @@ class MessageController extends Controller
     {
         Gate::authorize('thread', $message);
 
+        $message->load('chatable');
         $thread = $this->messageService->getThread($message);
 
         $thread['message']->load(['user', 'parent']);

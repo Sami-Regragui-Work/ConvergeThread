@@ -41,4 +41,9 @@ class MessagePolicy
 
         return $this->chatablePermissionService->hasPermission($message->chatable, $deleter, Permissions::MESSAGES_DELETE_ANY);
     }
+
+    public function thread(User $viewer, Message $message): bool
+    {
+        return $this->viewAny($viewer, $message->chatable);
+    }
 }
