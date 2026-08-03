@@ -15,11 +15,11 @@
 
                 <h1 class="text-xl font-bold text-white mb-2">You've been invited</h1>
                 <p class="text-slate-400 text-sm mb-6">
-                    @if($invitation->tenant_id === 1)
-                        You've been invited to set up the <span class="text-white font-medium">owner account</span>.
+                    @if(is_null($invitation->tenant_id))
+                        You've been invited to create a new <span class="text-white font-medium">workspace</span> as its admin.
                     @else
                         You've been invited to join <span
-                            class="text-white font-medium">{{ $invitation->tenant->name ?? 'this workspace' }}</span>.
+                            class="text-white font-medium">{{ $invitation->tenant->name }}</span>.
                         @if($invitation->group)
                             <br>Group: <span class="text-brand-400">{{ $invitation->group->name }}</span>
                         @endif

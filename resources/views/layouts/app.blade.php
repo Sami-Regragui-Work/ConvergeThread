@@ -85,6 +85,11 @@
                             class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white text-sm transition {{ request()->is('merge-sessions*') ? 'bg-brand-500/10 text-brand-400' : '' }}">
                             Merge Sessions
                         </a>
+
+                        <a href="{{ route('tenant-roles.index') }}"
+                            class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white text-sm transition {{ request()->is('tenant-roles*') ? 'bg-brand-500/10 text-brand-400' : '' }}">
+                            Tenant Roles
+                        </a>
                     @endif
                 </nav>
 
