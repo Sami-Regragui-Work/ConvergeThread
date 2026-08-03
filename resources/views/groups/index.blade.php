@@ -1,6 +1,12 @@
 @extends('layouts.app')
 @section('title', 'Groups')
 
+@php
+    $breadcrumbs = [
+        ['label' => 'Groups'],
+    ];
+@endphp
+
 @section('content')
     <div class="max-w-4xl mx-auto">
         <div class="flex items-center justify-between mb-6">
