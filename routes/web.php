@@ -115,6 +115,7 @@ Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
 
     // Messages
     Route::prefix('messages')->name('messages.')->group(function () {
+        Route::get('{message}/attachment', [MessageController::class, 'attachment'])->name('attachment');
         Route::get('{chatType}/{chatId}/poll', [MessageController::class, 'poll'])->name('poll');
         Route::get('{message}/thread', [MessageController::class, 'thread'])->name('thread');
         Route::get('{chatType}/{chatId}', [MessageController::class, 'index'])->name('index');

@@ -47,8 +47,8 @@
             </div>
         </section>
 
-        <section class="grid gap-8 xl:grid-cols-3">
-            <div class="xl:col-span-1">
+        <section class="space-y-6">
+            <div class="max-w-md">
                 <div class="rounded-2xl border border-white/5 bg-surface-200 p-6 shadow-xl shadow-black/10">
                     <div class="mb-5">
                         <h2 class="text-lg font-semibold text-white">Invite Tenant Admin</h2>
@@ -81,17 +81,16 @@
                 </div>
             </div>
 
-            <div class="xl:col-span-2">
-                <div class="rounded-2xl border border-white/5 bg-surface-200 shadow-xl shadow-black/10 overflow-hidden">
-                    <div class="flex items-center justify-between gap-3 border-b border-white/5 px-6 py-4">
-                        <div>
-                            <h2 class="text-lg font-semibold text-white">Tenants</h2>
-                            <p class="text-sm text-slate-400">Public info overview.</p>
-                        </div>
+            <div class="min-w-0 rounded-2xl border border-white/5 bg-surface-200 shadow-xl shadow-black/10 overflow-hidden">
+                <div class="flex items-center justify-between gap-3 border-b border-white/5 px-6 py-4">
+                    <div>
+                        <h2 class="text-lg font-semibold text-white">Tenants</h2>
+                        <p class="text-sm text-slate-400">Public info overview.</p>
                     </div>
+                </div>
 
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full text-sm">
+                <div class="overflow-x-auto">
+                    <table class="w-full min-w-0 text-sm">
                             <thead class="bg-white/3 text-slate-400">
                                 <tr>
                                     <th class="px-4 py-3 text-left font-medium">#</th>
@@ -147,7 +146,6 @@
                         </table>
                     </div>
                 </div>
-            </div>
         </section>
 
         <section class="rounded-2xl border border-white/5 bg-surface-200 shadow-xl shadow-black/10 overflow-hidden">

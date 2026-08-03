@@ -60,7 +60,7 @@ class Message extends Model
             'content' => $this->content,
             'is_file' => $this->is_file,
             'file_url' => $this->is_file && $this->file_path
-                ? asset('storage/' . $this->file_path)
+                ? route('messages.attachment', $this)
                 : null,
             'parent_id' => $this->parent_id,
             'created_at' => $this->created_at?->diffForHumans(),

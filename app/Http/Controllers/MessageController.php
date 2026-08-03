@@ -10,6 +10,8 @@ use App\Services\MessageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class MessageController extends Controller
 {
@@ -156,5 +158,18 @@ class MessageController extends Controller
             'chatType' => $chatType,
             'initialReplies' => $initialReplies,
         ]));
+    }
+
+    public function attachment(Message $message): StreamedResponse
+    {
+        Gate::authorize('view', $message);
+
+        abort_unless($message->is_file && $message->file_path, 404);
+        abort_unless(Storage::disk('public')->exists($message->file_path), 404);
+
+        return Storage::disk('public')->download(
+            $message->file_path,
+            basename($message->file_path),
+        );
     }
 }

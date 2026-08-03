@@ -92,7 +92,7 @@
             </div>
         </div>
 
-        @can('viewAny', [App\Models\GroupRoleOverride::class, $group])
+        @can('create', [App\Models\GroupRoleOverride::class, $group])
             <div class="bg-surface-200 border border-white/5 rounded-2xl overflow-hidden">
                 <div class="px-5 py-4 border-b border-white/5 flex items-center justify-between">
                     <h2 class="text-sm font-semibold text-white">Role Overrides</h2>

@@ -43,7 +43,7 @@
             </div>
 
             @if($message->is_file && $message->file_path)
-                <a href="{{ asset('storage/' . $message->file_path) }}" target="_blank" rel="noopener"
+                <a href="{{ route('messages.attachment', $message) }}" target="_blank" rel="noopener"
                     class="inline-flex items-center gap-2 text-brand-400 hover:text-brand-300 text-sm mb-2">
                     View attached file
                 </a>
