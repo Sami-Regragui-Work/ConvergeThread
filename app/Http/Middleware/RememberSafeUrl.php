@@ -14,17 +14,26 @@ class RememberSafeUrl
      */
     public function handle(Request $request, Closure $next): Response
     {
+        $tracked = $this->shouldTrack($request);
+        $pageUrl = $request->url();
+
+        if ($tracked) {
+            NavigationStack::record($pageUrl);
+        }
+
         $response = $next($request);
 
-        if (
-            $request->isMethod('GET')
-            && $response->isSuccessful()
-            && !$request->expectsJson()
-            && !$request->is('storage/*')
-        ) {
-            NavigationStack::record($request->fullUrl());
+        if ($tracked && !$response->isSuccessful()) {
+            NavigationStack::undoLast($pageUrl);
         }
 
         return $response;
+    }
+
+    private function shouldTrack(Request $request): bool
+    {
+        return $request->isMethod('GET')
+            && !$request->expectsJson()
+            && !$request->is('storage/*');
     }
 }

@@ -10,6 +10,8 @@ class NavigationStack
 
     public static function record(string $url): void
     {
+        $url = self::normalize($url);
+
         /** @var list<string> $stack */
         $stack = session(self::SESSION_KEY, []);
 
@@ -33,9 +35,22 @@ class NavigationStack
         }
     }
 
+    public static function undoLast(string $url): void
+    {
+        $url = self::normalize($url);
+
+        /** @var list<string> $stack */
+        $stack = session(self::SESSION_KEY, []);
+
+        if ($stack !== [] && end($stack) === $url) {
+            array_pop($stack);
+            session([self::SESSION_KEY => $stack]);
+        }
+    }
+
     public static function parentUrl(?string $current = null): ?string
     {
-        $current ??= url()->current();
+        $current = self::normalize($current ?? url()->current());
 
         /** @var list<string> $stack */
         $stack = session(self::SESSION_KEY, []);
@@ -64,5 +79,21 @@ class NavigationStack
     private static function isAllowed(string $url): bool
     {
         return !str_contains($url, '/auth/');
+    }
+
+    private static function normalize(string $url): string
+    {
+        $parts = parse_url($url);
+
+        if ($parts === false) {
+            return $url;
+        }
+
+        $scheme = $parts['scheme'] ?? 'http';
+        $host = $parts['host'] ?? 'localhost';
+        $port = isset($parts['port']) ? ':' . $parts['port'] : '';
+        $path = rtrim($parts['path'] ?? '/', '/') ?: '/';
+
+        return "{$scheme}://{$host}{$port}{$path}";
     }
 }
