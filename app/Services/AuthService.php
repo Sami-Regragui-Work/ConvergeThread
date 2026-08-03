@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-// use Tymon\JWTAuth\Facades\JWTAuth;
 
 class AuthService
 {
@@ -43,7 +42,7 @@ class AuthService
     public function login(string $email, string $password): User
     {
         if (!Auth::attempt(compact('email', 'password'), false)) {
-            throw new \Exception('Invalid cridentials', 401);
+            throw new \Exception('Invalid credentials', 401);
         }
 
         $user = Auth::user();
