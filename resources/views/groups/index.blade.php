@@ -74,7 +74,7 @@
                                     </svg>
                                 </a>
                             @else
-                                @can('create', App\Models\Group::class)
+                                @can('join', $group)
                                     <form method="POST" action="{{ route('groups.join', $group) }}">
                                         @csrf
                                         <button type="submit"

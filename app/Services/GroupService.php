@@ -11,6 +11,10 @@ use Illuminate\Validation\ValidationException;
 
 class GroupService
 {
+    public function __construct(private readonly GroupMemberService $groupMemberService)
+    {
+    }
+
     public function create(string $name, User $creator): Group
     {
         if ($creator->isOwner()) {
@@ -34,22 +38,13 @@ class GroupService
             throw new AuthorizationException('You cannot join a group outside your tenant.');
         }
 
-        $already = $group->activeMembers()->where('users.id', $user->id)->exists();
-
-        if ($already) {
+        if ($group->activeMembers()->where('users.id', $user->id)->exists()) {
             throw ValidationException::withMessages([
                 'group' => 'You are already a member of this group.',
             ]);
         }
 
-        $group->members()->attach($user->id, [
-            'tenant_role_id' => $user->tenant_role_id,
-            'group_role_override_id' => null,
-            'permissions' => null,
-            'left_at' => null,
-        ]);
-
-        return $group->members()->where('users.id', $user->id)->first()->pivot;
+        return $this->groupMemberService->add($group, $user);
     }
 
     public function updateName(Group $group, string $name): Group

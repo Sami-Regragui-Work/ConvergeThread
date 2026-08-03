@@ -20,8 +20,8 @@
                 </div>
             </div>
             <div class="flex items-center gap-2">
-                @can('join', [App\Models\GroupMember::class, $group])
-                    <form method="POST" action="{{ route('groups.members.join', $group) }}">
+                @can('join', $group)
+                    <form method="POST" action="{{ route('groups.join', $group) }}">
                         @csrf
                         <button type="submit"
                             class="inline-flex items-center gap-2 bg-brand-500/10 hover:bg-brand-500/20 text-brand-400 text-sm px-4 py-2 rounded-xl transition">
@@ -82,7 +82,7 @@
                 </div>
                 <div class="divide-y divide-white/5">
                     @forelse($group->duos ?? [] as $duo)
-                        <a href="{{ route('groups.duos.index', $group) }}" class="block px-5 py-3 hover:bg-white/5 transition">
+                        <a href="{{ route('messages.index', ['duo', $duo->id]) }}" class="block px-5 py-3 hover:bg-white/5 transition">
                             <p class="text-sm text-slate-300">{{ $duo->name }}</p>
                         </a>
                     @empty

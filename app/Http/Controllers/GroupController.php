@@ -72,7 +72,8 @@ class GroupController extends Controller
         $group->load([
             'creator:id,display_name',
             'activeMembers:id,display_name,username',
-            'tenant:id,slug'
+            'tenant:id,slug',
+            'duos:id,group_id,name,user1_id,user2_id',
         ]);
 
         return view('groups.show', compact('group'));
@@ -105,14 +106,14 @@ class GroupController extends Controller
 
     public function join(Group $group)
     {
-        Gate::authorize('create', Group::class);
+        Gate::authorize('join', $group);
 
         $user = Auth::user();
 
         $this->groupService->joinGroup($group, $user);
 
         return redirect()
-            ->route('groups.index')
+            ->route('groups.show', $group)
             ->with('success', "You have joined {$group->name}.");
     }
 

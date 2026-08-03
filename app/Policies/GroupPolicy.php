@@ -60,4 +60,21 @@ class GroupPolicy
     {
         return $this->groupPermissionService->hasPermission($group, $inviter, Permissions::GROUP_INVITE);
     }
+
+    public function join(User $user, Group $group): bool
+    {
+        if ($user->isOwner() || $user->banned_by_id !== null) {
+            return false;
+        }
+
+        if ($user->tenant_id !== $group->tenant_id) {
+            return false;
+        }
+
+        if ($group->activeMembers()->where('users.id', $user->id)->exists()) {
+            return false;
+        }
+
+        return $this->groupPermissionService->hasPermission(null, $user, Permissions::GROUP_CREATE);
+    }
 }
