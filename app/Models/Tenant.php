@@ -12,6 +12,7 @@ class Tenant extends Model
     protected $fillable = [
         'slug',
         'admin_email',
+        'closed_by_id',
     ];
 
     protected function casts(): array

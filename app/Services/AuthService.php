@@ -55,9 +55,21 @@ class AuthService
 
         $user = Auth::user();
 
+        if (!$user instanceof User) {
+            Auth::logout();
+            throw new \Exception('Invalid credentials', 401);
+        }
+
         if ($user->banned_by_id !== null) {
             Auth::logout();
             throw new \Exception('Banned account', 403);
+        }
+
+        $user->load('tenant');
+
+        if ($user->tenant && $user->tenant->isClosed()) {
+            Auth::logout();
+            throw new \Exception('This workspace is closed.', 403);
         }
 
         session()->regenerate();

@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Models\Tenant;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
 class IdentifyTenant
@@ -30,6 +31,16 @@ class IdentifyTenant
 
         if (!$tenant) {
             abort(404, 'Tenant not found.');
+        }
+
+        if ($tenant->isClosed()) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()
+                ->route('auth.login')
+                ->withErrors(['email' => 'This workspace is closed.']);
         }
 
         $request->attributes->set('tenant', $tenant);
