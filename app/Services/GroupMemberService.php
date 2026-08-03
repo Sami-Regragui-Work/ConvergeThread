@@ -5,8 +5,10 @@ namespace App\Services;
 use App\Models\Group;
 use App\Models\GroupMember;
 use App\Models\GroupRoleOverride;
+use App\Models\TenantRole;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Validation\ValidationException;
 
 class GroupMemberService
 {
@@ -61,6 +63,25 @@ class GroupMemberService
         ]);
 
         return $groupMember->fresh();
+    }
+
+    public function assignTenantRole(Group $group, User $member, TenantRole $tenantRole): User
+    {
+        if ((int) $member->tenant_id !== (int) $group->tenant_id) {
+            throw ValidationException::withMessages([
+                'user_id' => 'User does not belong to this workspace.',
+            ]);
+        }
+
+        if (!$tenantRole->isUsableByTenant($group->tenant_id)) {
+            throw ValidationException::withMessages([
+                'tenant_role_id' => 'Selected role does not belong to this workspace.',
+            ]);
+        }
+
+        $member->update(['tenant_role_id' => $tenantRole->id]);
+
+        return $member->fresh(['tenantRole']);
     }
 
     public function getActive(Group $group): Collection

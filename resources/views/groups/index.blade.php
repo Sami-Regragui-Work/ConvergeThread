@@ -32,14 +32,22 @@
 
         @can('createMember', App\Models\Invitation::class)
             <div id="workspace-invite" class="hidden mb-6 bg-surface-200 border border-white/5 rounded-2xl px-6 py-5">
-                <h2 class="text-sm font-semibold text-white mb-4">Invite someone to your workspace</h2>
-                <form method="POST" action="{{ route('invitations.tenant.store') }}" class="flex gap-3">
+                <h2 class="text-sm font-semibold text-white mb-1">Invite someone to your workspace</h2>
+                <p class="text-xs text-slate-500 mb-4">Defaults to Moderator if no role is selected.</p>
+                <form method="POST" action="{{ route('invitations.tenant.store') }}" class="flex flex-col sm:flex-row gap-3">
                     @csrf
                     <input type="hidden" name="tenant_id" value="{{ auth()->user()->tenant_id }}">
                     <input type="email" name="email" placeholder="colleague@example.com" required
-                        class="flex-1 bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm placeholder-slate-500">
+                        class="flex-1 min-w-0 bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm placeholder-slate-500">
+                    <select name="tenant_role_id"
+                        class="bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm min-w-40">
+                        <option value="">Moderator (default)</option>
+                        @foreach($tenantRoles as $role)
+                            <option value="{{ $role->id }}" @selected(old('tenant_role_id') == $role->id)>{{ $role->name }}</option>
+                        @endforeach
+                    </select>
                     <button type="submit"
-                        class="bg-brand-500 hover:bg-brand-600 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition">
+                        class="bg-brand-500 hover:bg-brand-600 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition shrink-0">
                         Send invite
                     </button>
                 </form>

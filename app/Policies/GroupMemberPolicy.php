@@ -43,4 +43,10 @@ class GroupMemberPolicy
     {
         return $this->groupPermissionService->hasPermission($group, $editor, Permissions::GROUP_MEMBERS_ASSIGN_ROLE);
     }
+
+    public function assignTenantRole(User $editor, Group $group): bool
+    {
+        return $this->assignRole($editor, $group)
+            || $this->groupPermissionService->hasPermission($group, $editor, Permissions::GROUP_INVITE);
+    }
 }

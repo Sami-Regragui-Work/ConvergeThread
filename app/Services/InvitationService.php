@@ -64,7 +64,7 @@ class InvitationService
             ]);
         }
 
-        if ($tenantRole && $tenantRole->tenant_id !== $tenant->id) {
+        if ($tenantRole && !$tenantRole->isUsableByTenant($tenant->id)) {
             throw ValidationException::withMessages([
                 'email' => 'Selected tenant role does not belong to this tenant.',
             ]);
@@ -243,7 +243,7 @@ class InvitationService
             ]);
         }
 
-        if ($invitation->tenantRole && $invitation->tenantRole->tenant_id !== $invitation->tenant_id) {
+        if ($invitation->tenantRole && !$invitation->tenantRole->isUsableByTenant($invitation->tenant_id)) {
             throw ValidationException::withMessages([
                 'token' => 'Invitation role does not belong to the invitation tenant.',
             ]);

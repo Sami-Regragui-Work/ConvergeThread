@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Group;
 use App\Models\GroupMember;
+use App\Models\TenantRole;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -80,6 +81,8 @@ class GroupService
             ? $groups->pluck('id')
             : $groups->where('creator_id', $user->id)->pluck('id');
 
-        return compact('groups', 'memberGroupIds', 'managerGroupIds');
+        $tenantRoles = TenantRole::assignableForInviter($user);
+
+        return compact('groups', 'memberGroupIds', 'managerGroupIds', 'tenantRoles');
     }
 }

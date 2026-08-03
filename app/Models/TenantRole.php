@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -46,8 +47,27 @@ class TenantRole extends Model
         return $query->where('is_system', true);
     }
 
-    public function scopeCustom(Builder $query): Builder
+    public function scopeForTenant(Builder $query, int $tenantId): Builder
     {
-        return $query->where('is_system', false);
+        return $query->where(function (Builder $inner) use ($tenantId): void {
+            $inner->where('tenant_id', $tenantId)
+                ->orWhere('is_system', true);
+        });
+    }
+
+    public function isUsableByTenant(?int $tenantId): bool
+    {
+        return $this->is_system || (int) $this->tenant_id === (int) $tenantId;
+    }
+
+    public static function assignableForInviter(User $inviter): Collection
+    {
+        $query = static::query()->forTenant($inviter->tenant_id)->orderBy('name');
+
+        if ($inviter->tenantRole?->name !== 'Admin') {
+            $query->where('name', '!=', 'Admin');
+        }
+
+        return $query->get();
     }
 }

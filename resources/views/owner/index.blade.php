@@ -48,8 +48,7 @@
         </section>
 
         <section class="space-y-6">
-            <div class="max-w-md">
-                <div class="rounded-2xl border border-white/5 bg-surface-200 p-6 shadow-xl shadow-black/10">
+            <div class="rounded-2xl border border-white/5 bg-surface-200 p-6 shadow-xl shadow-black/10">
                     <div class="mb-5">
                         <h2 class="text-lg font-semibold text-white">Invite Tenant Admin</h2>
                         <p class="mt-1 text-sm text-slate-400">This uses the existing owner invitation flow.</p>
@@ -78,7 +77,6 @@
                             Send owner invitation
                         </button>
                     </form>
-                </div>
             </div>
 
             <div class="min-w-0 rounded-2xl border border-white/5 bg-surface-200 shadow-xl shadow-black/10 overflow-hidden">

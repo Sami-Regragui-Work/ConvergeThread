@@ -56,7 +56,7 @@ class InvitationController extends Controller
             : null;
 
         $tenantRole = isset($credentials['tenant_role_id'])
-            ? TenantRole::where('tenant_id', $tenant->id)->findOrFail($credentials['tenant_role_id'])
+            ? TenantRole::query()->forTenant($tenant->id)->findOrFail($credentials['tenant_role_id'])
             : null;
 
         $invitation = $this->invitationService->createMemberInvitation(

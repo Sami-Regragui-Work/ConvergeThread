@@ -16,15 +16,23 @@
 
         @can('invite', $group)
             <div class="bg-surface-200 border border-white/5 rounded-2xl px-6 py-5">
-                <h2 class="text-sm font-semibold text-white mb-4">Invite by email</h2>
-                <form method="POST" action="{{ route('invitations.tenant.store') }}" class="flex gap-3">
+                <h2 class="text-sm font-semibold text-white mb-1">Invite by email</h2>
+                <p class="text-xs text-slate-500 mb-4">Defaults to Member if no role is selected.</p>
+                <form method="POST" action="{{ route('invitations.tenant.store') }}" class="flex flex-col sm:flex-row gap-3">
                     @csrf
                     <input type="hidden" name="tenant_id" value="{{ $group->tenant_id }}">
                     <input type="hidden" name="group_id" value="{{ $group->id }}">
                     <input type="email" name="email" placeholder="colleague@example.com" required
-                        class="flex-1 bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 placeholder-slate-500">
+                        class="flex-1 min-w-0 bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 placeholder-slate-500">
+                    <select name="tenant_role_id"
+                        class="bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm min-w-40">
+                        <option value="">Member (default)</option>
+                        @foreach($tenantRoles as $role)
+                            <option value="{{ $role->id }}" @selected(old('tenant_role_id') == $role->id)>{{ $role->name }}</option>
+                        @endforeach
+                    </select>
                     <button type="submit"
-                        class="bg-brand-500 hover:bg-brand-600 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition">
+                        class="bg-brand-500 hover:bg-brand-600 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition shrink-0">
                         Send invite
                     </button>
                 </form>
@@ -67,8 +75,30 @@
                                     {{ $member->user->display_name ?? $member->user->email }}
                                 </p>
                                 <p class="text-xs text-slate-500">{{ $member->user->email }}</p>
+                                <p class="text-xs text-brand-400/80 mt-0.5">
+                                    Role: {{ $member->user->tenantRole?->name ?? 'Unassigned' }}
+                                </p>
                             </div>
                         </div>
+
+                        @can('assignTenantRole', [App\Models\GroupMember::class, $group])
+                            <form method="POST" action="{{ route('groups.members.assign-tenant-role', $group) }}"
+                                class="flex items-center gap-2">
+                                @csrf @method('PATCH')
+                                <input type="hidden" name="user_id" value="{{ $member->user_id }}">
+                                <select name="tenant_role_id" required
+                                    class="bg-surface-300 border border-white/10 text-white text-xs rounded-lg px-2 py-1.5 max-w-[9rem]">
+                                    @foreach($tenantRoles as $role)
+                                        <option value="{{ $role->id }}"
+                                            @selected($member->user->tenant_role_id == $role->id)>
+                                            {{ $role->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                <button type="submit"
+                                    class="text-xs text-brand-400 hover:text-brand-300 px-2 py-1 whitespace-nowrap">Set role</button>
+                            </form>
+                        @endcan
 
                         @can('assignRole', [App\Models\GroupMember::class, $group])
                             <form method="POST" action="{{ route('groups.members.assign-role', $group) }}"

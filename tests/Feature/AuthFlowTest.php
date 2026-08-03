@@ -5,9 +5,9 @@ namespace Tests\Feature;
 use App\Models\Tenant;
 use App\Models\TenantRole;
 use App\Models\User;
-use Database\Seeders\permanents\OwnerSeeder;
-use Database\Seeders\permanents\SystemTenantRoleSeeder;
-use Database\Seeders\permanents\SystemTenantSeeder;
+use Database\Seeders\Permanents\OwnerSeeder;
+use Database\Seeders\Permanents\SystemTenantRoleSeeder;
+use Database\Seeders\Permanents\SystemTenantSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

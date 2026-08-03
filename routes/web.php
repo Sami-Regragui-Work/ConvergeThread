@@ -74,6 +74,7 @@ Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
                     Route::get('', [GroupMemberController::class, 'index'])->name('index');
                     Route::post('', [GroupMemberController::class, 'store'])->name('store');
                     Route::patch('assign-role', [GroupMemberController::class, 'assignRole'])->name('assign-role');
+                    Route::patch('assign-tenant-role', [GroupMemberController::class, 'assignTenantRole'])->name('assign-tenant-role');
                     Route::delete('', [GroupMemberController::class, 'destroy'])->name('destroy');
                 });
 

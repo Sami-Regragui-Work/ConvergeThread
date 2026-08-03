@@ -3,9 +3,9 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-use Database\Seeders\permanents\OwnerSeeder;
-use Database\Seeders\permanents\SystemTenantSeeder;
-use Database\Seeders\permanents\SystemTenantRoleSeeder;
+use Database\Seeders\Permanents\OwnerSeeder;
+use Database\Seeders\Permanents\SystemTenantSeeder;
+use Database\Seeders\Permanents\SystemTenantRoleSeeder;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
