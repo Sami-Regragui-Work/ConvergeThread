@@ -10,6 +10,7 @@ use App\Models\Invitation;
 use App\Models\Tenant;
 use App\Models\TenantRole;
 use App\Services\InvitationService;
+use App\Support\Flash;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 
@@ -32,10 +33,13 @@ class InvitationController extends Controller
             $owner
         );
 
-        return redirect()
-            ->back()
-            ->with('success', 'Admin invitation created successfully.')
-            ->with('accept_url', route('invitations.accept', $invitation->token));
+        return Flash::back(
+            'Admin invitation created. Share the link below with the new tenant admin.',
+            [[
+                'label' => 'Admin invitation link',
+                'url' => route('invitations.accept', $invitation->token),
+            ]],
+        );
     }
 
     public function createMemberInvitation(CreateMemberInvitationRequest $request)
@@ -63,10 +67,17 @@ class InvitationController extends Controller
             $tenantRole
         );
 
-        return redirect()
-            ->back()
-            ->with('success', 'Member invitation created successfully.')
-            ->with('accept_url', route('invitations.accept', $invitation->token));
+        $label = $group
+            ? 'Group invitation link'
+            : 'Workspace invitation link';
+
+        return Flash::back(
+            'Member invitation created. Share the link below with the invitee.',
+            [[
+                'label' => $label,
+                'url' => route('invitations.accept', $invitation->token),
+            ]],
+        );
     }
 
     public function show(string $token)
