@@ -11,18 +11,13 @@
 
 <body class="bg-[#0c0e18] text-slate-200 antialiased min-h-screen flex items-center justify-center">
     @php
-        $current = url()->current();
-        $previous = url()->previous();
-        $lastSafe = session('last_safe_url');
+        use App\Support\BackNavigation;
+        use App\Support\NavigationStack;
 
-        $candidates = array_filter([
-            $previous !== $current ? $previous : null,
-            $lastSafe !== $current ? $lastSafe : null,
-        ]);
-
-        $backUrl = $candidates[0] ?? (auth()->check()
-            ? (auth()->user()->isOwner() ? route('owner.index') : route('groups.index'))
-            : route('auth.login'));
+        $backUrl = NavigationStack::parentUrl()
+            ?? (auth()->check()
+                ? BackNavigation::url()
+                : route('auth.login'));
     @endphp
 
     <div class="text-center px-6">

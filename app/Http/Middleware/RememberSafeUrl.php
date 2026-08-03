@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\NavigationStack;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -21,7 +22,7 @@ class RememberSafeUrl
             && !$request->expectsJson()
             && !$request->is('storage/*')
         ) {
-            session(['last_safe_url' => $request->fullUrl()]);
+            NavigationStack::record($request->fullUrl());
         }
 
         return $response;
