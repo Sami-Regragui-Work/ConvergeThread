@@ -17,10 +17,10 @@
         <div class="bg-surface-200 border border-white/5 rounded-2xl overflow-hidden">
             <div class="divide-y divide-white/5">
                 @forelse($duos as $duo)
-                    <a href="{{ route('groups.duos.show', [$group, $duo]) }}"
+                    <a href="{{ route('messages.index', ['duo', $duo->id]) }}"
                         class="flex items-center gap-4 px-5 py-4 hover:bg-white/5 transition group">
                         <div class="flex -space-x-2 shrink-0">
-                            @foreach([$duo->userA, $duo->userB] as $u)
+                            @foreach([$duo->user1, $duo->user2] as $u)
                                 <div
                                     class="w-8 h-8 rounded-full bg-brand-500/10 border-2 border-surface-200 text-brand-400 flex items-center justify-center text-xs font-semibold">
                                     {{ strtoupper(substr($u->display_name ?? $u->email, 0, 1)) }}
@@ -28,10 +28,10 @@
                             @endforeach
                         </div>
                         <div class="flex-1 min-w-0">
-                            <p class="text-sm text-white font-medium">
-                                {{ $duo->userA->display_name ?? $duo->userA->email }}
-                                <span class="text-slate-500">&</span>
-                                {{ $duo->userB->display_name ?? $duo->userB->email }}
+                            <p class="text-sm text-white font-medium">{{ $duo->name }}</p>
+                            <p class="text-xs text-slate-500 truncate">
+                                {{ $duo->user1->display_name ?? $duo->user1->email }}
+                                &amp; {{ $duo->user2->display_name ?? $duo->user2->email }}
                             </p>
                         </div>
                         <svg class="w-4 h-4 text-slate-600 group-hover:text-slate-400 transition" fill="none"
