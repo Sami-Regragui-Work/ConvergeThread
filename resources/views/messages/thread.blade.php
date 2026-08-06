@@ -158,13 +158,14 @@
                         </template>
                     </div>
 
-                    <div class="relative">
-                        <div x-show="showMentionMenu" x-cloak @click.outside="showMentionMenu = false"
+                    <div class="relative" @click.outside="closeMentionMenu()">
+                        <div x-show="showMentionMenu" x-cloak
                             class="absolute bottom-full left-0 right-0 mb-2 max-h-48 overflow-y-auto rounded-xl border border-white/10 bg-surface-300 shadow-xl z-40">
-                            <template x-for="item in filteredSuggestions()" :key="item.token">
+                            <template x-for="(item, index) in filteredSuggestions()" :key="item.token">
                                 <button type="button"
-                                    @click="item.special === 'selected' ? (showSelectedPicker = true, showMentionMenu = false) : insertMention(item.token)"
-                                    class="w-full text-left px-4 py-2.5 text-sm hover:bg-white/5 flex items-center justify-between gap-4">
+                                    @mousedown.prevent="pickSuggestion(item)"
+                                    class="w-full text-left px-4 py-2.5 text-sm flex items-center justify-between gap-4"
+                                    :class="activeMentionIndex === index ? 'bg-white/10' : 'hover:bg-white/5'">
                                     <span class="font-medium shrink-0" :style="item.color ? 'color:' + item.color : ''" :class="!item.color ? 'text-brand-300' : ''" x-text="item.token"></span>
                                     <span class="text-slate-500 truncate text-right" x-text="item.label"></span>
                                 </button>
@@ -172,10 +173,13 @@
                         </div>
 
                         <div class="flex items-end gap-2">
-                            <button type="button" @click="showMentionMenu = !showMentionMenu"
+                            <button type="button" @click="toggleMentionMenu()"
                                 class="shrink-0 w-10 h-10 rounded-xl border border-white/10 bg-surface-200 text-brand-400 hover:bg-white/5 transition font-bold"
                                 title="Mention someone">&#64;</button>
-                            <input type="text" x-ref="draftInput" x-model="draft" @input="onDraftInput()" autocomplete="off"
+                            <input type="text" x-ref="draftInput" x-model="draft"
+                                @input="onDraftInput()"
+                                @keydown="onDraftKeydown($event)"
+                                autocomplete="off"
                                 placeholder="Reply in thread… @all, @role:Admin"
                                 :disabled="sending"
                                 class="flex-1 bg-surface-200 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 transition placeholder-slate-500 disabled:opacity-50">

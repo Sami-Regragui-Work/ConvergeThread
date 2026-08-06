@@ -159,4 +159,24 @@ class MentionTest extends TestCase
             'mention_type' => 'user',
         ]);
     }
+
+    public function test_render_content_html_avoids_nested_and_false_pills(): void
+    {
+        $html = app(\App\Services\MentionService::class)->renderContentHtml(
+            'Hi @role:Admin and @carol and @al and @G1.emp1',
+            ['Admin' => '#ef4444'],
+            ['carol' => 'Carol'],
+            ['g1.emp1' => 'G1/emp1'],
+        );
+
+        $this->assertSame(1, substr_count($html, '@role:Admin'));
+        $this->assertSame(3, substr_count($html, 'mention-pill'));
+        $this->assertStringContainsString('>@role:Admin</span> and', $html);
+        $this->assertStringContainsString('style="color: #ef4444"', $html);
+        $this->assertStringContainsString('@Carol', $html);
+        $this->assertStringContainsString('@G1/emp1', $html);
+        $this->assertStringContainsString(' and @al and ', $html);
+        $this->assertStringNotContainsString('>@role</span>', $html);
+        $this->assertDoesNotMatchRegularExpression('/mention-pill[^>]*>@al</', $html);
+    }
 }

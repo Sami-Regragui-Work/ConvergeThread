@@ -30,6 +30,7 @@
             showMentionMenu: false,
             showSelectedPicker: false,
             mentionFilter: '',
+            activeMentionIndex: -1,
             selectedUserIds: [],
             selectedSearch: '',
             editingId: null,
@@ -105,10 +106,92 @@
                 return person?.display_name || person?.username || ('User #' + id);
             },
 
-            insertMention(token) {
-                this.draft = this.draft.replace(/@[A-Za-z0-9_:.-]*$/, token + ' ');
-                this.showMentionMenu = false;
+            toggleMentionMenu() {
+                this.showMentionMenu = !this.showMentionMenu;
                 this.mentionFilter = '';
+                this.activeMentionIndex = -1;
+                this.$nextTick(() => this.focusDraft());
+            },
+
+            closeMentionMenu() {
+                this.showMentionMenu = false;
+                this.activeMentionIndex = -1;
+                this.mentionFilter = '';
+            },
+
+            pickSuggestion(item) {
+                if (!item) return;
+                if (item.special === 'selected') {
+                    this.showSelectedPicker = true;
+                    this.closeMentionMenu();
+                    return;
+                }
+                this.insertMention(item.token);
+            },
+
+            acceptActiveMention() {
+                const items = this.filteredSuggestions();
+                if (!items.length) return false;
+                const idx = this.activeMentionIndex >= 0 ? this.activeMentionIndex : 0;
+                this.pickSuggestion(items[idx]);
+                return true;
+            },
+
+            mentionNav(delta) {
+                if (!this.showMentionMenu) return;
+                const items = this.filteredSuggestions();
+                if (!items.length) return;
+
+                if (this.activeMentionIndex < 0) {
+                    this.activeMentionIndex = delta > 0 ? 0 : items.length - 1;
+                } else {
+                    this.activeMentionIndex = (this.activeMentionIndex + delta + items.length) % items.length;
+                }
+            },
+
+            onDraftKeydown(event) {
+                if (!this.showMentionMenu) return;
+
+                if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    this.mentionNav(1);
+                    return;
+                }
+
+                if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    this.mentionNav(-1);
+                    return;
+                }
+
+                if (event.key === 'Tab') {
+                    if (!this.filteredSuggestions().length) return;
+                    event.preventDefault();
+                    this.acceptActiveMention();
+                    return;
+                }
+
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    this.closeMentionMenu();
+                    return;
+                }
+
+                if (event.key === 'Enter' && this.activeMentionIndex >= 0) {
+                    event.preventDefault();
+                    this.acceptActiveMention();
+                }
+            },
+
+            insertMention(token) {
+                const fragment = /@[A-Za-z0-9_:.\/-]*$/;
+                if (fragment.test(this.draft)) {
+                    this.draft = this.draft.replace(fragment, token + ' ');
+                } else {
+                    const needsSpace = this.draft.length > 0 && !/\s$/.test(this.draft);
+                    this.draft = this.draft + (needsSpace ? ' ' : '') + token + ' ';
+                }
+                this.closeMentionMenu();
                 this.$nextTick(() => this.focusDraft());
             },
 
@@ -136,12 +219,13 @@
             },
 
             onDraftInput() {
-                const match = this.draft.match(/@([A-Za-z0-9_:.-]*)$/);
+                const match = this.draft.match(/@([A-Za-z0-9_:.\/-]*)$/);
                 if (match) {
                     this.mentionFilter = match[1];
                     this.showMentionMenu = true;
-                } else if (!this.draft.includes('@')) {
-                    this.showMentionMenu = false;
+                    this.activeMentionIndex = -1;
+                } else {
+                    this.mentionFilter = '';
                 }
             },
 

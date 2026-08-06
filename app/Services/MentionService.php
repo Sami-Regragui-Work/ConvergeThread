@@ -92,7 +92,7 @@ class MentionService
         }
 
         if ($chatType === 'merge') {
-            if (preg_match_all('/@group[:.]([A-Za-z0-9 _-]+)/i', $content, $groupMatches)) {
+            if (preg_match_all('/@group[:.]([A-Za-z0-9_-]+)/i', $content, $groupMatches)) {
                 $groups = $this->participantService->groupsInChat($chatable);
                 $userIds = [];
 
@@ -142,7 +142,7 @@ class MentionService
             }
         }
 
-        if (preg_match_all('/@role[:.]([A-Za-z0-9 _-]+)/i', $content, $roleMatches)) {
+        if (preg_match_all('/@role[:.]([A-Za-z0-9_-]+)/i', $content, $roleMatches)) {
             $userIds = [];
 
             foreach ($roleMatches[1] as $token) {
@@ -232,58 +232,81 @@ class MentionService
         array $mergeUserLabels = [],
     ): string {
         $escaped = e($content);
+        $placeholders = [];
 
-        $escaped = preg_replace(
+        $protect = function (string $html) use (&$placeholders): string {
+            $key = '@@MENTION'.count($placeholders).'@@';
+            $placeholders[$key] = $html;
+
+            return $key;
+        };
+
+        $escaped = preg_replace_callback(
             '/@(all|selected)\b/i',
-            '<span class="mention-pill text-brand-300">@$1</span>',
+            fn (array $m) => $protect('<span class="mention-pill">@'.strtolower($m[1]).'</span>'),
             $escaped,
         ) ?? $escaped;
 
         $escaped = preg_replace_callback(
-            '/@role[:.]([A-Za-z0-9 _-]+)/',
-            function (array $matches) use ($roleColors) {
+            '/@role[:.]([A-Za-z0-9_-]+)/i',
+            function (array $matches) use ($roleColors, $protect) {
                 $roleName = $matches[1];
                 $color = $roleColors[$roleName] ?? null;
                 $style = $color ? ' style="color: '.e($color).'"' : '';
 
-                return '<span class="mention-pill'.($color ? '' : ' text-brand-300').'"'.$style.'>@role:'.e($roleName).'</span>';
+                return $protect(
+                    '<span class="mention-pill"'.$style.'>@role:'.e($roleName).'</span>'
+                );
             },
             $escaped,
         ) ?? $escaped;
 
-        $escaped = preg_replace(
-            '/@group[:.]([A-Za-z0-9 _-]+)/',
-            '<span class="mention-pill text-violet-300">@group:$1</span>',
+        $escaped = preg_replace_callback(
+            '/@group[:.]([A-Za-z0-9_-]+)/i',
+            function (array $matches) use ($protect) {
+                $groupName = $matches[1];
+
+                return $protect(
+                    '<span class="mention-pill">@group:'.e($groupName).'</span>'
+                );
+            },
             $escaped,
         ) ?? $escaped;
 
         $escaped = preg_replace_callback(
             '/@([A-Za-z0-9_-]+)\.([A-Za-z0-9_]+)/',
-            function (array $matches) use ($mergeUserLabels) {
+            function (array $matches) use ($mergeUserLabels, $protect) {
                 $key = strtolower($matches[1].'.'.$matches[2]);
                 $label = $mergeUserLabels[$key] ?? null;
-                $text = $label ? '@'.$label : '@'.$matches[1].'.'.$matches[2];
+                if (!$label) {
+                    return $matches[0];
+                }
 
-                return '<span class="mention-pill text-brand-300">'.e($text).'</span>';
+                return $protect('<span class="mention-pill">@'.e($label).'</span>');
             },
             $escaped,
         ) ?? $escaped;
 
         $escaped = preg_replace_callback(
             '/@([A-Za-z0-9_]+)/',
-            function (array $matches) use ($usernameLabels, $roleColors) {
+            function (array $matches) use ($usernameLabels, $roleColors, $protect) {
                 $token = $matches[1];
                 $label = $usernameLabels[strtolower($token)] ?? null;
-                $text = $label ? '@'.$label : '@'.$token;
-                $color = $label ? ($roleColors['_user_'.strtolower($token)] ?? null) : null;
+                if (!$label) {
+                    return $matches[0];
+                }
+
+                $color = $roleColors['_user_'.strtolower($token)] ?? null;
                 $style = $color ? ' style="color: '.e($color).'"' : '';
 
-                return '<span class="mention-pill'.($color ? '' : ' text-brand-300').'"'.$style.'>'.e($text).'</span>';
+                return $protect(
+                    '<span class="mention-pill"'.$style.'>@'.e($label).'</span>'
+                );
             },
             $escaped,
         ) ?? $escaped;
 
-        return $escaped;
+        return strtr($escaped, $placeholders);
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Duo;
 use App\Models\Group;
 use App\Models\User;
+use App\Support\WorkspaceSync;
 use Illuminate\Database\Eloquent\Collection;
 
 class DuoService
@@ -15,7 +16,7 @@ class DuoService
             [$user1, $user2] = [$user2, $user1];
         }
 
-        return Duo::firstOrCreate(
+        $duo = Duo::firstOrCreate(
             [
                 'group_id' => $group->id,
                 'user1_id' => $user1->id,
@@ -25,6 +26,12 @@ class DuoService
                 'name' => $name,
             ]
         );
+
+        if ($duo->wasRecentlyCreated) {
+            WorkspaceSync::bump($group->tenant_id, ['duos', 'groups']);
+        }
+
+        return $duo;
     }
 
     public function getGroupDuos(Group $group): Collection
@@ -46,6 +53,13 @@ class DuoService
 
     public function delete(Duo $duo): bool
     {
-        return $duo->delete();
+        $tenantId = $duo->group?->tenant_id ?? $duo->group()->value('tenant_id');
+        $deleted = (bool) $duo->delete();
+
+        if ($deleted) {
+            WorkspaceSync::bump($tenantId, ['duos', 'groups']);
+        }
+
+        return $deleted;
     }
 }

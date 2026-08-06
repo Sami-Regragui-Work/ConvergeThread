@@ -71,11 +71,12 @@
 
         .mention-pill {
             display: inline;
-            padding: 0.05rem 0.35rem;
+            padding: 0.05rem 0.4rem;
             margin: 0 0.05rem;
             border-radius: 0.375rem;
             font-weight: 600;
-            background-color: rgba(99, 102, 241, 0.18);
+            background-color: rgba(76, 29, 149, 0.72);
+            color: #ede9fe;
             box-decoration-break: clone;
             -webkit-box-decoration-break: clone;
         }

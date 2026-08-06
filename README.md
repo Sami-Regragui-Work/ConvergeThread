@@ -41,16 +41,21 @@ php artisan storage:link
 ## Run
 
 ```bash
-# HTTP app
-php artisan serve
+# HTTP + WebSockets (local realtime)
+composer run serve
+```
 
-# WebSocket server (Reverb) — required for live chat / workspace sync
-php artisan reverb:start
+That starts `php artisan serve` and `php artisan reverb:start` together. Stopping the command stops both.
+
+Full local stack (also queue, logs, Vite):
+
+```bash
+composer run dev
 ```
 
 Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
 
-`.env.example` defaults to `BROADCAST_CONNECTION=reverb` with local Reverb keys. Keep the Reverb process running alongside `serve` for realtime updates; without it, the UI falls back to polling.
+`.env.example` defaults to `BROADCAST_CONNECTION=reverb`. If Reverb is not running, the UI falls back to polling.
 
 After seeding, sign in with the owner account from `database/seeders/Permanents/OwnerSeeder.php` (check that file for the seeded email/password), or register into the default workspace tenant.
 
