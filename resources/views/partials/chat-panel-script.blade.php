@@ -32,6 +32,16 @@
             sending: false,
             sendError: '',
             maxFileBytes: 50 * 1024 * 1024,
+            maxFilesPerMessage: 20,
+            dragOverComposer: false,
+            recording: false,
+            recordSeconds: 0,
+            mediaRecorder: null,
+            recordStream: null,
+            recordChunks: [],
+            recordTimer: null,
+            mediaViewer: null,
+            _pdfjsLoading: null,
             pollTimer: null,
             echoBound: false,
             e2eeReady: false,
@@ -107,7 +117,9 @@
                 if (this.pollTimer) clearInterval(this.pollTimer);
                 if (this.callPollTimer) clearInterval(this.callPollTimer);
                 if (this.callHeartbeatTimer) clearInterval(this.callHeartbeatTimer);
+                if (this.recording) this.stopRecording();
                 this.stopRingtone();
+                this.closeMediaViewer();
                 if (this.echoBound && window.Echo && this.chatType && this.chatId) {
                     window.Echo.leave('chat.' + this.chatType + '.' + this.chatId);
                 }
@@ -288,6 +300,12 @@
                 for (const message of list) {
                     await this.decryptMessageInPlace(message);
                 }
+                if (list === this.messages) {
+                    this.messages = [...this.messages];
+                }
+                if (this.parentMessage) {
+                    this.parentMessage = { ...this.parentMessage };
+                }
             },
 
             async indexMessagesForSearch(list) {
@@ -322,6 +340,78 @@
                 if (attachment.local_url) return attachment.local_url;
                 if (attachment.is_encrypted) return null;
                 return attachment.preview_url || attachment.url || null;
+            },
+
+            attachmentMetaLine(attachment) {
+                if (!attachment) return '';
+                const parts = [];
+                if (attachment.page_count) parts.push(attachment.page_count + ' pages');
+                parts.push((attachment.ext || attachment.kind || 'FILE').toUpperCase());
+                if (attachment.size_label) parts.push(attachment.size_label);
+                return parts.join(' · ');
+            },
+
+            openMediaViewer(attachment) {
+                const url = this.attachmentDisplayUrl(attachment) || attachment?.url;
+                if (!url) return;
+                let type = 'file';
+                if (attachment.is_image) type = 'image';
+                else if (attachment.is_video) type = 'video';
+                else if (attachment.is_audio) type = 'audio';
+                else if (attachment.kind === 'pdf' || (attachment.mime_type || '').includes('pdf')) type = 'pdf';
+                this.mediaViewer = {
+                    url,
+                    type,
+                    name: attachment.name || 'Media',
+                    meta: this.attachmentMetaLine(attachment),
+                };
+            },
+
+            closeMediaViewer() {
+                this.mediaViewer = null;
+            },
+
+            async loadPdfJs() {
+                if (window.pdfjsLib) return window.pdfjsLib;
+                if (this._pdfjsLoading) return this._pdfjsLoading;
+                this._pdfjsLoading = new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+                    script.onload = () => {
+                        if (!window.pdfjsLib) {
+                            reject(new Error('pdf.js missing'));
+                            return;
+                        }
+                        window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+                            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                        resolve(window.pdfjsLib);
+                    };
+                    script.onerror = () => reject(new Error('pdf.js failed to load'));
+                    document.head.appendChild(script);
+                });
+                return this._pdfjsLoading;
+            },
+
+            async enrichPdfPreview(attachment) {
+                if (!attachment || attachment.kind !== 'pdf' || attachment.thumb_url) return;
+                const url = this.attachmentDisplayUrl(attachment);
+                if (!url) return;
+                try {
+                    const pdfjs = await this.loadPdfJs();
+                    const doc = await pdfjs.getDocument(
+                        String(url).startsWith('blob:') ? url : { url, withCredentials: true }
+                    ).promise;
+                    attachment.page_count = doc.numPages || null;
+                    const page = await doc.getPage(1);
+                    const viewport = page.getViewport({ scale: 0.6 });
+                    const canvas = document.createElement('canvas');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+                    attachment.thumb_url = canvas.toDataURL('image/jpeg', 0.72);
+                } catch (e) {
+                    // Preview remains icon-only when PDF.js can't render (e.g. encrypted blob quirks).
+                }
             },
 
             scrollToFocusedMessage() {
@@ -361,11 +451,19 @@
                             const plain = await window.ChatCrypto.decryptBytes(this.roomKey, attachment.encryption_iv, buf);
                             const blob = new Blob([plain], { type: attachment.mime_type || 'application/octet-stream' });
                             attachment.local_url = URL.createObjectURL(blob);
-                            if (attachment.is_image || attachment.is_video) {
+                            if (attachment.is_image || attachment.is_video || attachment.is_audio) {
                                 attachment.preview_url = attachment.local_url;
                             }
                             attachment.url = attachment.local_url;
                         } catch (e) {}
+                    }
+                }
+
+                if (Array.isArray(message.attachments)) {
+                    for (const attachment of message.attachments) {
+                        if (attachment.kind === 'pdf') {
+                            await this.enrichPdfPreview(attachment);
+                        }
                     }
                 }
 
@@ -819,46 +917,140 @@
             },
 
             buildPreview(file) {
-                const isImage = file.type.startsWith('image/');
-                const isVideo = file.type.startsWith('video/');
+                const isImage = (file.type || '').startsWith('image/');
+                const isVideo = (file.type || '').startsWith('video/');
+                const isAudio = (file.type || '').startsWith('audio/');
                 return {
                     key: this.fileKey(file),
                     name: file.name,
-                    url: (isImage || isVideo) ? URL.createObjectURL(file) : null,
+                    url: (isImage || isVideo || isAudio) ? URL.createObjectURL(file) : null,
                     isImage,
                     isVideo,
+                    isAudio,
                     sizeLabel: this.formatBytes(file.size),
                     ext: (file.name.split('.').pop() || 'file').slice(0, 5).toUpperCase(),
                 };
             },
 
-            onFilesChange(event) {
-                const incoming = [...(event.target.files || [])];
-                if (!incoming.length) return;
+            addFiles(incoming) {
+                const list = [...(incoming || [])].filter(Boolean);
+                if (!list.length) return;
 
                 this.sendError = '';
-                const existing = new Set(this.files.map(f => this.fileKey(f)));
+                const existing = new Set(this.files.map((f) => this.fileKey(f)));
                 const accepted = [];
 
-                for (const file of incoming) {
+                for (const file of list) {
+                    if (this.files.length + accepted.length >= this.maxFilesPerMessage) {
+                        this.sendError = 'You can attach at most 20 files per message.';
+                        break;
+                    }
                     if (file.size > this.maxFileBytes) {
-                        this.sendError = `"${file.name}" is larger than 50 MB.`;
+                        this.sendError = `"${file.name || 'File'}" is larger than 50 MB.`;
                         continue;
                     }
-                    const key = this.fileKey(file);
+                    let named = file;
+                    if (!file.name || file.name === 'image.png' || file.name === 'blob') {
+                        const ext = (file.type || '').split('/')[1] || 'bin';
+                        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+                        named = new File([file], `paste-${stamp}.${ext}`, { type: file.type || 'application/octet-stream' });
+                    }
+                    const key = this.fileKey(named);
                     if (existing.has(key)) continue;
                     existing.add(key);
-                    accepted.push(file);
+                    accepted.push(named);
                 }
 
                 for (const file of accepted) {
                     this.files.push(file);
                     this.filePreviews.push(this.buildPreview(file));
                 }
+            },
 
-                // Reset input so the same files can be re-picked later if needed,
-                // without re-injecting already staged files on the next change.
+            onFilesChange(event) {
+                this.addFiles(event.target.files || []);
                 if (this.$refs.fileInput) this.$refs.fileInput.value = '';
+            },
+
+            onComposerPaste(event) {
+                const items = [...(event.clipboardData?.items || [])];
+                const files = [];
+                for (const item of items) {
+                    if (item.kind !== 'file') continue;
+                    const file = item.getAsFile();
+                    if (file) files.push(file);
+                }
+                if (!files.length) return;
+                event.preventDefault();
+                this.addFiles(files);
+            },
+
+            onComposerDrop(event) {
+                this.dragOverComposer = false;
+                const files = [...(event.dataTransfer?.files || [])];
+                if (!files.length) return;
+                this.addFiles(files);
+            },
+
+            async toggleRecording() {
+                if (this.recording) {
+                    this.stopRecording();
+                    return;
+                }
+                await this.startRecording();
+            },
+
+            async startRecording() {
+                if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+                    this.sendError = 'Audio recording is not supported in this browser.';
+                    return;
+                }
+                try {
+                    this.recordStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                        ? 'audio/webm;codecs=opus'
+                        : (MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '');
+                    this.mediaRecorder = mime
+                        ? new MediaRecorder(this.recordStream, { mimeType: mime })
+                        : new MediaRecorder(this.recordStream);
+                    this.recordChunks = [];
+                    this.mediaRecorder.ondataavailable = (e) => {
+                        if (e.data && e.data.size) this.recordChunks.push(e.data);
+                    };
+                    this.mediaRecorder.onstop = () => {
+                        const type = this.mediaRecorder?.mimeType || 'audio/webm';
+                        const blob = new Blob(this.recordChunks, { type });
+                        const ext = type.includes('ogg') ? 'ogg' : 'webm';
+                        const file = new File([blob], `voice-${Date.now()}.${ext}`, { type });
+                        if (blob.size > 0) this.addFiles([file]);
+                        this.recordChunks = [];
+                        if (this.recordStream) {
+                            this.recordStream.getTracks().forEach((t) => t.stop());
+                            this.recordStream = null;
+                        }
+                    };
+                    this.mediaRecorder.start();
+                    this.recording = true;
+                    this.recordSeconds = 0;
+                    this.recordTimer = setInterval(() => { this.recordSeconds += 1; }, 1000);
+                } catch (e) {
+                    this.sendError = 'Microphone permission denied for recording.';
+                    this.recording = false;
+                }
+            },
+
+            stopRecording() {
+                if (this.recordTimer) {
+                    clearInterval(this.recordTimer);
+                    this.recordTimer = null;
+                }
+                this.recording = false;
+                if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+                    try { this.mediaRecorder.stop(); } catch (e) {}
+                } else if (this.recordStream) {
+                    this.recordStream.getTracks().forEach((t) => t.stop());
+                    this.recordStream = null;
+                }
             },
 
             removeFile(index) {

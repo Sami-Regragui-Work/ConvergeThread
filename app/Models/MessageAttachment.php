@@ -60,6 +60,9 @@ class MessageAttachment extends Model
             if (str_starts_with($this->mime_type, 'video/')) {
                 return 'video';
             }
+            if (str_starts_with($this->mime_type, 'audio/')) {
+                return 'audio';
+            }
             if ($this->mime_type === 'application/pdf') {
                 return 'pdf';
             }
@@ -75,7 +78,7 @@ class MessageAttachment extends Model
             in_array($ext, ['doc', 'docx', 'odt', 'rtf'], true) => 'doc',
             in_array($ext, ['xls', 'xlsx', 'ods', 'csv'], true) => 'sheet',
             in_array($ext, ['zip', 'rar', '7z', 'tar', 'gz'], true) => 'archive',
-            in_array($ext, ['mp3', 'wav', 'ogg', 'm4a'], true) => 'audio',
+            in_array($ext, ['mp3', 'wav', 'ogg', 'm4a', 'aac'], true) => 'audio',
             in_array($ext, ['mp4', 'mov', 'webm', 'mkv'], true) => 'video',
             default => 'file',
         };
@@ -113,6 +116,7 @@ class MessageAttachment extends Model
         $kind = $this->kind();
         $isImage = $kind === 'image';
         $isVideo = $kind === 'video';
+        $isAudio = $kind === 'audio';
         $url = route('messages.attachments.download', [$message, $this]);
         $size = $this->sizeBytes();
 
@@ -122,10 +126,11 @@ class MessageAttachment extends Model
             'id' => $this->id,
             'url' => $url,
             // Never expose ciphertext as an <img>/<video> src — clients set preview after decrypt.
-            'preview_url' => (! $encrypted && ($isImage || $isVideo)) ? $url : null,
+            'preview_url' => (! $encrypted && ($isImage || $isVideo || $isAudio)) ? $url : null,
             'name' => $this->displayName(),
             'is_image' => $isImage,
             'is_video' => $isVideo,
+            'is_audio' => $isAudio,
             'is_encrypted' => $encrypted,
             'encryption_iv' => $this->encryption_iv,
             'mime_type' => $this->mime_type,
@@ -133,6 +138,8 @@ class MessageAttachment extends Model
             'ext' => Str::limit($this->extension(), 5, ''),
             'size' => $size,
             'size_label' => self::formatBytes($size),
+            'page_count' => null,
+            'thumb_url' => null,
         ];
     }
 }
