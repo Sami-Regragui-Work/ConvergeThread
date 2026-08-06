@@ -9,6 +9,7 @@ This folder is the **working source of truth** for development.
 | [architecture.md](./architecture.md) | Stack, rules, layers, routes, invariants |
 | [roadmap.md](./roadmap.md) | Phases, SOW checklist, execution order |
 | [todo.md](./todo.md) | Done vs pending backlog (big-ticket items) |
+| [known-limitations.md](./known-limitations.md) | E2EE / WebRTC caveats and how to fix them |
 | [user-flows.md](./user-flows.md) | End-user journeys |
 | [erd.dbml](./erd.dbml) | Database schema (dbdiagram syntax) |
 | [branching.md](./branching.md) | Git branch discipline |

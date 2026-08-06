@@ -46,11 +46,11 @@
 | 9 | Responsive pass | ✅ (core layouts) |
 | 10 | Clean layered architecture | ✅ |
 
-## Post-MVP (see [todo.md](./todo.md))
+## Post-MVP (see [todo.md](./todo.md) + [known-limitations.md](./known-limitations.md))
 
-- Video call & voice call (WebRTC; header opens placeholder modal today)
-- Laravel Reverb or Ratchet/Pawl WebSocket server (replace polling client)
-- E2EE for messages and attachments
+- TURN for restrictive NATs; SFU if large group calls
+- Multi-device E2EE recovery / late-joiner key share
+- Call entry on thread view; secure-context / Reverb ops notes
 - Expanded feature test coverage
 - Replay commits onto individual `feature/*` branches
 

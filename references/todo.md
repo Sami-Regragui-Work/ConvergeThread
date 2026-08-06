@@ -59,6 +59,7 @@
 - Client-side Web Crypto E2EE for message text and attachments
 - Per-user ECDH identity keys (private key in browser) + per-chat AES room keys
 - Server stores ciphertext only; notifications show generic encrypted previews
+- Fresh DB assumed — no plaintext→ciphertext migration
 
 ### Voice & video calls
 - WebRTC voice/video in chat (invite / join / offer / answer / ICE via Reverb)
@@ -68,11 +69,34 @@
 
 ## Todo
 
-### TURN for restrictive NATs
-Calls use public STUN today; some networks need a TURN relay.
+How to fix each item: [known-limitations.md](./known-limitations.md).
 
-### Multi-device E2EE
-Private-key sync / recovery across devices.
+### TURN for restrictive NATs
+Calls use public STUN only; symmetric NAT / strict firewalls may get signaling but no media.
+
+### Calls require Reverb
+Call invite/SDP/ICE are WebSocket-only; polling does not carry call signals. Production must keep Reverb up.
+
+### Secure context for getUserMedia
+Mic/camera need HTTPS (or localhost). LAN `http://192.168…` demos will fail without TLS.
+
+### Mesh call scaling
+Full-mesh peer connections; fine for small chats, not for large group calls — needs an SFU later.
+
+### Call UI on thread view
+Voice/video controls exist on main chat only; thread view has no call entry point.
+
+### Multi-device E2EE / recovery
+Identity private key lives in `localStorage` only — second device or cleared site data cannot decrypt history without recovery or device linking.
+
+### Late joiner room-key share
+New members wait until an existing member with the room key opens the chat (or shares keys); no proactive share-on-invite yet.
+
+### Opaque encrypted previews
+Notifications/search cannot show plaintext message bodies (E2EE tradeoff unless client-side index).
+
+### App-level call E2EE (if SFU)
+DTLS-SRTP protects peer-to-peer media today; an SFU path would need Insertable Streams / SFrame for true E2EE calls.
 
 ### Sidebar UX
 Further polish for desktop toggle defaults on very small screens if needed.
