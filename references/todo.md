@@ -49,13 +49,11 @@
 - Owner dashboard live client-side search (no Enter submit)
 - Display-name capitalization helper (first letter only)
 
-
 ### Mention UX & duo sync
 - Mention pills: no nested/false highlights; darker purple style
 - Mention menu: arrow/tab selection; @ button insert works without typing @
 - Duo create/delete bumps owner/workspace live sync
 - `composer run serve` starts HTTP + Reverb together
-
 
 ### E2EE chat
 - Client-side Web Crypto E2EE for message text and attachments
@@ -72,5 +70,3 @@ Voice and video call UI exists in chat; **WebRTC media calls are not working yet
 ### Sidebar UX
 Further polish for desktop toggle defaults on very small screens if needed.
 
-### E2EE
-End-to-end encryption for messages and attachments.
