@@ -80,6 +80,8 @@ php artisan test
 
 Project docs live in `references/` (tracked on git branch `docs/project-documentation`; gitignored on `main` for local use). Start with `references/README.md` and `references/todo.md`.
 
+E2EE / WebRTC caveats and how to fix them: `references/known-limitations.md` on the docs branch.
+
 Scope documents: the two `.docx` files in `references/` (full project + MVP SOW).
 
 ## Branching
@@ -88,5 +90,13 @@ Feature work uses `feature/*` branches merged into `main`. See `references/branc
 
 ## Roadmap / Todo
 
+See `references/todo.md` and `references/known-limitations.md` (docs branch). Highlights:
+
 - TURN servers for restrictive NATs (calls use public STUN today)
-- Multi-device E2EE private-key sync / recovery
+- Multi-device E2EE private-key sync / recovery; late-joiner room-key share
+- SFU if large group calls; call UI on thread view
+- Reverb required for live calls; HTTPS (or localhost) for mic/camera
+- Opaque encrypted notification previews (E2EE tradeoff)
+- Sidebar UX polish on very small screens
+
+Fresh installs assumed for E2EE — no plaintext history migration.
