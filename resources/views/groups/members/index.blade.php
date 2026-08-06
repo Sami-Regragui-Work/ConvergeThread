@@ -81,7 +81,7 @@
                                 @csrf @method('PATCH')
                                 <input type="hidden" name="user_id" value="{{ $member->user_id }}">
                                 <select name="tenant_role_id" required
-                                    class="bg-surface-300 border border-white/10 text-white text-xs rounded-lg px-2 py-1.5 max-w-[9rem]">
+                                    class="bg-surface-300 border border-white/10 text-white text-xs rounded-lg px-2 py-1.5 max-w-36">
                                     @foreach($tenantRoles as $role)
                                         <option value="{{ $role->id }}"
                                             @selected($member->user->tenant_role_id == $role->id)>

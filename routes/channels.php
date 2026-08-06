@@ -11,7 +11,9 @@ Broadcast::channel('chat.{chatType}.{chatId}', function ($user, string $chatType
     $chatable = match ($chatType) {
         'group' => Group::where('tenant_id', $user->tenant_id)->find($chatId),
         'duo' => Duo::whereHas('group', fn ($q) => $q->where('tenant_id', $user->tenant_id))->find($chatId),
-        'merge' => MergeSession::whereHas('groups', fn ($q) => $q->where('tenant_id', $user->tenant_id))->find($chatId),
+        'merge' => MergeSession::query()
+            ->forTenant($user->tenant_id)
+            ->find($chatId),
         default => null,
     };
 

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -9,7 +10,13 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class MergeSession extends Model
 {
+    public $fillable = [
+        'started_at',
+        'ended_at',
+    ];
+
     public $timestamps = false;
+
     protected function casts(): array
     {
         return [
@@ -18,14 +25,21 @@ class MergeSession extends Model
         ];
     }
 
+    public function scopeForTenant(Builder $query, int $tenantId): Builder
+    {
+        return $query
+            ->whereHas('groups', fn (Builder $inner) => $inner->where('tenant_id', $tenantId))
+            ->whereDoesntHave('groups', fn (Builder $inner) => $inner->where('tenant_id', '!=', $tenantId));
+    }
+
     public function mergeSessionGroups(): HasMany
     {
         return $this->hasMany(MergeSessionGroup::class);
     }
 
     public function groups(): BelongsToMany
-{
-    return $this->belongsToMany(Group::class, 'merge_session_groups');
+    {
+        return $this->belongsToMany(Group::class, 'merge_session_groups');
     }
 
     public function messages(): MorphMany

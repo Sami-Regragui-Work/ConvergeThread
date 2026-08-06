@@ -15,7 +15,8 @@ trait ResolvesChatable
             'group' => Group::where('tenant_id', $user->tenant_id)->findOrFail($chatId),
             'duo' => Duo::whereHas('group', fn ($q) => $q->where('tenant_id', $user->tenant_id))
                 ->findOrFail($chatId),
-            'merge' => MergeSession::whereHas('groups', fn ($q) => $q->where('tenant_id', $user->tenant_id))
+            'merge' => MergeSession::query()
+                ->forTenant($user->tenant_id)
                 ->findOrFail($chatId),
             default => abort(404, 'Invalid chat type'),
         };

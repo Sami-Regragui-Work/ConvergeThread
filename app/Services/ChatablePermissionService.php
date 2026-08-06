@@ -59,11 +59,14 @@ class ChatablePermissionService
 
         $groups = $mergeSession->groups;
 
-        foreach ($groups as $group) {
-            if ($group->tenant_id !== $user->tenant_id) {
-                continue;
-            }
+        if (
+            $groups->isEmpty()
+            || $groups->contains(fn (Group $group) => (int) $group->tenant_id !== (int) $user->tenant_id)
+        ) {
+            return false;
+        }
 
+        foreach ($groups as $group) {
             if (!$this->groupPermissionService->isActiveMember($group, $user)) {
                 continue;
             }

@@ -23,7 +23,7 @@ class MergeSessionController extends Controller
     {
         Gate::authorize('viewAny', MergeSession::class);
 
-        $sessions = $this->mergeService->getActive()->load('groups');
+        $sessions = $this->mergeService->getActiveForTenant(Auth::user()->tenant_id);
 
         return view('merge-sessions.index', compact('sessions'));
     }

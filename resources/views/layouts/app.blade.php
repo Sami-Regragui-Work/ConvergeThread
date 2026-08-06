@@ -48,8 +48,6 @@
 </head>
 
 <body class="antialiased" x-data="{ sidebarOpen: false }">
-    @include('partials.flash')
-
     <div class="flex min-h-screen bg-surface-400">
         @auth
             <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
@@ -127,6 +125,7 @@
         @endauth
 
         <div class="flex min-w-0 flex-1 flex-col">
+            {{-- Header --}}
             <header
                 class="sticky top-0 z-20 flex items-center gap-4 px-4 sm:px-5 py-3 border-b border-white/5 bg-surface-300/95 backdrop-blur shrink-0">
                 @auth
@@ -163,6 +162,10 @@
                 </div>
             </header>
 
+            {{-- Flash messages --}}
+            @include('partials.flash')
+
+            {{-- Main content --}}
             <main class="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
                 <div class="w-full max-w-7xl mx-auto">
                     @include('partials.breadcrumbs')
