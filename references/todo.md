@@ -49,12 +49,19 @@
 - Owner dashboard live client-side search (no Enter submit)
 - Display-name capitalization helper (first letter only)
 
+
+### Mention UX & duo sync
+- Mention pills: no nested/false highlights; darker purple style
+- Mention menu: arrow/tab selection; @ button insert works without typing @
+- Duo create/delete bumps owner/workspace live sync
+- `composer run serve` starts HTTP + Reverb together
+
 ---
 
 ## Todo
 
 ### Voice and video calls
-UI buttons exist in the chat header; WebRTC media (signaling + streams) is not working yet.
+Voice and video call UI exists in chat; **WebRTC media calls are not working yet**
 
 ### Sidebar UX
 Further polish for desktop toggle defaults on very small screens if needed.
