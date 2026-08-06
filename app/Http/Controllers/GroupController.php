@@ -57,6 +57,17 @@ class GroupController extends Controller
             $user
         );
 
+        if ($request->wantsJson()) {
+            return response()->json([
+                'ok' => true,
+                'group' => [
+                    'id' => $group->id,
+                    'name' => $group->name,
+                    'url' => route('groups.show', $group),
+                ],
+            ]);
+        }
+
         return redirect()
             ->route('groups.index', $group)
             ->with('success', 'Group created successfully.');
@@ -98,6 +109,16 @@ class GroupController extends Controller
         Gate::authorize('update', $group);
 
         $group = $this->groupService->updateName($group, $credentials['name']);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'ok' => true,
+                'group' => [
+                    'id' => $group->id,
+                    'name' => $group->name,
+                ],
+            ]);
+        }
 
         return redirect()
             ->back()

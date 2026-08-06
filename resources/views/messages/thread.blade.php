@@ -26,6 +26,8 @@
             callSignalUrl: @js(route('messages.call.signal', [$chatType, $message->chatable_id])),
             callActiveUrl: @js(route('messages.call.active', [$chatType, $message->chatable_id])),
             parentMessage: @js($parentPayload),
+            currentUserName: @js(auth()->user()->displayLabel()),
+            iceServers: @js(config('webrtc.ice_servers')),
         })"
         x-init="init()">
 
@@ -34,14 +36,17 @@
                 <p class="text-sm font-semibold text-white">Thread</p>
                 <p class="text-xs text-slate-500">Replies · type &#64; to mention</p>
             </div>
-            <form method="POST" action="{{ route('messages.thread.mute', $message) }}">
-                @csrf
-                <button type="submit"
-                    class="px-2.5 py-1.5 rounded-lg border text-xs transition {{ $threadMuted ? 'border-amber-500/40 text-amber-400 bg-amber-500/10' : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white' }}"
-                    title="{{ $threadMuted ? 'Unmute thread notifications' : 'Mute thread notifications' }}">
-                    {{ $threadMuted ? 'Unmute' : 'Mute' }}
-                </button>
-            </form>
+            <div class="flex items-center gap-2 shrink-0">
+                @include('partials.chat-call-ui', ['mode' => 'buttons'])
+                <form method="POST" action="{{ route('messages.thread.mute', $message) }}">
+                    @csrf
+                    <button type="submit"
+                        class="px-2.5 py-1.5 rounded-lg border text-xs transition {{ $threadMuted ? 'border-amber-500/40 text-amber-400 bg-amber-500/10' : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white' }}"
+                        title="{{ $threadMuted ? 'Unmute thread notifications' : 'Mute thread notifications' }}">
+                        {{ $threadMuted ? 'Unmute' : 'Mute' }}
+                    </button>
+                </form>
+            </div>
         </div>
 
         <div class="bg-surface-200 border border-white/5 rounded-2xl p-5 mb-4 shrink-0" x-show="parentMessage">
@@ -262,10 +267,11 @@
                 <p class="text-sm text-slate-500 text-center">You don't have permission to reply in this thread.</p>
             </template>
         </div>
+
+        @include('partials.chat-call-ui', ['chatLabel' => 'Thread', 'mode' => 'modals'])
     </div>
 
     @push('scripts')
-        @include('partials.chat-crypto')
         @include('partials.chat-panel-script')
     @endpush
 @endsection

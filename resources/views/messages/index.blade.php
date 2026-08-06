@@ -27,6 +27,7 @@
             callActiveUrl: @js(route('messages.call.active', [$chatType, $chatId])),
             currentUserName: @js(auth()->user()->displayLabel()),
             activeCall: @js($activeCall),
+            iceServers: @js(config('webrtc.ice_servers')),
         })"
         x-init="init()">
 
@@ -274,98 +275,11 @@
             </template>
         </div>
 
-        {{-- Incoming call --}}
-        <div x-show="incomingCall" x-cloak class="fixed inset-0 z-200 flex items-center justify-center p-4">
-            <div class="absolute inset-0 bg-black/60"></div>
-            <div class="relative bg-surface-200 border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center space-y-4">
-                <div class="w-16 h-16 mx-auto rounded-full bg-emerald-500/10 text-emerald-300 flex items-center justify-center text-xl font-bold"
-                    x-text="(incomingCall?.from_user_name || '?').slice(0, 1).toUpperCase()"></div>
-                <div>
-                    <p class="text-white font-semibold" x-text="(incomingCall?.from_user_name || 'Someone') + ' is calling'"></p>
-                    <p class="text-sm text-slate-500 mt-1"
-                        x-text="(incomingCall?.call_type === 'video' ? 'Video' : 'Voice') + ' call · {{ $chatable->name ?? 'chat' }}'"></p>
-                </div>
-                <div class="flex gap-3">
-                    <button type="button" @click="rejectIncoming()"
-                        class="flex-1 py-2.5 rounded-xl bg-red-500/20 text-red-400 hover:bg-red-500/30 text-sm font-semibold transition">Decline</button>
-                    <button type="button" @click="acceptIncoming()"
-                        class="flex-1 py-2.5 rounded-xl bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 text-sm font-semibold transition">Accept</button>
-                </div>
-            </div>
-        </div>
-
-        {{-- Active / outgoing call --}}
-        <div x-show="showCallModal && callState !== 'idle'" x-cloak class="fixed inset-0 z-200 flex items-center justify-center p-4">
-            <div class="absolute inset-0 bg-black/70"></div>
-            <div class="relative bg-surface-200 border border-white/10 rounded-2xl p-5 sm:p-6 max-w-3xl w-full shadow-2xl space-y-4">
-                <div class="flex items-center justify-between gap-3">
-                    <div>
-                        <p class="text-white font-semibold"
-                            x-text="callState === 'outgoing' ? ('Calling…') : (callType === 'video' ? 'Video call' : 'Voice call')"></p>
-                        <p class="text-xs text-slate-500">{{ $chatable->name ?? 'chat' }}</p>
-                    </div>
-                    <span class="text-[10px] uppercase tracking-wide px-2 py-1 rounded-lg border border-white/10 text-slate-400"
-                        x-text="callState"></span>
-                </div>
-
-                <p x-show="callError" x-cloak class="text-sm text-amber-300" x-text="callError"></p>
-
-                <div class="grid gap-3"
-                    :class="callType === 'video' ? 'sm:grid-cols-2' : ''">
-                    <div class="relative rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center">
-                        <video x-ref="localVideo" x-show="callType === 'video'" autoplay muted playsinline
-                            class="absolute inset-0 h-full w-full object-cover"></video>
-                        <div x-show="callType !== 'video' || localVideoOff" class="relative z-10 text-center p-4">
-                            <div class="w-14 h-14 mx-auto rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center text-lg font-bold"
-                                x-text="(currentUserName || 'Y').slice(0, 1).toUpperCase()"></div>
-                            <p class="text-xs text-slate-400 mt-2">You <span x-show="localMuted">(muted)</span></p>
-                        </div>
-                        <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white">You</span>
-                    </div>
-
-                    <template x-for="peer in peers" :key="peer.userId">
-                        <div class="relative rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center">
-                            <video x-show="callType === 'video'" :id="'remote-video-' + peer.userId" autoplay playsinline
-                                class="absolute inset-0 h-full w-full object-cover"
-                                x-effect="if ($el && peer.stream) $el.srcObject = peer.stream"></video>
-                            <audio x-show="callType === 'voice'" :id="'remote-audio-' + peer.userId" autoplay
-                                x-effect="if ($el && peer.stream) $el.srcObject = peer.stream"></audio>
-                            <div x-show="callType !== 'video' || !peer.stream" class="relative z-10 text-center p-4">
-                                <div class="w-14 h-14 mx-auto rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center text-lg font-bold"
-                                    x-text="(peer.name || '?').slice(0, 1).toUpperCase()"></div>
-                                <p class="text-xs text-slate-400 mt-2" x-text="peer.name"></p>
-                            </div>
-                            <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white" x-text="peer.name"></span>
-                        </div>
-                    </template>
-
-                    <div x-show="callState === 'outgoing' && peers.length === 0" class="rounded-xl border border-dashed border-white/10 min-h-40 flex items-center justify-center text-sm text-slate-500">
-                        Waiting for someone to join…
-                    </div>
-                </div>
-
-                <div class="flex flex-wrap items-center justify-center gap-2 pt-1">
-                    <button type="button" @click="toggleMute()"
-                        class="px-3 py-2 rounded-xl border text-sm transition"
-                        :class="localMuted ? 'border-amber-500/40 bg-amber-500/10 text-amber-300' : 'border-white/10 text-slate-300 hover:bg-white/5'">
-                        <span x-text="localMuted ? 'Unmute' : 'Mute'"></span>
-                    </button>
-                    <button type="button" x-show="callType === 'video'" @click="toggleVideo()"
-                        class="px-3 py-2 rounded-xl border text-sm transition"
-                        :class="localVideoOff ? 'border-amber-500/40 bg-amber-500/10 text-amber-300' : 'border-white/10 text-slate-300 hover:bg-white/5'">
-                        <span x-text="localVideoOff ? 'Camera on' : 'Camera off'"></span>
-                    </button>
-                    <button type="button" @click="endCall()"
-                        class="px-4 py-2 rounded-xl bg-red-500/20 text-red-400 hover:bg-red-500/30 text-sm font-semibold transition">
-                        End call
-                    </button>
-                </div>
-            </div>
-        </div>
+        {{-- Incoming / active call UI --}}
+        @include('partials.chat-call-ui', ['chatLabel' => $chatable->name ?? 'chat', 'mode' => 'modals'])
     </div>
 
     @push('scripts')
-        @include('partials.chat-crypto')
         @include('partials.chat-panel-script')
     @endpush
 @endsection

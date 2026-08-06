@@ -29,10 +29,11 @@
                     </form>
                 @endcan
                 @can('update', $group)
-                    <a href="{{ route('groups.edit', $group) }}"
+                    <button type="button"
+                        onclick="window.__openGroupRename && window.__openGroupRename({ name: @js($group->name), url: @js(route('groups.update', $group)) })"
                         class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-slate-300 text-sm px-4 py-2 rounded-xl transition">
-                        Edit
-                    </a>
+                        Rename
+                    </button>
                 @endcan
                 @can('delete', $group)
                     <form method="POST" action="{{ route('groups.destroy', $group) }}">

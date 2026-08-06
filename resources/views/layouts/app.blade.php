@@ -249,6 +249,14 @@
                             @endif
                         </div>
                     </div>
+                    <button type="button" onclick="window.__openE2eeRecovery && window.__openE2eeRecovery()"
+                        class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-white/5 hover:text-white text-sm transition mb-1">
+                        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                        </svg>
+                        E2EE recovery
+                    </button>
                     <form method="POST" action="{{ route('auth.logout') }}">
                         @csrf
                         <button type="submit"
@@ -384,6 +392,11 @@
 
     @include('partials.confirm-dialog')
     @auth
+        @unless(auth()->user()->isOwner())
+            @include('partials.chat-crypto')
+            @include('partials.group-name-modal')
+            @include('partials.e2ee-recovery')
+        @endunless
         @php
             $loadChatBrowse = !auth()->user()->isOwner() && (
                 request()->routeIs('messages.*')
@@ -392,7 +405,6 @@
             );
         @endphp
         @if($loadChatBrowse)
-            @include('partials.chat-crypto')
             @include('partials.chat-search-index')
             @include('partials.chat-browse-ui')
         @endif

@@ -149,6 +149,7 @@ Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
         Route::post('crypto/public-key', [ChatCryptoController::class, 'storePublicKey'])->name('crypto.public-key');
         Route::get('{chatType}/{chatId}/crypto', [ChatCryptoController::class, 'show'])->name('crypto.show');
         Route::post('{chatType}/{chatId}/crypto/shares', [ChatCryptoController::class, 'storeShares'])->name('crypto.shares');
+        Route::post('{chatType}/{chatId}/crypto/request-key', [ChatCryptoController::class, 'requestKey'])->name('crypto.request-key');
         Route::get('{chatType}/{chatId}/search-feed', [ChatBrowseController::class, 'searchFeed'])->name('search-feed');
         Route::get('{chatType}/{chatId}/media', [ChatBrowseController::class, 'media'])->name('media');
         Route::get('{chatType}/{chatId}/participants', [ChatBrowseController::class, 'participants'])->name('participants');

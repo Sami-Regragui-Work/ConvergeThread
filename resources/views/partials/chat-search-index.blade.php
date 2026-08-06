@@ -1,8 +1,9 @@
 @verbatim
 <script>
     window.ChatSearchIndex = (function () {
-        const DB_NAME = 'ct_encrypted_search_v1';
+        const DB_NAME = 'ct_encrypted_search_v2';
         const DB_VERSION = 1;
+        let indexCryptoKeyPromise = null;
 
         function openDb() {
             return new Promise((resolve, reject) => {
@@ -52,30 +53,82 @@
         }
 
         async function putMeta(meta) {
-            return withStore('meta', 'readwrite', (store) => {
-                store.put(meta);
-            });
+            return withStore('meta', 'readwrite', (store) => { store.put(meta); });
         }
 
-        async function upsertMessages(type, id, rows) {
+        async function listMeta() {
+            return withStore('meta', 'readonly', (store) => new Promise((resolve, reject) => {
+                const req = store.getAll();
+                req.onsuccess = () => resolve(req.result || []);
+                req.onerror = () => reject(req.error);
+            }));
+        }
+
+        async function deriveIndexKey(userId) {
+            if (indexCryptoKeyPromise) return indexCryptoKeyPromise;
+            indexCryptoKeyPromise = (async () => {
+                const raw = localStorage.getItem('ct_e2ee_private_' + userId);
+                if (!raw || !window.ChatCrypto) return null;
+                const material = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('ct-search|' + raw));
+                return crypto.subtle.importKey('raw', material, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+            })();
+            return indexCryptoKeyPromise;
+        }
+
+        async function sealBody(userId, plaintext) {
+            const key = await deriveIndexKey(userId);
+            if (!key || !window.ChatCrypto) {
+                return { bodyEnc: null, bodyPlainFallback: plaintext || '' };
+            }
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const cipher = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(plaintext || ''));
+            return {
+                bodyEnc: window.ChatCrypto.b64encode(iv) + ':' + window.ChatCrypto.b64encode(cipher),
+                bodyPlainFallback: null,
+            };
+        }
+
+        async function openBody(userId, row) {
+            if (row.bodyPlainFallback != null && row.bodyPlainFallback !== undefined && !row.bodyEnc) {
+                return row.bodyPlainFallback || '';
+            }
+            if (!row.bodyEnc) return '';
+            const key = await deriveIndexKey(userId);
+            if (!key || !window.ChatCrypto) return '';
+            try {
+                const [ivB64, cipherB64] = String(row.bodyEnc).split(':');
+                const iv = window.ChatCrypto.b64decode(ivB64);
+                const cipher = window.ChatCrypto.b64decode(cipherB64);
+                const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipher);
+                return new TextDecoder().decode(plain);
+            } catch (e) {
+                return '';
+            }
+        }
+
+        async function upsertMessages(type, id, rows, userId) {
             const ck = chatKey(type, id);
-            return withStore('messages', 'readwrite', (store) => {
-                rows.forEach((row) => {
-                    store.put({
-                        key: messageKey(type, id, row.messageId),
-                        chatKey: ck,
-                        chatType: type,
-                        chatId: Number(id),
-                        messageId: Number(row.messageId),
-                        parentId: row.parentId ? Number(row.parentId) : null,
-                        userId: Number(row.userId),
-                        userName: row.userName || '',
-                        body: row.body || '',
-                        attachmentNames: row.attachmentNames || [],
-                        hasAttachments: !!row.hasAttachments,
-                        createdAt: row.createdAt || null,
-                    });
+            const sealed = [];
+            for (const row of rows) {
+                const sealedBody = await sealBody(userId, row.body || '');
+                sealed.push({
+                    key: messageKey(type, id, row.messageId),
+                    chatKey: ck,
+                    chatType: type,
+                    chatId: Number(id),
+                    messageId: Number(row.messageId),
+                    parentId: row.parentId ? Number(row.parentId) : null,
+                    userId: Number(row.userId),
+                    userName: row.userName || '',
+                    bodyEnc: sealedBody.bodyEnc,
+                    bodyPlainFallback: sealedBody.bodyPlainFallback,
+                    attachmentNames: row.attachmentNames || [],
+                    hasAttachments: !!row.hasAttachments,
+                    createdAt: row.createdAt || null,
                 });
+            }
+            return withStore('messages', 'readwrite', (store) => {
+                sealed.forEach((row) => store.put(row));
             });
         }
 
@@ -89,6 +142,14 @@
             }));
         }
 
+        async function loadAllMessages() {
+            return withStore('messages', 'readonly', (store) => new Promise((resolve, reject) => {
+                const req = store.getAll();
+                req.onsuccess = () => resolve(req.result || []);
+                req.onerror = () => reject(req.error);
+            }));
+        }
+
         function tokenize(text) {
             return String(text || '')
                 .toLowerCase()
@@ -97,23 +158,17 @@
                 .filter(Boolean);
         }
 
-        function matchesQuery(row, query) {
+        function matchesQuery(row, query, body) {
             const q = String(query || '').trim().toLowerCase();
             if (!q) return true;
-            const hay = [
-                row.body || '',
-                row.userName || '',
-                ...(row.attachmentNames || []),
-            ].join(' ').toLowerCase();
+            const hay = [body || '', row.userName || '', ...(row.attachmentNames || [])].join(' ').toLowerCase();
             if (hay.includes(q)) return true;
             const tokens = tokenize(q);
             return tokens.length > 0 && tokens.every((t) => hay.includes(t));
         }
 
-        async function search(filters) {
+        async function filterRows(rows, filters, viewerUserId) {
             const {
-                chatType,
-                chatId,
                 query = '',
                 userId = null,
                 hasAttachments = null,
@@ -122,18 +177,29 @@
                 limit = 50,
             } = filters;
 
-            let rows = await loadChatMessages(chatType, chatId);
-            rows = rows.filter((row) => {
-                if (userId && Number(row.userId) !== Number(userId)) return false;
-                if (hasAttachments === true && !row.hasAttachments) return false;
-                if (hasAttachments === false && row.hasAttachments) return false;
-                if (fromDate && row.createdAt && row.createdAt < fromDate) return false;
-                if (toDate && row.createdAt && row.createdAt > toDate) return false;
-                return matchesQuery(row, query);
-            });
+            const out = [];
+            for (const row of rows) {
+                if (userId && Number(row.userId) !== Number(userId)) continue;
+                if (hasAttachments === true && !row.hasAttachments) continue;
+                if (hasAttachments === false && row.hasAttachments) continue;
+                if (fromDate && row.createdAt && row.createdAt < fromDate) continue;
+                if (toDate && row.createdAt && row.createdAt > toDate) continue;
+                const body = await openBody(viewerUserId, row);
+                if (!matchesQuery(row, query, body)) continue;
+                out.push({ ...row, body });
+            }
+            out.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+            return out.slice(0, limit);
+        }
 
-            rows.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
-            return rows.slice(0, limit);
+        async function search(filters) {
+            const rows = await loadChatMessages(filters.chatType, filters.chatId);
+            return filterRows(rows, filters, filters.viewerUserId || filters.userId || null);
+        }
+
+        async function searchAll(filters) {
+            const rows = await loadAllMessages();
+            return filterRows(rows, filters, filters.viewerUserId);
         }
 
         async function resolveRoomKey(type, id, userId, cryptoPublicKeyUrl) {
@@ -201,7 +267,7 @@
                         createdAt: msg.created_at,
                     });
                 }
-                await upsertMessages(type, id, rows);
+                await upsertMessages(type, id, rows, userId);
                 imported += rows.length;
                 after = batch[batch.length - 1].id;
                 if (!data.next_after) break;
@@ -218,7 +284,18 @@
             return { imported, lastSyncedId: after };
         }
 
-        async function indexDecryptedMessage(type, id, message) {
+        async function syncChats(chats, options = {}) {
+            let imported = 0;
+            for (const chat of chats) {
+                try {
+                    const result = await syncChat(chat.type, chat.id, options);
+                    imported += result.imported;
+                } catch (e) {}
+            }
+            return { imported };
+        }
+
+        async function indexDecryptedMessage(type, id, message, userId) {
             if (!message?.id) return;
             await upsertMessages(type, id, [{
                 messageId: message.id,
@@ -229,15 +306,18 @@
                 attachmentNames: (message.attachments || []).map((a) => a.name).filter(Boolean),
                 hasAttachments: !!(message.attachments && message.attachments.length),
                 createdAt: message.created_at_iso || message.created_at || null,
-            }]);
+            }], userId || message.user_id);
         }
 
         return {
             chatKey,
             syncChat,
+            syncChats,
             search,
+            searchAll,
             indexDecryptedMessage,
             getMeta,
+            listMeta,
             resolveRoomKey,
         };
     })();

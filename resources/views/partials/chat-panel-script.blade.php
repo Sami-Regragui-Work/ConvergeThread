@@ -59,7 +59,7 @@
             peers: [],
             peerConnections: {},
             callPollTimer: null,
-            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }],
+            iceServers: config.iceServers ?? [{ urls: 'stun:stun.l.google.com:19302' }],
             focusMessageId: null,
 
             async init() {
@@ -121,6 +121,16 @@
                     } else if (state.has_room_key) {
                         this.e2eeReady = false;
                         this.e2eeError = 'Waiting for an existing member to share the chat key…';
+                        try {
+                            await fetch(this.cryptoShowUrl.replace(/\/crypto$/, '/crypto/request-key'), {
+                                method: 'POST',
+                                headers: {
+                                    'Accept': 'application/json',
+                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                                },
+                                credentials: 'same-origin',
+                            });
+                        } catch (e) {}
                         setTimeout(() => this.setupE2ee().then(() => {
                             if (this.e2eeReady) this.decryptMessages(this.messages);
                         }), 3000);
@@ -184,7 +194,12 @@
                 if (!window.ChatSearchIndex || !this.chatType || !this.chatId || !Array.isArray(list)) return;
                 for (const message of list) {
                     try {
-                        await window.ChatSearchIndex.indexDecryptedMessage(this.chatType, this.chatId, message);
+                        await window.ChatSearchIndex.indexDecryptedMessage(
+                            this.chatType,
+                            this.chatId,
+                            message,
+                            this.currentUserId,
+                        );
                     } catch (e) {}
                 }
             },
@@ -293,6 +308,11 @@
                     });
 
                 channel.listen('.call.signal', (payload) => this.onCallSignal(payload));
+                channel.listen('.chat.key.needed', async (payload) => {
+                    if (!this.roomKey || !payload?.user_id) return;
+                    if (Number(payload.user_id) === Number(this.currentUserId)) return;
+                    await this.distributeMissingShares([]);
+                });
 
                 this.echoBound = true;
             },
@@ -738,12 +758,20 @@
                     this.showCallModal = true;
                     return;
                 }
+                if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+                    this.callError = 'Mic/camera need HTTPS (or localhost).';
+                    this.showCallModal = true;
+                    return;
+                }
+                if (!window.Echo || !this.echoBound) {
+                    this.callError = 'Live calls need Reverb (composer run serve). You can still try; others may miss the ring.';
+                }
 
                 try {
                     this.callType = type;
                     this.callId = 'call_' + this.currentUserId + '_' + Date.now();
                     this.callState = 'outgoing';
-                    this.callError = '';
+                    this.callError = this.callError || '';
                     this.showCallModal = true;
                     this.peers = [];
                     this.peerConnections = {};

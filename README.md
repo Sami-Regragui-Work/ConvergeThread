@@ -55,7 +55,9 @@ composer run dev
 
 Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
 
-`.env.example` defaults to `BROADCAST_CONNECTION=reverb`. If Reverb is not running, the UI falls back to polling (chat still works; **live calls need Reverb**).
+`.env.example` defaults to `BROADCAST_CONNECTION=reverb`. If Reverb is not running, the UI falls back to polling (chat still works; **live calls need Reverb**). Mic/camera need **HTTPS or localhost**.
+
+Optional TURN (restrictive NATs): set `TURN_URLS`, `TURN_USERNAME`, `TURN_CREDENTIAL` in `.env` (see `config/webrtc.php`).
 
 After seeding, sign in with the owner account from `database/seeders/Permanents/OwnerSeeder.php` (check that file for the seeded email/password), or register into the default workspace tenant.
 
@@ -73,9 +75,9 @@ php artisan test
 - Blade + Tailwind (CDN) + Alpine.js
 - Session authentication (`web` guard)
 - Laravel Reverb WebSockets for chat, workspace sync, and WebRTC call signaling
-- Client-side E2EE for chat text and attachments (Web Crypto; private keys stay in the browser)
-- WebRTC voice/video calls in chat (STUN; mesh between joined peers)
-- Header chat search (Proton-style: decrypt locally → IndexedDB body keywords) and files-by-thread browse
+- Client-side E2EE for chat text and attachments (Web Crypto; private keys stay in the browser; export/import recovery in sidebar)
+- WebRTC voice/video calls in chat and threads (STUN + optional TURN; mesh peers)
+- Header chat search (local encrypted IndexedDB index; per-chat or all my chats) and files-by-thread browse
 
 ## Documentation
 
@@ -91,14 +93,8 @@ Feature work uses `feature/*` branches merged into `main`. See `references/branc
 
 ## Roadmap / Todo
 
-See `references/todo.md` and `references/known-limitations.md` (docs branch). Highlights:
+See `references/todo.md` and `references/known-limitations.md` (docs branch). Remaining highlights:
 
-- TURN servers for restrictive NATs (calls use public STUN today)
-- Multi-device E2EE private-key sync / recovery; late-joiner room-key share
-- SFU if large group calls; call UI on thread view
-- Reverb required for live calls; HTTPS (or localhost) for mic/camera
-- Harden local search IndexedDB (encrypt at rest); cross-chat search in one query
-- Convert simple edit pages to modals (live sync already exists)
-- Sidebar UX polish on very small screens
-
-Fresh installs assumed for E2EE — no plaintext history migration.
+- SFU for large group calls (mesh + TURN covers small calls today)
+- Passphrase-wrapped E2EE recovery (file export/import works now)
+- Further modal conversions beyond group create/rename

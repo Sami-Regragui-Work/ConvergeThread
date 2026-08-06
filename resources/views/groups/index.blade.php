@@ -19,13 +19,13 @@
                     </button>
                 @endcan
                 @can('create', App\Models\Group::class)
-                    <a href="{{ route('groups.create') }}"
+                    <button type="button" onclick="window.__openGroupCreate && window.__openGroupCreate()"
                         class="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold px-4 py-2 rounded-xl transition">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                         </svg>
                         New Group
-                    </a>
+                    </button>
                 @endcan
             </div>
         </div>
@@ -80,13 +80,15 @@
                         <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition">
                             {{-- Edit: managers bypass membership; members need update permission --}}
                             @if($managerGroupIds->contains($group->id) || ($memberGroupIds->contains($group->id) && auth()->user()->can('update', $group)))
-                                <a href="{{ route('groups.edit', $group) }}"
-                                    class="p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition">
+                                <button type="button"
+                                    onclick="window.__openGroupRename && window.__openGroupRename({ name: @js($group->name), url: @js(route('groups.update', $group)) })"
+                                    class="p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition"
+                                    title="Rename">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
-                                </a>
+                                </button>
                             @endif
 
                             {{-- View (members only) or Join (non-members) --}}

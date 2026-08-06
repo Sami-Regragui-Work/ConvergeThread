@@ -22,6 +22,7 @@
             showSearch: false,
             showMedia: false,
             selectedChatKey: @js($browseChatType && $browseChatId ? $browseChatType.':'.$browseChatId : ''),
+            searchScope: 'one',
             query: '',
             authorQuery: '',
             filterUserId: null,
@@ -56,17 +57,23 @@
             },
 
             parseChatKey() {
-                if (!this.selectedChatKey) return null;
+                if (!this.selectedChatKey || this.selectedChatKey === '__all__') return null;
                 const [type, id] = this.selectedChatKey.split(':');
                 if (!type || !id) return null;
                 return { type, id: Number(id) };
+            },
+
+            isAllChats() {
+                return this.selectedChatKey === '__all__';
             },
 
             async openSearch() {
                 await this.boot();
                 this.showSearch = true;
                 this.showMedia = false;
-                if (this.selectedChatKey) {
+                if (this.isAllChats()) {
+                    await this.onChatPicked();
+                } else if (this.selectedChatKey) {
                     await this.loadParticipants();
                     await this.syncSelected(false);
                 }
@@ -76,7 +83,7 @@
                 await this.boot();
                 this.showMedia = true;
                 this.showSearch = false;
-                if (this.selectedChatKey) await this.loadMedia();
+                if (this.selectedChatKey && !this.isAllChats()) await this.loadMedia();
             },
 
             async onChatPicked() {
@@ -85,6 +92,23 @@
                 this.filterUserId = null;
                 this.authorQuery = '';
                 this.participants = [];
+                if (this.isAllChats()) {
+                    this.busy = true;
+                    this.status = 'Indexing all chats…';
+                    try {
+                        const result = await window.ChatSearchIndex.syncChats(this.chats, {
+                            userId: this.currentUserId,
+                            cryptoPublicKeyUrl: this.cryptoPublicKeyUrl,
+                            force: false,
+                        });
+                        this.status = 'Indexed ' + result.imported + ' message(s) across chats';
+                    } catch (e) {
+                        this.status = 'Could not index all chats.';
+                    } finally {
+                        this.busy = false;
+                    }
+                    return;
+                }
                 if (this.selectedChatKey) {
                     await this.loadParticipants();
                     await this.syncSelected(false);
@@ -151,15 +175,22 @@
             },
 
             async runSearch() {
-                const chat = this.parseChatKey();
-                if (!chat) {
+                if (!this.selectedChatKey) {
                     this.status = 'Select a chat first.';
                     return;
                 }
                 if (!window.ChatSearchIndex) return;
                 this.busy = true;
                 try {
-                    await this.syncSelected(false);
+                    if (this.isAllChats()) {
+                        await window.ChatSearchIndex.syncChats(this.chats, {
+                            userId: this.currentUserId,
+                            cryptoPublicKeyUrl: this.cryptoPublicKeyUrl,
+                            force: false,
+                        });
+                    } else {
+                        await this.syncSelected(false);
+                    }
                     const fromDate = this.filterFrom ? new Date(this.filterFrom).toISOString() : null;
                     let toDate = null;
                     if (this.filterTo) {
@@ -171,16 +202,26 @@
                     if (this.filterAttachments === '1') hasAttachments = true;
                     if (this.filterAttachments === '0') hasAttachments = false;
 
-                    this.results = await window.ChatSearchIndex.search({
-                        chatType: chat.type,
-                        chatId: chat.id,
+                    const filters = {
                         query: this.query,
                         userId: this.filterUserId ? Number(this.filterUserId) : null,
                         hasAttachments,
                         fromDate,
                         toDate,
                         limit: 80,
-                    });
+                        viewerUserId: this.currentUserId,
+                    };
+
+                    if (this.isAllChats()) {
+                        this.results = await window.ChatSearchIndex.searchAll(filters);
+                    } else {
+                        const chat = this.parseChatKey();
+                        this.results = await window.ChatSearchIndex.search({
+                            ...filters,
+                            chatType: chat.type,
+                            chatId: chat.id,
+                        });
+                    }
                     this.status = this.results.length + ' result(s)';
                 } catch (e) {
                     this.status = 'Search failed.';
@@ -264,8 +305,11 @@
             },
 
             goToMessage(hit) {
-                const chat = this.parseChatKey();
-                if (!chat) return;
+                const chat = this.parseChatKey() || {
+                    type: hit.chatType,
+                    id: hit.chatId,
+                };
+                if (!chat?.type || !chat?.id) return;
                 if (hit.parentId) {
                     window.location.href = '/messages/' + hit.parentId + '/thread?message=' + hit.messageId;
                 } else {
@@ -321,10 +365,12 @@
                         <select x-model="$store.chatBrowse.selectedChatKey" @change="$store.chatBrowse.onChatPicked()"
                             class="w-full bg-surface-200 border border-white/10 text-white text-sm rounded-lg px-3 py-2">
                             <option value="">Select a chat…</option>
+                            <option value="__all__">All my chats</option>
                             <template x-for="chat in $store.chatBrowse.chats" :key="chat.type + ':' + chat.id">
                                 <option :value="chat.type + ':' + chat.id" x-text="chat.name + ' (' + chat.kind + ')'"></option>
                             </template>
                         </select>
+                        <p class="text-[10px] text-slate-500 mt-1">All chats only searches chats you belong to (indexed locally).</p>
                     </div>
                     <div>
                         <label class="block text-[11px] text-slate-500 mb-1">Keywords</label>

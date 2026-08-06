@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\ChatKeyNeeded;
 use App\Http\Controllers\Concerns\ResolvesChatable;
 use App\Models\ChatKeyShare;
 use App\Models\Message;
@@ -103,6 +104,17 @@ class ChatCryptoController extends Controller
                 ]
             );
         }
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function requestKey(string $chatType, int $chatId)
+    {
+        $user = Auth::user();
+        $chatable = $this->resolveChatable($user, $chatType, $chatId);
+        Gate::authorize('viewAny', [Message::class, $chatable]);
+
+        ChatKeyNeeded::dispatch($chatType, $chatId, (int) $user->id);
 
         return response()->json(['ok' => true]);
     }

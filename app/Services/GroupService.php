@@ -56,13 +56,16 @@ class GroupService
     public function updateName(Group $group, string $name): Group
     {
         $group->update(['name' => $name]);
+        WorkspaceSync::bump($group->tenant_id, ['groups']);
 
         return $group->fresh();
     }
 
     public function delete(Group $group): void
     {
+        $tenantId = $group->tenant_id;
         $group->delete();
+        WorkspaceSync::bump($tenantId, ['groups', 'members']);
     }
 
     public function getIndexDataForUser(User $user): array
