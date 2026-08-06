@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Notifications\AddedToGroupNotification;
 use App\Notifications\GroupPermissionsChangedNotification;
 use App\Notifications\RoleChangedNotification;
+use App\Support\WorkspaceSync;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Validation\ValidationException;
 
@@ -35,6 +36,9 @@ class GroupMemberService
                 ));
             }
 
+            $group->touch();
+            WorkspaceSync::bump($group->tenant_id, ['groups', 'members']);
+
             return $existingMembership->fresh();
         }
 
@@ -55,6 +59,9 @@ class GroupMemberService
             ));
         }
 
+        $group->touch();
+        WorkspaceSync::bump($group->tenant_id, ['groups', 'members']);
+
         return $groupMember;
     }
 
@@ -66,6 +73,8 @@ class GroupMemberService
             ->firstOrFail();
 
         $groupMember->update(['left_at' => now()]);
+        $group->touch();
+        WorkspaceSync::bump($group->tenant_id, ['groups', 'members']);
     }
 
     public function assignRole(Group $group, User $member, ?GroupRoleOverride $roleOverride = null): GroupMember
@@ -83,6 +92,9 @@ class GroupMemberService
             $group,
             $roleOverride ? 'New permissions in '.$group->name : 'Permissions reset in '.$group->name,
         ));
+
+        $group->touch();
+        WorkspaceSync::bump($group->tenant_id, ['groups', 'members']);
 
         return $groupMember->fresh();
     }
@@ -104,6 +116,8 @@ class GroupMemberService
         $member->update(['tenant_role_id' => $tenantRole->id]);
 
         $member->notify(new RoleChangedNotification($tenantRole->name, $group->name));
+
+        WorkspaceSync::bump($group->tenant_id, ['users', 'members']);
 
         return $member->fresh(['tenantRole']);
     }

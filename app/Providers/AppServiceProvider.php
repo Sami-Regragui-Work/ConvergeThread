@@ -8,6 +8,7 @@ use App\Models\MergeSession;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
@@ -26,6 +27,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Broadcast::routes(['middleware' => ['web', 'auth']]);
+
         Relation::enforceMorphMap([
             'group' => Group::class,
             'duo' => Duo::class,

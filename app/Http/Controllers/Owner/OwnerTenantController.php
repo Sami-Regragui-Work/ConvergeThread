@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Owner;
 
 use App\Http\Controllers\Controller;
 use App\Models\Tenant;
+use App\Support\WorkspaceSync;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 
@@ -20,6 +21,7 @@ class OwnerTenantController extends Controller
         }
 
         $tenant->close(Auth::user());
+        WorkspaceSync::bump($tenant->id, ['tenants']);
 
         return back()->with('success', "Workspace \"{$tenant->name}\" has been closed.");
     }
@@ -27,6 +29,7 @@ class OwnerTenantController extends Controller
     public function reopen(Tenant $tenant): RedirectResponse
     {
         $tenant->reopen();
+        WorkspaceSync::bump($tenant->id, ['tenants']);
 
         return back()->with('success', "Workspace \"{$tenant->name}\" has been reopened.");
     }

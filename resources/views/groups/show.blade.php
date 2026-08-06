@@ -4,7 +4,7 @@
 @section('content')
     @php $memberCount = $group->activeMembers->count(); @endphp
 
-    <div class="max-w-5xl mx-auto space-y-6">
+    <div class="max-w-5xl mx-auto space-y-6" data-sync="groups,members">
 
         <div
             class="bg-surface-200 border border-white/5 rounded-2xl px-6 py-5 flex flex-col sm:flex-row sm:items-center gap-4">

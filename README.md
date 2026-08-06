@@ -41,10 +41,16 @@ php artisan storage:link
 ## Run
 
 ```bash
+# HTTP app
 php artisan serve
+
+# WebSocket server (Reverb) — required for live chat / workspace sync
+php artisan reverb:start
 ```
 
 Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
+
+`.env.example` defaults to `BROADCAST_CONNECTION=reverb` with local Reverb keys. Keep the Reverb process running alongside `serve` for realtime updates; without it, the UI falls back to polling.
 
 After seeding, sign in with the owner account from `database/seeders/Permanents/OwnerSeeder.php` (check that file for the seeded email/password), or register into the default workspace tenant.
 
@@ -61,7 +67,7 @@ php artisan test
 - PHP, Laravel 12
 - Blade + Tailwind (CDN) + Alpine.js
 - Session authentication (`web` guard)
-- Poll-based chat updates (`BROADCAST_CONNECTION=log` by default)
+- Laravel Reverb WebSockets for chat and workspace sync (HTTP poll fallback)
 
 ## Documentation
 
@@ -76,6 +82,5 @@ Feature work uses `feature/*` branches merged into `main`. See `references/branc
 ## Roadmap / Todo
 
 - **E2EE (end-to-end encryption)** for messages and attachments
-- WebSocket real-time sync (replacing poll-based updates)
-- Voice and video calls in chat header
+- Voice and video call UI exists in chat; **WebRTC media calls are not working yet**
 - Full hierarchy UI polish and cross-hierarchy rules

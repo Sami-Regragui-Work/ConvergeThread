@@ -6,6 +6,7 @@ use App\Models\Group;
 use App\Models\GroupMember;
 use App\Models\TenantRole;
 use App\Models\User;
+use App\Support\WorkspaceSync;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -30,6 +31,8 @@ class GroupService
             ]);
 
             $this->groupMemberService->add($group, $creator);
+
+            WorkspaceSync::bump($creator->tenant_id, ['groups', 'members']);
 
             return $group;
         });

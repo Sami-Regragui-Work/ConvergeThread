@@ -15,11 +15,35 @@
                     colors: {
                         surface: { 50: '#f8fafc', 100: '#1e2433', 200: '#16192a', 300: '#11141f', 400: '#0c0e18' },
                         brand: { 400: '#818cf8', 500: '#6366f1', 600: '#4f46e5' }
-                    }
+                    },
+                    zIndex: {
+                        300: '300',
+                    },
                 }
             }
         }
     </script>
+    @if(config('broadcasting.default') === 'reverb')
+        <script src="https://cdn.jsdelivr.net/npm/pusher-js@8.4.0-rc2/dist/web/pusher.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/laravel-echo@1.19.0/dist/echo.iife.js"></script>
+        <script>
+            window.Echo = new Echo({
+                broadcaster: 'reverb',
+                key: @js(config('broadcasting.connections.reverb.key')),
+                wsHost: @js(config('broadcasting.connections.reverb.options.host')),
+                wsPort: @js((int) config('broadcasting.connections.reverb.options.port')),
+                wssPort: @js((int) config('broadcasting.connections.reverb.options.port')),
+                forceTLS: @js(config('broadcasting.connections.reverb.options.scheme') === 'https'),
+                enabledTransports: ['ws', 'wss'],
+                authEndpoint: @js(url('/broadcasting/auth')),
+                auth: {
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    },
+                },
+            });
+        </script>
+    @endif
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
     <style>
         [x-cloak] {
@@ -62,37 +86,77 @@
     x-data="{
         sidebarOpen: {{ auth()->check() ? "window.matchMedia('(min-width: 1024px)').matches" : 'false' }},
         unreadNotifs: {{ auth()->check() ? auth()->user()->unreadNotifications()->count() : 0 }},
-        groupsStamp: null,
-        usersStamp: null,
+        stamps: {},
+        ownerSearch: '',
+        realtimeReady: false,
         init() {
             @auth
+            this.setupRealtime();
             this.pollWorkspace();
-            setInterval(() => this.pollWorkspace(), 8000);
+            setInterval(() => this.pollWorkspace(), this.realtimeReady ? 20000 : 8000);
             @endauth
         },
-        async pollWorkspace() {
+        ownerMatch(haystack) {
+            const q = (this.ownerSearch || '').toLowerCase().trim();
+            if (!q) return true;
+            return String(haystack || '').toLowerCase().includes(q);
+        },
+        setupRealtime() {
+            if (!window.Echo) return;
+            const tenantId = {{ (int) (auth()->user()->tenant_id ?? 0) }};
+            if (tenantId) {
+                window.Echo.private('workspace.' + tenantId)
+                    .listen('.workspace.updated', (e) => this.onSyncEvent(e?.scopes || ['workspace']));
+            }
+            @if(auth()->check() && auth()->user()->isOwner())
+            window.Echo.private('owner')
+                .listen('.owner.updated', (e) => this.onSyncEvent(e?.scopes || ['workspace']));
+            @endif
+            this.realtimeReady = true;
+        },
+        onSyncEvent(scopes) {
+            this.reloadIfNeeded(scopes);
+            this.pollWorkspace(true);
+        },
+        reloadIfNeeded(scopes) {
+            const el = document.querySelector('[data-sync]');
+            if (!el) return;
+            const needed = (el.dataset.sync || '').split(',').map(s => s.trim()).filter(Boolean);
+            if (!needed.length || scopes.includes('workspace') || needed.some(s => scopes.includes(s))) {
+                window.location.reload();
+            }
+        },
+        async pollWorkspace(notificationsOnly = false) {
             try {
                 const r = await fetch(@js(route('workspace.sync')), { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
                 if (!r.ok) return;
                 const d = await r.json();
                 if (this.unreadNotifs !== d.unread_notifications) {
                     this.unreadNotifs = d.unread_notifications;
-                    document.querySelector('[data-notif-badge]')?.classList.toggle('hidden', !d.unread_notifications);
-                    if (document.querySelector('[data-notif-badge]')) {
-                        document.querySelector('[data-notif-badge]').textContent = d.unread_notifications > 9 ? '9+' : d.unread_notifications;
+                    const badge = document.querySelector('[data-notif-badge]');
+                    if (badge) {
+                        badge.classList.toggle('hidden', !d.unread_notifications);
+                        badge.textContent = d.unread_notifications > 9 ? '9+' : d.unread_notifications;
                     }
                 }
-                const workspacePage = document.querySelector('[data-workspace-page]');
-                if (workspacePage) {
-                    if (this.groupsStamp && this.groupsStamp !== d.groups_updated_at) {
-                        window.location.reload();
-                    }
-                    if (this.usersStamp && this.usersStamp !== d.users_updated_at) {
-                        window.location.reload();
+                if (notificationsOnly) return;
+
+                const el = document.querySelector('[data-sync]');
+                if (el) {
+                    const needed = (el.dataset.sync || '').split(',').map(s => s.trim()).filter(Boolean);
+                    const keys = needed.length ? needed : Object.keys(d).filter(k => !['unread_notifications', 'server_time', 'groups_updated_at', 'users_updated_at'].includes(k));
+                    for (const key of keys) {
+                        if (this.stamps[key] != null && d[key] != null && this.stamps[key] !== d[key]) {
+                            window.location.reload();
+                            return;
+                        }
                     }
                 }
-                this.groupsStamp = d.groups_updated_at;
-                this.usersStamp = d.users_updated_at;
+
+                for (const [key, value] of Object.entries(d)) {
+                    if (['unread_notifications', 'server_time'].includes(key)) continue;
+                    this.stamps[key] = value;
+                }
             } catch (e) {}
         }
     }">
@@ -102,7 +166,7 @@
                 class="fixed inset-y-0 left-0 z-40 w-64 border-r border-white/5 bg-surface-300 transition-transform duration-300 flex flex-col">
 
                 {{-- Logo --}}
-                <div class="flex items-center gap-3 px-5 py-4 border-b border-white/5">
+                <div class="flex items-center gap-3 px-5 py-4 border-b border-white/5 select-none">
                     <div
                         class="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center text-white font-bold text-sm">
                         CT
@@ -211,21 +275,32 @@
                     @include('partials.back-button')
                 @endauth
 
-                <div class="flex items-center gap-2 min-w-0">
-                    <div
-                        class="w-7 h-7 rounded-lg bg-brand-500 flex items-center justify-center text-white font-bold text-xs">
-                        CT
-                    </div>
-                    <h1 class="text-sm font-semibold text-white truncate">ConvergeThread</h1>
+                <div class="flex items-center gap-2 min-w-0 select-none">
+                    @auth
+                        <h1 class="text-sm font-semibold text-white truncate">
+                            @if(auth()->user()->isOwner())
+                                Owner
+                            @else
+                                {{ auth()->user()->tenant?->name ?? 'Workspace' }}
+                            @endif
+                        </h1>
+                    @else
+                        <div
+                            class="w-7 h-7 rounded-lg bg-brand-500 flex items-center justify-center text-white font-bold text-xs">
+                            CT
+                        </div>
+                        <h1 class="text-sm font-semibold text-white truncate">ConvergeThread</h1>
+                    @endauth
                 </div>
 
                 <div class="ml-auto flex items-center gap-3">
                     @auth
-                        @if(auth()->user()->tenant_id === 1)
-                            <form action="{{ route('owner.index') }}" method="GET" class="hidden md:block">
-                                <input type="search" name="q" value="{{ request('q') }}" placeholder="Search tenants, users…"
-                                    class="bg-surface-200 border border-white/10 text-white text-xs rounded-lg px-3 py-1.5 w-48 focus:outline-none focus:ring-1 focus:ring-brand-500/50">
-                            </form>
+                        @if(auth()->user()->isOwner())
+                            <div class="hidden md:block">
+                                <input type="search" x-model="ownerSearch" placeholder="Search tenants, users…"
+                                    class="bg-surface-200 border border-white/10 text-white text-xs rounded-lg px-3 py-1.5 w-48 focus:outline-none focus:ring-1 focus:ring-brand-500/50"
+                                    @keydown.enter.prevent>
+                            </div>
                         @endif
                         <a href="{{ route('notifications.index') }}"
                             class="relative inline-flex items-center justify-center p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition"

@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Notifications\RoleChangedNotification;
 use App\Services\RoleHierarchyService;
 use App\Services\TenantPermissionService;
+use App\Support\WorkspaceSync;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
@@ -82,6 +83,7 @@ class WorkspaceMemberController extends Controller
 
         $member->update(['tenant_role_id' => $tenantRole->id]);
         $member->notify(new RoleChangedNotification($tenantRole->name, 'workspace'));
+        WorkspaceSync::bump($user->tenant_id, ['users', 'members']);
 
         return back()->with('success', 'Role updated.');
     }

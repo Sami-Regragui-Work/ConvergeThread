@@ -2,7 +2,7 @@
 @section('title', 'Merge Sessions')
 
 @section('content')
-    <div class="max-w-4xl mx-auto">
+    <div class="max-w-4xl mx-auto" data-sync="merges">
         <div class="flex items-center justify-between mb-6">
             <h1 class="text-xl font-bold text-white">Merge Sessions</h1>
             @can('create', App\Models\MergeSession::class)

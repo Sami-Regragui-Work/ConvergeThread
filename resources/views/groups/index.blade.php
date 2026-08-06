@@ -8,7 +8,7 @@
 @endphp
 
 @section('content')
-    <div class="max-w-4xl mx-auto">
+    <div class="max-w-4xl mx-auto" data-sync="groups,members">
         <div class="flex items-center justify-between mb-6">
             <h1 class="text-xl font-bold text-white">Groups</h1>
             <div class="flex items-center gap-2">

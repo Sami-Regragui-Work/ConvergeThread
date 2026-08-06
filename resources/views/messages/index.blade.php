@@ -18,6 +18,8 @@
             canSend: @js(auth()->user()->can('create', [App\Models\Message::class, $chatable])),
             mentionIds: @js($mentionIds),
             showThreadLink: true,
+            chatType: @js($chatType),
+            chatId: @js((int) $chatId),
         })"
         x-init="init()">
 
@@ -196,7 +198,7 @@
                             <button type="button" @click="showMentionMenu = !showMentionMenu"
                                 class="shrink-0 w-10 h-10 rounded-xl border border-white/10 bg-surface-200 text-brand-400 hover:bg-white/5 transition font-bold"
                                 title="Mention someone">&#64;</button>
-                            <input type="text" x-model="draft" @input="onDraftInput()" autocomplete="off"
+                            <input type="text" x-ref="draftInput" x-model="draft" @input="onDraftInput()" autocomplete="off"
                                 placeholder="Message… @all, @role:Admin, @username"
                                 :disabled="sending"
                                 class="flex-1 bg-surface-200 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 transition placeholder-slate-500 disabled:opacity-50">

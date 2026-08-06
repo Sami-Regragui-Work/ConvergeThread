@@ -8,6 +8,7 @@ use App\Models\Invitation;
 use App\Models\Tenant;
 use App\Models\TenantRole;
 use App\Models\User;
+use App\Support\WorkspaceSync;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -80,7 +81,7 @@ class InvitationService
 
         $resolvedRoleId = $tenantRole?->id ?? $this->defaultTenantRoleId($group);
 
-        return Invitation::create([
+        $invitation = Invitation::create([
             'tenant_id' => $tenant->id,
             'group_id' => $group?->id,
             'invited_by_id' => $invitedBy->id,
@@ -89,6 +90,10 @@ class InvitationService
             'token' => Str::random(60),
             'expires_at' => now()->addDays(7),
         ]);
+
+        WorkspaceSync::bump($tenant->id, ['invitations']);
+
+        return $invitation;
     }
 
     public function acceptAdminInvitation(
@@ -136,6 +141,8 @@ class InvitationService
                 'tenant_id' => $tenant->id,
                 'accepted_at' => now(),
             ]);
+
+            WorkspaceSync::bump($tenant->id, ['users', 'tenants', 'invitations']);
 
             return [
                 'user' => $user,
@@ -196,6 +203,8 @@ class InvitationService
             $invitation->update([
                 'accepted_at' => now(),
             ]);
+
+            WorkspaceSync::bump($invitation->tenant_id, ['users', 'members', 'groups', 'invitations']);
 
             return [
                 'user' => $user,

@@ -6,19 +6,24 @@ use App\Models\Group;
 use App\Models\GroupRoleOverride;
 use App\Models\Tenant;
 use App\Models\TenantRole;
+use App\Support\WorkspaceSync;
 use Illuminate\Validation\ValidationException;
 
 class RoleService
 {
     public function createTenantRole(Tenant $tenant, string $name, array $permissions, ?string $color = null): TenantRole
     {
-        return TenantRole::create([
+        $role = TenantRole::create([
             'tenant_id' => $tenant->id,
             'name' => $name,
             'color' => $color,
             'permissions' => $permissions,
             'is_system' => false,
         ]);
+
+        WorkspaceSync::bump($tenant->id, ['roles']);
+
+        return $role;
     }
 
     public function createGroupRoleOverride(Group $group, TenantRole $tenantRole, ?array $permissions = null): GroupRoleOverride
@@ -43,6 +48,8 @@ class RoleService
                 'color' => $color ?? $tenantRole->color,
             ]);
 
+            WorkspaceSync::bump($tenantRole->tenant_id, ['roles']);
+
             return $tenantRole->fresh();
         }
 
@@ -51,6 +58,8 @@ class RoleService
             'color' => $color ?? $tenantRole->color,
             'permissions' => $permissions,
         ]);
+
+        WorkspaceSync::bump($tenantRole->tenant_id, ['roles']);
 
         return $tenantRole->fresh();
     }
@@ -63,7 +72,9 @@ class RoleService
             ]);
         }
 
+        $tenantId = $tenantRole->tenant_id;
         $tenantRole->delete();
+        WorkspaceSync::bump($tenantId, ['roles']);
     }
 
     public function deleteGroupRoleOverride(GroupRoleOverride $groupRoleOverride): void

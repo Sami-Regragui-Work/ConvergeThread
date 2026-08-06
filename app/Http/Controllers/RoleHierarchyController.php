@@ -7,6 +7,7 @@ use App\Models\RoleHierarchyLevel;
 use App\Models\User;
 use App\Services\RoleHierarchyService;
 use App\Support\Permissions;
+use App\Support\WorkspaceSync;
 use App\Services\TenantPermissionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -57,6 +58,8 @@ class RoleHierarchyController extends Controller
             'label' => 'Top level',
         ]);
 
+        WorkspaceSync::bump($user->tenant_id, ['hierarchies']);
+
         return back()->with('success', 'Hierarchy created.');
     }
 
@@ -73,6 +76,8 @@ class RoleHierarchyController extends Controller
             'level' => $next,
             'label' => 'Level '.$next,
         ]);
+
+        WorkspaceSync::bump($user->tenant_id, ['hierarchies']);
 
         return back()->with('success', 'Level added.');
     }
@@ -96,6 +101,8 @@ class RoleHierarchyController extends Controller
 
         $level->members()->sync($validIds);
 
+        WorkspaceSync::bump($user->tenant_id, ['hierarchies', 'members']);
+
         return back()->with('success', 'Level members updated.');
     }
 
@@ -109,6 +116,8 @@ class RoleHierarchyController extends Controller
 
         $level->delete();
 
+        WorkspaceSync::bump($user->tenant_id, ['hierarchies']);
+
         return back()->with('success', 'Level removed.');
     }
 
@@ -119,6 +128,8 @@ class RoleHierarchyController extends Controller
         abort_unless((int) $hierarchy->tenant_id === (int) $user->tenant_id, 404);
 
         $hierarchy->delete();
+
+        WorkspaceSync::bump($user->tenant_id, ['hierarchies']);
 
         return back()->with('success', 'Hierarchy deleted.');
     }

@@ -2,7 +2,7 @@
 @section('title', 'Role Hierarchies')
 
 @section('content')
-    <div class="max-w-5xl mx-auto space-y-6">
+    <div class="max-w-5xl mx-auto space-y-6" data-sync="hierarchies,members">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
                 <h1 class="text-xl font-bold text-white">Role Hierarchies</h1>

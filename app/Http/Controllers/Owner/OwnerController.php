@@ -10,49 +10,27 @@ use App\Models\User;
 
 class OwnerController extends Controller
 {
-    public function index(\Illuminate\Http\Request $request)
+    public function index()
     {
-        $query = $request->input('q');
-        $query = is_string($query) ? trim($query) : '';
-
-        $usersQuery = User::query()
+        $users = User::query()
             ->with(['tenant', 'tenantRole', 'bannedBy'])
-            ->orderBy('id');
+            ->orderBy('id')
+            ->get();
 
-        $tenantsQuery = Tenant::query()
+        $tenants = Tenant::query()
             ->with(['closure.closedBy'])
             ->withCount(['users', 'groups', 'tenantRoles'])
-            ->orderBy('id');
+            ->orderBy('id')
+            ->get();
 
-        $groupsQuery = Group::query()
+        $groups = Group::query()
             ->with(['tenant', 'creator', 'members'])
             ->withCount('members')
-            ->orderBy('id');
-
-        if ($query !== '') {
-            $usersQuery->where(function ($q) use ($query) {
-                $q->where('email', 'like', "%{$query}%")
-                    ->orWhere('username', 'like', "%{$query}%")
-                    ->orWhere('display_name', 'like', "%{$query}%");
-            });
-
-            $tenantsQuery->where(function ($q) use ($query) {
-                $q->where('slug', 'like', "%{$query}%")
-                    ->orWhere('admin_email', 'like', "%{$query}%");
-            });
-
-            $groupsQuery->where('name', 'like', "%{$query}%");
-        }
-
-        $users = $usersQuery->get();
-        $tenants = $tenantsQuery->get();
-        $groups = $groupsQuery->get();
+            ->orderBy('id')
+            ->get();
 
         $duos = Duo::query()
             ->with(['group', 'user1', 'user2'])
-            ->when($query !== '', function ($q) use ($query) {
-                $q->where('name', 'like', "%{$query}%");
-            })
             ->orderBy('id')
             ->get();
 

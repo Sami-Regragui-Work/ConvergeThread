@@ -2,7 +2,7 @@
 @section('title', 'Workspace Members')
 
 @section('content')
-    <div class="max-w-4xl mx-auto space-y-6" data-workspace-page>
+    <div class="max-w-4xl mx-auto space-y-6" data-sync="users,members,invitations">
         <div>
             <h1 class="text-xl font-bold text-white">Workspace Members</h1>
             <p class="text-sm text-slate-500 mt-1">

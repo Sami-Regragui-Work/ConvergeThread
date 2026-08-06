@@ -5,7 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Support\Str;
+use App\Support\DisplayName;
 
 class Tenant extends Model
 {
@@ -66,6 +66,6 @@ class Tenant extends Model
 
     public function getNameAttribute(): string
     {
-        return Str::title(str_replace('_', ' ', $this->slug));
+        return DisplayName::capitalizeFirst(str_replace('_', ' ', $this->slug)) ?? $this->slug;
     }
 }

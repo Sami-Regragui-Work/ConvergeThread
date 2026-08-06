@@ -23,3 +23,11 @@ Broadcast::channel('chat.{chatType}.{chatId}', function ($user, string $chatType
 
     return Gate::forUser($user)->allows('viewAny', [Message::class, $chatable]);
 });
+
+Broadcast::channel('workspace.{tenantId}', function ($user, int $tenantId) {
+    return (int) $user->tenant_id === $tenantId;
+});
+
+Broadcast::channel('owner', function ($user) {
+    return $user->isOwner();
+});

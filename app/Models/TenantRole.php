@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use App\Support\DisplayName;
 use App\Services\RoleHierarchyService;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -27,6 +29,14 @@ class TenantRole extends Model
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
         ];
+    }
+
+    protected function name(): Attribute
+    {
+        return Attribute::make(
+            get: fn (?string $value) => DisplayName::capitalizeFirst($value),
+            set: fn (?string $value) => $value,
+        );
     }
 
     public function tenant(): BelongsTo

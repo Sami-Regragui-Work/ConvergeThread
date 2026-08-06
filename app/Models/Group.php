@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\DisplayName;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -22,6 +24,14 @@ class Group extends Model
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
         ];
+    }
+
+    protected function name(): Attribute
+    {
+        return Attribute::make(
+            get: fn (?string $value) => DisplayName::capitalizeFirst($value),
+            set: fn (?string $value) => $value,
+        );
     }
 
     public function tenant(): BelongsTo

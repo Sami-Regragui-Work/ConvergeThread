@@ -15,6 +15,8 @@
             canSend: config.canSend ?? config.canReply ?? false,
             showThreadLink: config.showThreadLink ?? false,
             parentId: config.parentId ?? null,
+            chatType: config.chatType ?? null,
+            chatId: config.chatId ?? null,
             draft: '',
             files: [],
             filePreviews: [],
@@ -22,6 +24,7 @@
             sendError: '',
             maxFileBytes: 50 * 1024 * 1024,
             pollTimer: null,
+            echoBound: false,
             mentionQueue: [...(config.mentionIds ?? [])],
             mentionIndex: 0,
             showMentionMenu: false,
@@ -36,12 +39,44 @@
 
             init() {
                 this.scrollToBottom();
-                this.pollTimer = setInterval(() => this.poll(), 3000);
+                this.$nextTick(() => this.focusDraft());
+                this.setupRealtime();
+                this.pollTimer = setInterval(() => this.poll(), this.echoBound ? 15000 : 3000);
             },
 
             destroy() {
                 if (this.pollTimer) clearInterval(this.pollTimer);
+                if (this.echoBound && window.Echo && this.chatType && this.chatId) {
+                    window.Echo.leave('chat.' + this.chatType + '.' + this.chatId);
+                }
                 this.revokeFilePreviews();
+            },
+
+            focusDraft() {
+                this.$refs.draftInput?.focus();
+            },
+
+            setupRealtime() {
+                if (!window.Echo || !this.chatType || !this.chatId) return;
+
+                window.Echo.private('chat.' + this.chatType + '.' + this.chatId)
+                    .listen('.message.sent', (e) => {
+                        const message = e?.message;
+                        if (!message) {
+                            this.poll();
+                            return;
+                        }
+
+                        if (this.parentId) {
+                            if (Number(message.parent_id) !== Number(this.parentId)) return;
+                        } else if (message.parent_id) {
+                            return;
+                        }
+
+                        this.appendMessages([message]);
+                    });
+
+                this.echoBound = true;
             },
 
             mentionCount() {
@@ -74,6 +109,7 @@
                 this.draft = this.draft.replace(/@[A-Za-z0-9_:.-]*$/, token + ' ');
                 this.showMentionMenu = false;
                 this.mentionFilter = '';
+                this.$nextTick(() => this.focusDraft());
             },
 
             toggleSelected(id) {
@@ -385,6 +421,7 @@
                     this.sendError = 'Network error while sending. Try again.';
                 } finally {
                     this.sending = false;
+                    this.$nextTick(() => this.focusDraft());
                 }
             },
         };

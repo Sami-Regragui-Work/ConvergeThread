@@ -2,7 +2,7 @@
 @section('title', 'Pending Invitations')
 
 @section('content')
-    <div class="max-w-3xl mx-auto space-y-6">
+    <div class="max-w-3xl mx-auto space-y-6" data-sync="invitations">
         <div>
             <h1 class="text-xl font-bold text-white">Pending Invitations</h1>
             <p class="text-sm text-slate-500 mt-1">Invitations you sent that have not been accepted yet.</p>

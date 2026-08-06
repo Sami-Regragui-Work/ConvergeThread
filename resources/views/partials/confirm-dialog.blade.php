@@ -1,7 +1,7 @@
 <div x-data="confirmDialog()"
     @confirm-action.window="ask($event.detail.message, $event.detail.form)"
     x-cloak>
-    <div x-show="open" class="fixed inset-0 z-[300] flex items-center justify-center p-4">
+    <div x-show="open" class="fixed inset-0 z-300 flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/60" @click="cancel()"></div>
         <div class="relative w-full max-w-sm rounded-2xl border border-white/10 bg-surface-200 p-6 shadow-2xl space-y-4"
             @click.stop>

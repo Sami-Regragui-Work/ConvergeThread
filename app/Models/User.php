@@ -2,8 +2,9 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Support\DisplayName;
 use Database\Factories\UserFactory;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -114,5 +115,13 @@ class User extends Authenticatable
         }
 
         return $this->email;
+    }
+
+    protected function displayName(): Attribute
+    {
+        return Attribute::make(
+            get: fn (?string $value) => DisplayName::capitalizeFirst($value),
+            set: fn (?string $value) => $value,
+        );
     }
 }

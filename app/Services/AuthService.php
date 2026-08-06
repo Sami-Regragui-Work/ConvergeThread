@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\TenantRole;
 use App\Models\User;
+use App\Support\WorkspaceSync;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 
@@ -39,6 +40,8 @@ class AuthService
             'tenant_id' => $tenant->id,
             'tenant_role_id' => $memberRoleId,
         ]);
+
+        WorkspaceSync::bump($tenant->id, ['users']);
 
         Auth::login($user);
 

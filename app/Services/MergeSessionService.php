@@ -7,6 +7,7 @@ use App\Models\MergeSession;
 use App\Models\User;
 use App\Notifications\MergeSessionStartedNotification;
 use App\Services\ChatParticipantService;
+use App\Support\WorkspaceSync;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -40,6 +41,8 @@ class MergeSessionService
                 }
             }
 
+            WorkspaceSync::bump($group1->tenant_id, ['merges']);
+
             return $session;
         });
     }
@@ -47,6 +50,10 @@ class MergeSessionService
     public function end(MergeSession $session): MergeSession
     {
         $session->update(['ended_at' => now()]);
+        $session->loadMissing('groups');
+        $tenantId = $session->groups->first()?->tenant_id;
+        WorkspaceSync::bump($tenantId, ['merges']);
+
         return $session->fresh();
     }
 

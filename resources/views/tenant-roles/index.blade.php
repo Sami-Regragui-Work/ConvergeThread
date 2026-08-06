@@ -2,7 +2,7 @@
 @section('title', 'Tenant Roles')
 
 @section('content')
-    <div class="max-w-3xl mx-auto">
+    <div class="max-w-3xl mx-auto" data-sync="roles">
         <div class="flex items-center justify-between mb-6">
             <h1 class="text-xl font-bold text-white">Tenant Roles</h1>
             @can('create', App\Models\TenantRole::class)

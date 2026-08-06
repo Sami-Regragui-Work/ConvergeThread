@@ -2,7 +2,7 @@
 @section('title', 'Members — ' . $group->name)
 
 @section('content')
-    <div class="max-w-3xl mx-auto space-y-6">
+    <div class="max-w-3xl mx-auto space-y-6" data-sync="members,groups,invitations">
         <div class="flex items-center gap-3 mb-6">
             <h1 class="text-xl font-bold text-white">Members</h1>
             <span class="text-xs text-slate-500">{{ $group->name }}</span>

@@ -3,7 +3,7 @@
 @section('title', 'Owner Dashboard')
 
 @section('content')
-    <div class="space-y-8">
+    <div class="space-y-8" data-sync="users,tenants,groups,members,duos">
         <section class="space-y-4">
             <div class="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
                 <div>
@@ -11,6 +11,11 @@
                     <p class="text-sm text-slate-400">
                         Bootstrap tenant admins, inspect platform data, and review current counts.
                     </p>
+                </div>
+                <div class="md:hidden">
+                    <input type="search" x-model="ownerSearch" placeholder="Search tenants, users…"
+                        class="w-full bg-surface-200 border border-white/10 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-brand-500/50"
+                        @keydown.enter.prevent>
                 </div>
             </div>
         </section>
@@ -102,7 +107,8 @@
                             </thead>
                             <tbody class="divide-y divide-white/5">
                                 @forelse ($tenants as $tenant)
-                                    <tr class="text-slate-300">
+                                    <tr class="text-slate-300"
+                                        x-show="ownerMatch(@js(strtolower(($tenant->name ?? '').' '.($tenant->admin_email ?? '').' '.($tenant->slug ?? '').' '.$tenant->id)))">
                                         <td class="px-4 py-3">{{ $tenant->id }}</td>
                                         <td class="px-4 py-3 font-medium text-white">{{ $tenant->name }}</td>
                                         <td class="px-4 py-3">{{ $tenant->admin_email }}</td>
@@ -173,7 +179,8 @@
                     </thead>
                     <tbody class="divide-y divide-white/5">
                         @forelse ($users as $user)
-                            <tr class="text-slate-300">
+                            <tr class="text-slate-300"
+                                x-show="ownerMatch(@js(strtolower(($user->display_name ?? '').' '.($user->username ?? '').' '.($user->email ?? '').' '.($user->tenant?->name ?? '').' '.($user->tenantRole?->name ?? '').' '.$user->id)))">
                                 <td class="px-4 py-3">{{ $user->id }}</td>
                                 <td class="px-4 py-3 font-medium text-white">
                                     {{ $user->display_name ?? $user->email }}
@@ -230,12 +237,13 @@
 
                 <div class="space-y-4">
                     @forelse ($groups as $group)
-                        <div class="rounded-2xl border border-white/5 bg-surface-300 p-4">
+                        <div class="rounded-2xl border border-white/5 bg-surface-300 p-4"
+                            x-show="ownerMatch(@js(strtolower(($group->name ?? '').' '.($group->tenant?->name ?? '').' '.$group->members->map(fn ($m) => $m->display_name ?? $m->username)->implode(' '))))">
                             <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
                                     <h3 class="font-medium text-white">{{ $group->name }}</h3>
                                     <p class="text-sm text-slate-400">
-                                        Tenant: {{ $group->tenant?->name ?? '—' }} · Members: {{ $group->users_count }}
+                                        Tenant: {{ $group->tenant?->name ?? '—' }} · Members: {{ $group->members_count }}
                                     </p>
                                 </div>
                             </div>
@@ -264,7 +272,8 @@
 
                 <div class="space-y-4">
                     @forelse ($duos as $duo)
-                        <div class="rounded-2xl border border-white/5 bg-surface-300 p-4">
+                        <div class="rounded-2xl border border-white/5 bg-surface-300 p-4"
+                            x-show="ownerMatch(@js(strtolower(($duo->name ?? '').' '.($duo->group?->name ?? '').' '.($duo->user1?->display_name ?? $duo->user1?->username ?? '').' '.($duo->user2?->display_name ?? $duo->user2?->username ?? ''))))">
                             <h3 class="font-medium text-white">{{ $duo->name }}</h3>
                             <p class="mt-1 text-sm text-slate-400">Group: {{ $duo->group?->name ?? '—' }}</p>
 
