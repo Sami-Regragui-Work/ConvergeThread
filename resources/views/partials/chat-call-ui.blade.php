@@ -47,33 +47,34 @@
         <div class="flex items-center justify-between gap-3">
             <div>
                 <p class="text-white font-semibold"
-                    x-text="callState === 'outgoing' ? ('Calling…') : (callType === 'video' ? 'Video call' : 'Voice call')"></p>
+                    x-text="callState === 'outgoing' ? ('Calling…') : (sharingScreen ? 'Sharing screen' : (callType === 'video' ? 'Video call' : 'Voice call'))"></p>
                 <p class="text-xs text-slate-500">{{ $chatLabel }}</p>
             </div>
             <span class="text-[10px] uppercase tracking-wide px-2 py-1 rounded-lg border border-white/10 text-slate-400"
                 x-text="callState"></span>
         </div>
         <p x-show="callError" x-cloak class="text-sm text-amber-300" x-text="callError"></p>
-        <div class="grid gap-3" :class="callType === 'video' ? 'sm:grid-cols-2' : ''">
+        <div class="grid gap-3" :class="(localShowsVideo() || peers.some(p => peerShowsVideo(p))) ? 'sm:grid-cols-2' : ''">
             <div class="relative rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center">
-                <video x-ref="localVideo" x-show="callType === 'video'" autoplay muted playsinline
-                    class="absolute inset-0 h-full w-full object-cover"></video>
-                <div x-show="callType !== 'video' || localVideoOff" class="relative z-10 text-center p-4">
+                <video x-ref="localVideo" x-show="localShowsVideo() && !localVideoOff" autoplay muted playsinline
+                    class="absolute inset-0 h-full w-full object-contain bg-black"></video>
+                <div x-show="!localShowsVideo() || localVideoOff" class="relative z-10 text-center p-4">
                     <div class="w-14 h-14 mx-auto rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center text-lg font-bold"
                         x-text="(currentUserName || 'Y').slice(0, 1).toUpperCase()"></div>
                     <p class="text-xs text-slate-400 mt-2">You <span x-show="localMuted">(muted)</span></p>
                 </div>
-                <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white">You</span>
+                <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white"
+                    x-text="sharingScreen ? 'You · screen' : 'You'"></span>
             </div>
             <template x-for="peer in peers" :key="peer.userId">
                 <div class="relative rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center">
-                    <video x-show="callType === 'video'" :id="'remote-video-' + peer.userId" autoplay playsinline
-                        class="absolute inset-0 h-full w-full object-cover"
+                    <video x-show="peerShowsVideo(peer)" :id="'remote-video-' + peer.userId" autoplay playsinline
+                        class="absolute inset-0 h-full w-full object-contain bg-black"
                         x-effect="if ($el && peer.stream) { $el.srcObject = peer.stream; $el.play?.().catch(() => {}); }"></video>
                     {{-- Keep audio in DOM (not display:none) or browsers mute it --}}
                     <audio :id="'remote-audio-' + peer.userId" autoplay playsinline class="sr-only"
-                        x-effect="if ($el && peer.stream) { $el.srcObject = peer.stream; $el.muted = callType === 'video'; if (callType !== 'video') $el.play?.().catch(() => {}); }"></audio>
-                    <div x-show="callType !== 'video' || !peer.stream" class="relative z-10 text-center p-4">
+                        x-effect="if ($el && peer.stream) { $el.srcObject = peer.stream; $el.muted = peerShowsVideo(peer); if (!peerShowsVideo(peer)) $el.play?.().catch(() => {}); }"></audio>
+                    <div x-show="!peerShowsVideo(peer) || !peer.stream" class="relative z-10 text-center p-4">
                         <div class="w-14 h-14 mx-auto rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center text-lg font-bold"
                             x-text="(peer.name || '?').slice(0, 1).toUpperCase()"></div>
                         <p class="text-xs text-slate-400 mt-2" x-text="peer.name"></p>
@@ -93,8 +94,15 @@
             </button>
             <button type="button" x-show="callType === 'video'" @click="toggleVideo()"
                 class="px-3 py-2 rounded-xl border text-sm transition"
-                :class="localVideoOff ? 'border-amber-500/40 bg-amber-500/10 text-amber-300' : 'border-white/10 text-slate-300 hover:bg-white/5'">
+                :class="localVideoOff ? 'border-amber-500/40 bg-amber-500/10 text-amber-300' : 'border-white/10 text-slate-300 hover:bg-white/5'"
+                :disabled="sharingScreen">
                 <span x-text="localVideoOff ? 'Camera on' : 'Camera off'"></span>
+            </button>
+            <button type="button" @click="toggleScreenShare()"
+                class="px-3 py-2 rounded-xl border text-sm transition"
+                :class="sharingScreen ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-white/10 text-slate-300 hover:bg-white/5'"
+                title="Share your screen">
+                <span x-text="sharingScreen ? 'Stop sharing' : 'Share screen'"></span>
             </button>
             <button type="button" @click="endCall()"
                 class="px-4 py-2 rounded-xl bg-red-500/20 text-red-400 hover:bg-red-500/30 text-sm font-semibold transition">

@@ -57,6 +57,9 @@
             localStream: null,
             localMuted: false,
             localVideoOff: false,
+            sharingScreen: false,
+            cameraTrack: null,
+            screenTrack: null,
             peers: [],
             peerConnections: {},
             peerDisconnectTimers: {},
@@ -993,9 +996,10 @@
                 });
                 this.localMuted = false;
                 this.localVideoOff = false;
-                this.$nextTick(() => {
-                    if (this.$refs.localVideo) this.$refs.localVideo.srcObject = this.localStream;
-                });
+                this.sharingScreen = false;
+                this.screenTrack = null;
+                this.cameraTrack = this.localStream.getVideoTracks()[0] || null;
+                this.bindLocalPreview();
             },
 
             async startCall(type) {
@@ -1117,6 +1121,12 @@
                 });
                 this.peerConnections = {};
                 this.peers = [];
+                if (this.screenTrack) {
+                    try { this.screenTrack.stop(); } catch (e) {}
+                }
+                this.screenTrack = null;
+                this.cameraTrack = null;
+                this.sharingScreen = false;
                 if (this.localStream) {
                     this.localStream.getTracks().forEach((t) => t.stop());
                     this.localStream = null;
@@ -1135,9 +1145,139 @@
             },
 
             toggleVideo() {
-                if (!this.localStream || this.callType !== 'video') return;
+                if (!this.localStream || this.callType !== 'video' || this.sharingScreen) return;
                 this.localVideoOff = !this.localVideoOff;
                 this.localStream.getVideoTracks().forEach((t) => { t.enabled = !this.localVideoOff; });
+            },
+
+            localShowsVideo() {
+                return this.callType === 'video' || this.sharingScreen;
+            },
+
+            peerShowsVideo(peer) {
+                if (this.callType === 'video') return true;
+                const tracks = peer?.stream?.getVideoTracks?.() || [];
+                return tracks.some((t) => t && t.readyState === 'live');
+            },
+
+            bindLocalPreview() {
+                this.$nextTick(() => {
+                    if (!this.$refs.localVideo) return;
+                    if (this.sharingScreen && this.screenTrack) {
+                        this.$refs.localVideo.srcObject = new MediaStream([this.screenTrack]);
+                    } else {
+                        this.$refs.localVideo.srcObject = this.localStream;
+                    }
+                });
+            },
+
+            async replaceVideoTrackForPeers(track) {
+                const needsRenegotiate = [];
+                for (const [userId, pc] of Object.entries(this.peerConnections || {})) {
+                    if (!pc) continue;
+                    const videoSender = pc.getSenders().find((s) => s.track?.kind === 'video');
+                    if (videoSender) {
+                        try {
+                            await videoSender.replaceTrack(track);
+                        } catch (e) {
+                            console.warn(e);
+                        }
+                    } else if (track) {
+                        try {
+                            pc.addTrack(track, this.localStream || new MediaStream([track]));
+                            needsRenegotiate.push(userId);
+                        } catch (e) {
+                            console.warn(e);
+                        }
+                    }
+                }
+                for (const userId of needsRenegotiate) {
+                    await this.renegotiateOffer(userId);
+                }
+            },
+
+            async renegotiateOffer(userId) {
+                const pc = this.peerConnections[userId];
+                if (!pc || pc.signalingState !== 'stable' || !this.callId) return;
+                try {
+                    const offer = await pc.createOffer();
+                    await pc.setLocalDescription(offer);
+                    await this.signalCall({
+                        action: 'offer',
+                        call_id: this.callId,
+                        call_type: this.callType,
+                        to_user_id: Number(userId),
+                        sdp: offer,
+                    });
+                } catch (e) {
+                    console.warn(e);
+                }
+            },
+
+            async toggleScreenShare() {
+                if (this.sharingScreen) {
+                    await this.stopScreenShare();
+                } else {
+                    await this.startScreenShare();
+                }
+            },
+
+            async startScreenShare() {
+                if (!this.callId || this.callState === 'idle') return;
+                if (!navigator.mediaDevices?.getDisplayMedia) {
+                    this.callError = 'Screen share is not supported in this browser.';
+                    return;
+                }
+                try {
+                    const screenStream = await navigator.mediaDevices.getDisplayMedia({
+                        video: { frameRate: 15 },
+                        audio: false,
+                    });
+                    const track = screenStream.getVideoTracks()[0];
+                    if (!track) {
+                        screenStream.getTracks().forEach((t) => t.stop());
+                        this.callError = 'No screen track available.';
+                        return;
+                    }
+
+                    // Keep camera track so we can restore it after sharing.
+                    if (!this.cameraTrack && this.localStream) {
+                        this.cameraTrack = this.localStream.getVideoTracks()[0] || null;
+                    }
+
+                    this.screenTrack = track;
+                    this.sharingScreen = true;
+                    this.localVideoOff = false;
+                    track.onended = () => {
+                        if (this.sharingScreen) this.stopScreenShare();
+                    };
+
+                    await this.replaceVideoTrackForPeers(track);
+                    this.bindLocalPreview();
+                    // Refresh peer tiles so remote video visibility updates when others share.
+                    this.peers = [...this.peers];
+                } catch (e) {
+                    if (e?.name !== 'NotAllowedError') {
+                        this.callError = 'Could not start screen share.';
+                    }
+                }
+            },
+
+            async stopScreenShare() {
+                const screen = this.screenTrack;
+                this.screenTrack = null;
+                this.sharingScreen = false;
+                if (screen) {
+                    try { screen.stop(); } catch (e) {}
+                }
+
+                const restore = (this.callType === 'video' && this.cameraTrack && this.cameraTrack.readyState === 'live')
+                    ? this.cameraTrack
+                    : null;
+
+                await this.replaceVideoTrackForPeers(restore);
+                this.bindLocalPreview();
+                this.peers = [...this.peers];
             },
 
             upsertPeer(userId, name, stream = null) {
@@ -1181,6 +1321,10 @@
 
                 if (this.localStream) {
                     this.localStream.getTracks().forEach((track) => pc.addTrack(track, this.localStream));
+                    if (this.sharingScreen && this.screenTrack
+                        && !this.localStream.getVideoTracks().includes(this.screenTrack)) {
+                        pc.addTrack(this.screenTrack, this.localStream);
+                    }
                 }
 
                 pc.onicecandidate = (event) => {
@@ -1197,6 +1341,10 @@
                 pc.ontrack = (event) => {
                     const stream = event.streams[0] || new MediaStream([event.track]);
                     this.upsertPeer(userId, name, stream);
+                    const refresh = () => { this.peers = [...this.peers]; };
+                    event.track.addEventListener('ended', refresh);
+                    event.track.addEventListener('mute', refresh);
+                    event.track.addEventListener('unmute', refresh);
                 };
 
                 pc.onconnectionstatechange = () => {
