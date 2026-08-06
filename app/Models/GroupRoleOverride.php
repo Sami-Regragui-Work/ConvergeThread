@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class GroupRoleOverride extends Model
 {
@@ -31,10 +30,5 @@ class GroupRoleOverride extends Model
     public function tenantRole(): BelongsTo
     {
         return $this->belongsTo(TenantRole::class);
-    }
-
-    public function members(): HasMany
-    {
-        return $this->hasMany(GroupMember::class, 'group_role_override_id');
     }
 }

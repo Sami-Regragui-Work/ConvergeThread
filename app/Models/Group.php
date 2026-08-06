@@ -38,7 +38,7 @@ class Group extends Model
     {
         return $this->belongsToMany(User::class, 'group_members')
             ->using(GroupMember::class)
-            ->withPivot(['group_role_override_id', 'permissions', 'left_at'])
+            ->withPivot(['group_role_override_id', 'left_at'])
             ->withTimestamps();
     }
 

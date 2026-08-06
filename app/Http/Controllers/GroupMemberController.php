@@ -12,13 +12,16 @@ use App\Models\GroupRoleOverride;
 use App\Models\TenantRole;
 use App\Models\User;
 use App\Services\GroupMemberService;
+use App\Services\RoleHierarchyService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
 
 class GroupMemberController extends Controller
 {
     public function __construct(
-        private readonly GroupMemberService $groupMemberService
+        private readonly GroupMemberService $groupMemberService,
+        private readonly RoleHierarchyService $roleHierarchyService,
     ) {}
 
     public function index(Group $group)
@@ -37,14 +40,22 @@ class GroupMemberController extends Controller
         $roleOverrides = $group->groupRoleOverrides()->with('tenantRole')->get();
         /** @var User $user */
         $user = Auth::user();
-        $tenantRoles = TenantRole::assignableForInviter($user);
+
+        $assignableByMember = $members->mapWithKeys(function (GroupMember $gm) use ($user) {
+            return [
+                $gm->user_id => $this->roleHierarchyService->assignableRolesFor($user, $gm->user),
+            ];
+        });
+
+        $inviteRoles = TenantRole::assignableForInviter($user);
 
         return view('groups.members.index', compact(
             'members',
             'group',
             'availableUsers',
             'roleOverrides',
-            'tenantRoles',
+            'assignableByMember',
+            'inviteRoles',
         ));
     }
 
@@ -56,7 +67,7 @@ class GroupMemberController extends Controller
         $user = User::where('tenant_id', $group->tenant_id)
             ->findOrFail($credentials['user_id']);
 
-        $this->groupMemberService->add($group, $user);
+        $this->groupMemberService->add($group, $user, Auth::user());
 
         return redirect()
             ->route('groups.members.index', $group)
@@ -117,6 +128,12 @@ class GroupMemberController extends Controller
         $tenantRole = TenantRole::query()
             ->forTenant($group->tenant_id)
             ->findOrFail($credentials['tenant_role_id']);
+
+        try {
+            $this->roleHierarchyService->assertCanAssignRole(Auth::user(), $member, $tenantRole);
+        } catch (\InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['tenant_role_id' => $e->getMessage()]);
+        }
 
         $this->groupMemberService->assignTenantRole($group, $member, $tenantRole);
 

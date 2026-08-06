@@ -2,10 +2,12 @@
 
 namespace App\Models;
 
+use App\Models\MessageAttachment;
+use App\Models\MessageMention;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class Message extends Model
 {
@@ -48,23 +50,76 @@ class Message extends Model
         return $this->hasMany(Message::class, 'parent_id');
     }
 
-    public function toChatPayload(): array
+    public function mentions(): HasMany
     {
-        $this->loadMissing('user');
+        return $this->hasMany(MessageMention::class);
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(MessageAttachment::class)->orderBy('sort');
+    }
+
+    public function toChatPayload(?int $viewerId = null): array
+    {
+        $this->loadMissing(['user.tenantRole', 'attachments']);
+
+        $legacyFileUrl = $this->is_file && $this->file_path
+            ? route('messages.attachment', $this)
+            : null;
+
+        $legacyName = $this->file_path ? basename($this->file_path) : 'file';
+        $legacyExt = strtoupper(pathinfo($legacyName, PATHINFO_EXTENSION) ?: 'FILE');
+        $legacyIsImage = $this->is_file && $this->file_path
+            && preg_match('/\.(jpe?g|png|gif|webp)$/i', $this->file_path);
+        $legacyKind = match (true) {
+            (bool) $legacyIsImage => 'image',
+            strcasecmp($legacyExt, 'PDF') === 0 => 'pdf',
+            in_array(strtolower($legacyExt), ['ppt', 'pptx', 'odp'], true) => 'ppt',
+            in_array(strtolower($legacyExt), ['doc', 'docx', 'odt', 'rtf'], true) => 'doc',
+            in_array(strtolower($legacyExt), ['xls', 'xlsx', 'ods', 'csv'], true) => 'sheet',
+            default => 'file',
+        };
+
+        $attachmentPayload = $this->attachments
+            ->map(fn (MessageAttachment $attachment) => $attachment->toPayload($this))
+            ->values()
+            ->all();
+
+        if ($attachmentPayload === [] && $legacyFileUrl) {
+            $attachmentPayload = [[
+                'id' => null,
+                'url' => $legacyFileUrl,
+                'preview_url' => $legacyIsImage ? $legacyFileUrl : null,
+                'name' => $legacyName,
+                'is_image' => (bool) $legacyIsImage,
+                'kind' => $legacyKind,
+                'ext' => $legacyExt,
+            ]];
+        }
+
+        $firstAttachment = $attachmentPayload[0] ?? null;
 
         return [
             'id' => $this->id,
             'user_id' => $this->user_id,
             'user_name' => $this->user->display_name ?? $this->user->email,
+            'user_role_color' => $this->user->tenantRole?->color,
             'user_initial' => strtoupper(substr($this->user->display_name ?? $this->user->email, 0, 1)),
             'content' => $this->content,
-            'is_file' => $this->is_file,
-            'file_url' => $this->is_file && $this->file_path
-                ? route('messages.attachment', $this)
-                : null,
+            'is_file' => $this->is_file || count($attachmentPayload) > 0,
+            'file_url' => $firstAttachment['url'] ?? $legacyFileUrl,
+            'file_preview_url' => $firstAttachment['preview_url'] ?? ($legacyIsImage ? $legacyFileUrl : null),
+            'attachments' => $attachmentPayload,
             'parent_id' => $this->parent_id,
             'created_at' => $this->created_at?->diffForHumans(),
+            'updated_at' => $this->updated_at?->gt($this->created_at)
+                ? $this->updated_at->diffForHumans()
+                : null,
             'reply_count' => $this->relationLoaded('replies') ? $this->replies->count() : 0,
+            'mentions_you' => $viewerId
+                ? $this->mentions()->where('user_id', $viewerId)->whereNull('read_at')->exists()
+                : false,
         ];
     }
 }

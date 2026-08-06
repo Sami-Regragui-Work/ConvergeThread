@@ -1,0 +1,332 @@
+@verbatim
+<script>
+    function chatPanel(config) {
+        return {
+            messages: config.messages ?? config.replies ?? [],
+            participants: config.participants ?? [],
+            mentionSuggestions: config.mentionSuggestions ?? [],
+            pollUrl: config.pollUrl,
+            mentionsUrl: config.mentionsUrl,
+            markMentionUrlTemplate: config.markMentionUrlTemplate,
+            storeUrl: config.storeUrl,
+            updateUrlTemplate: config.updateUrlTemplate ?? '',
+            threadUrlTemplate: config.threadUrlTemplate,
+            currentUserId: config.currentUserId,
+            canSend: config.canSend ?? config.canReply ?? false,
+            showThreadLink: config.showThreadLink ?? false,
+            parentId: config.parentId ?? null,
+            draft: '',
+            files: [],
+            filePreviews: [],
+            sending: false,
+            pollTimer: null,
+            mentionQueue: [...(config.mentionIds ?? [])],
+            mentionIndex: 0,
+            showMentionMenu: false,
+            showSelectedPicker: false,
+            mentionFilter: '',
+            selectedUserIds: [],
+            selectedSearch: '',
+            editingId: null,
+            editDraft: '',
+            showCallModal: false,
+            callType: 'voice',
+
+            init() {
+                this.scrollToBottom();
+                this.pollTimer = setInterval(() => this.poll(), 3000);
+            },
+
+            destroy() {
+                if (this.pollTimer) clearInterval(this.pollTimer);
+                this.revokeFilePreviews();
+            },
+
+            mentionCount() {
+                return this.mentionQueue.length;
+            },
+
+            filteredSuggestions() {
+                const q = this.mentionFilter.toLowerCase();
+                if (!q) return this.mentionSuggestions;
+                return this.mentionSuggestions.filter(item =>
+                    item.token.toLowerCase().includes(q) || (item.label || '').toLowerCase().includes(q)
+                );
+            },
+
+            filteredForSelected() {
+                const q = this.selectedSearch.toLowerCase();
+                return this.participants.filter(p => {
+                    if (!q) return true;
+                    return (p.display_name || '').toLowerCase().includes(q)
+                        || (p.username || '').toLowerCase().includes(q);
+                });
+            },
+
+            participantLabel(id) {
+                const person = this.participants.find(p => p.id === id);
+                return person?.display_name || person?.username || ('User #' + id);
+            },
+
+            insertMention(token) {
+                this.draft = this.draft.replace(/@[A-Za-z0-9_:.-]*$/, token + ' ');
+                this.showMentionMenu = false;
+                this.mentionFilter = '';
+            },
+
+            toggleSelected(id) {
+                const set = new Set(this.selectedUserIds);
+                if (set.has(id)) set.delete(id); else set.add(id);
+                this.selectedUserIds = [...set];
+            },
+
+            selectAllFiltered() {
+                const ids = this.filteredForSelected().map(p => p.id);
+                this.selectedUserIds = [...new Set([...this.selectedUserIds, ...ids])];
+            },
+
+            unselectAllFiltered() {
+                const remove = new Set(this.filteredForSelected().map(p => p.id));
+                this.selectedUserIds = this.selectedUserIds.filter(id => !remove.has(id));
+            },
+
+            confirmSelected() {
+                if (!this.draft.toLowerCase().includes('@selected')) {
+                    this.draft = (this.draft + ' @selected').trim();
+                }
+                this.showSelectedPicker = false;
+            },
+
+            onDraftInput() {
+                const match = this.draft.match(/@([A-Za-z0-9_:.-]*)$/);
+                if (match) {
+                    this.mentionFilter = match[1];
+                    this.showMentionMenu = true;
+                } else if (!this.draft.includes('@')) {
+                    this.showMentionMenu = false;
+                }
+            },
+
+            lastId() {
+                if (!this.messages.length) return 0;
+                return Math.max(...this.messages.map(m => m.id));
+            },
+
+            threadUrl(messageId) {
+                return this.threadUrlTemplate.replace('__ID__', messageId);
+            },
+
+            markUrl(messageId) {
+                return this.markMentionUrlTemplate.replace('__ID__', messageId);
+            },
+
+            updateUrl(messageId) {
+                return this.updateUrlTemplate.replace('__ID__', messageId);
+            },
+
+            scrollToBottom() {
+                this.$nextTick(() => {
+                    const el = this.$refs.messagesContainer;
+                    if (el) el.scrollTop = el.scrollHeight;
+                });
+            },
+
+            scrollToMessage(messageId) {
+                this.$nextTick(() => {
+                    const el = this.$refs.messagesContainer?.querySelector(`[data-message-id="${messageId}"]`);
+                    if (el) {
+                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        el.classList.add('ring-2', 'ring-brand-400/60', 'rounded-xl');
+                        setTimeout(() => el.classList.remove('ring-2', 'ring-brand-400/60', 'rounded-xl'), 2200);
+                    }
+                });
+            },
+
+            async jumpNextMention() {
+                if (!this.mentionQueue.length) return;
+
+                if (this.mentionIndex >= this.mentionQueue.length) {
+                    this.mentionIndex = 0;
+                }
+
+                const messageId = this.mentionQueue[this.mentionIndex];
+                this.scrollToMessage(messageId);
+
+                try {
+                    await fetch(this.markUrl(messageId), {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        },
+                        credentials: 'same-origin',
+                    });
+                } catch (e) {}
+
+                this.mentionQueue.splice(this.mentionIndex, 1);
+            },
+
+            appendMessages(incoming) {
+                const existing = new Set(this.messages.map(m => m.id));
+                let added = false;
+
+                for (const message of incoming) {
+                    if (!existing.has(message.id)) {
+                        this.messages.push(message);
+                        added = true;
+                    } else {
+                        const idx = this.messages.findIndex(m => m.id === message.id);
+                        if (idx >= 0) this.messages[idx] = message;
+                    }
+                }
+
+                if (added) this.scrollToBottom();
+            },
+
+            async poll() {
+                try {
+                    const separator = this.pollUrl.includes('?') ? '&' : '?';
+                    const response = await fetch(`${this.pollUrl}${separator}after=${this.lastId()}`, {
+                        headers: { 'Accept': 'application/json' },
+                        credentials: 'same-origin',
+                    });
+                    if (!response.ok) return;
+                    const data = await response.json();
+                    this.appendMessages(data.messages ?? []);
+
+                    if (this.mentionsUrl) {
+                        const mentionResponse = await fetch(this.mentionsUrl, {
+                            headers: { 'Accept': 'application/json' },
+                            credentials: 'same-origin',
+                        });
+                        if (mentionResponse.ok) {
+                            const mentionData = await mentionResponse.json();
+                            this.mentionQueue = mentionData.message_ids ?? [];
+                        }
+                    }
+                } catch (error) {}
+            },
+
+            revokeFilePreviews() {
+                for (const preview of this.filePreviews) {
+                    if (preview.url) URL.revokeObjectURL(preview.url);
+                }
+                this.filePreviews = [];
+            },
+
+            onFilesChange(event) {
+                this.revokeFilePreviews();
+                this.files = [...(event.target.files || [])];
+                this.filePreviews = this.files.map(file => ({
+                    name: file.name,
+                    url: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
+                    isImage: file.type.startsWith('image/'),
+                }));
+            },
+
+            removeFile(index) {
+                if (this.filePreviews[index]?.url) {
+                    URL.revokeObjectURL(this.filePreviews[index].url);
+                }
+                this.files.splice(index, 1);
+                this.filePreviews.splice(index, 1);
+                if (!this.files.length && this.$refs.fileInput) {
+                    this.$refs.fileInput.value = '';
+                }
+            },
+
+            startEdit(message) {
+                this.editingId = message.id;
+                this.editDraft = message.content || '';
+            },
+
+            cancelEdit() {
+                this.editingId = null;
+                this.editDraft = '';
+            },
+
+            async saveEdit(messageId) {
+                if (!this.editDraft.trim()) return;
+
+                try {
+                    const response = await fetch(this.updateUrl(messageId), {
+                        method: 'PATCH',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ content: this.editDraft.trim() }),
+                    });
+
+                    if (!response.ok) return;
+
+                    const data = await response.json();
+                    const idx = this.messages.findIndex(m => m.id === messageId);
+                    if (idx >= 0 && data.message) {
+                        this.messages[idx] = data.message;
+                    }
+                    this.cancelEdit();
+                } catch (error) {}
+            },
+
+            openCall(type) {
+                this.callType = type;
+                this.showCallModal = true;
+            },
+
+            async sendMessage() {
+                if (this.sending) return;
+                if (!this.draft.trim() && !this.files.length) return;
+
+                this.sending = true;
+                const formData = new FormData();
+
+                if (this.draft.trim()) {
+                    formData.append('content', this.draft.trim());
+                }
+
+                for (const file of this.files) {
+                    formData.append('files[]', file);
+                }
+
+                for (const id of this.selectedUserIds) {
+                    formData.append('mention_user_ids[]', id);
+                }
+
+                if (this.parentId) {
+                    formData.append('parent_id', this.parentId);
+                }
+
+                try {
+                    const response = await fetch(this.storeUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        },
+                        credentials: 'same-origin',
+                        body: formData,
+                    });
+
+                    if (!response.ok) return;
+
+                    const data = await response.json();
+                    if (data.message) {
+                        this.appendMessages([data.message]);
+                    }
+                    this.draft = '';
+                    this.revokeFilePreviews();
+                    this.files = [];
+                    this.selectedUserIds = [];
+                    if (this.$refs.fileInput) this.$refs.fileInput.value = '';
+                } catch (error) {
+                } finally {
+                    this.sending = false;
+                }
+            },
+        };
+    }
+</script>
+@endverbatim

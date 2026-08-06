@@ -4,11 +4,19 @@ namespace App\Services;
 
 use App\Models\Group;
 use App\Models\MergeSession;
+use App\Models\User;
+use App\Notifications\MergeSessionStartedNotification;
+use App\Services\ChatParticipantService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
 class MergeSessionService
 {
+    public function __construct(
+        private readonly ChatParticipantService $participantService,
+    ) {
+    }
+
     public function start(Group $group1, Group $group2): MergeSession
     {
         return DB::transaction(function () use ($group1, $group2) {
@@ -20,6 +28,17 @@ class MergeSessionService
                 ['group_id' => $group1->id],
                 ['group_id' => $group2->id],
             ]);
+
+            $notified = [];
+            foreach ([$group1, $group2] as $group) {
+                foreach ($this->participantService->participants($group) as $user) {
+                    if (isset($notified[$user->id])) {
+                        continue;
+                    }
+                    $notified[$user->id] = true;
+                    $user->notify(new MergeSessionStartedNotification($session, $group->name));
+                }
+            }
 
             return $session;
         });

@@ -103,8 +103,11 @@ class MergeSessionTenantTest extends TestCase
 
         $session = app(MergeSessionService::class)->start($group1, $group2);
 
-        $this->actingAs($admin)
-            ->get(route('messages.index', ['merge', $session->id]))
-            ->assertOk();
+        $response = $this->actingAs($admin)
+            ->get(route('messages.index', ['merge', $session->id]));
+
+        $response->assertOk();
+        $response->assertViewIs('messages.index');
+        $this->assertStringContainsString('Messages', $response->getContent());
     }
 }

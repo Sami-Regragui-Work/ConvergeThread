@@ -17,8 +17,39 @@ use Illuminate\Support\Facades\Gate;
 class InvitationController extends Controller
 {
     public function __construct(
-        private readonly InvitationService $invitationService
+        private readonly InvitationService $invitationService,
     ) {
+    }
+
+    public function index()
+    {
+        Gate::authorize('createMember', Invitation::class);
+
+        $invitations = Invitation::query()
+            ->where('invited_by_id', Auth::id())
+            ->whereNull('accepted_at')
+            ->where('expires_at', '>', now())
+            ->with(['tenant', 'group', 'tenantRole'])
+            ->latest()
+            ->get();
+
+        return view('invitations.index', compact('invitations'));
+    }
+
+    public function revoke(Invitation $invitation)
+    {
+        Gate::authorize('createMember', Invitation::class);
+        $user = Auth::user();
+        abort_unless(
+            $invitation->invited_by_id === $user->id
+            || (int) $invitation->tenant_id === (int) $user->tenant_id,
+            403,
+        );
+        abort_if($invitation->accepted_at !== null, 404);
+
+        $invitation->update(['expires_at' => now()]);
+
+        return back()->with('success', 'Invitation revoked.');
     }
 
     public function createAdminInvitation(CreateAdminInvitationRequest $request)

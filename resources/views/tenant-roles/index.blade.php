@@ -18,26 +18,27 @@
                 @forelse($roles as $role)
                     <div class="px-5 py-4 flex items-center gap-4 hover:bg-white/5 transition group">
                         <div
-                            class="w-8 h-8 rounded-lg bg-brand-500/10 text-brand-400 flex items-center justify-center text-xs font-bold shrink-0">
+                            class="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 border border-white/10"
+                            style="background-color: {{ $role->color ?? '#6366f1' }}22; color: {{ $role->color ?? '#6366f1' }}">
                             {{ strtoupper(substr($role->name, 0, 1)) }}
                         </div>
                         <div class="flex-1 min-w-0">
-                            <span class="text-sm text-white font-medium">{{ $role->name }}</span>
+                            <span class="text-sm font-medium" style="color: {{ $role->color ?? '#e2e8f0' }}">{{ $role->name }}</span>
                             @if($role->is_system)
                                 <span class="ml-2 text-[10px] uppercase tracking-wide text-slate-500">System</span>
                             @endif
                         </div>
+                        <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                        @can('update', $role)
+                            <a href="{{ route('tenant-roles.edit', $role) }}"
+                                class="p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                            </a>
+                        @endcan
                         @if(!$role->is_system)
-                            <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
-                                @can('update', $role)
-                                    <a href="{{ route('tenant-roles.edit', $role) }}"
-                                        class="p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                        </svg>
-                                    </a>
-                                @endcan
                                 @can('delete', $role)
                                     <form method="POST" action="{{ route('tenant-roles.destroy', $role) }}">
                                         @csrf @method('DELETE')
@@ -50,8 +51,8 @@
                                         </button>
                                     </form>
                                 @endcan
-                            </div>
                         @endif
+                        </div>
                     </div>
                 @empty
                     <div class="px-5 py-10 text-center text-slate-500 text-sm">No tenant roles defined yet.</div>

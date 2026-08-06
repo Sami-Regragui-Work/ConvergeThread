@@ -17,6 +17,8 @@
                     @error('name')<p class="mt-1 text-xs text-red-400">{{ $message }}</p>@enderror
                 </div>
 
+                @include('partials.role-color-field', ['color' => old('color', '#6366f1')])
+
                 <div>
                     <label class="block text-sm font-medium text-slate-300 mb-1.5">Permissions</label>
                     @include('partials.permission-checkboxes', ['selected' => old('permissions', [])])

@@ -8,10 +8,14 @@ use App\Http\Controllers\GroupRoleOverrideController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\MergeSessionController;
 use App\Http\Controllers\MessageController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Owner\OwnerController;
 use App\Http\Controllers\Owner\OwnerTenantController;
 use App\Http\Controllers\Owner\OwnerUserController;
 use App\Http\Controllers\TenantRoleController;
+use App\Http\Controllers\RoleHierarchyController;
+use App\Http\Controllers\WorkspaceMemberController;
+use App\Http\Controllers\WorkspaceSyncController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -52,6 +56,25 @@ Route::middleware(['auth', 'is.owner'])->prefix('owner')->name('owner.')->group(
 
 Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
     Route::post('auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
+
+    Route::get('workspace/members', [WorkspaceMemberController::class, 'index'])->name('workspace.members.index');
+    Route::patch('workspace/members/{member}/role', [WorkspaceMemberController::class, 'updateRole'])->name('workspace.members.role');
+    Route::delete('workspace/invitations/{invitation}', [InvitationController::class, 'revoke'])->name('invitations.manage.revoke');
+
+    Route::get('workspace/sync', [WorkspaceSyncController::class, 'poll'])->name('workspace.sync');
+
+    Route::prefix('hierarchies')->name('hierarchies.')->group(function () {
+        Route::get('', [RoleHierarchyController::class, 'index'])->name('index');
+        Route::post('', [RoleHierarchyController::class, 'store'])->name('store');
+        Route::post('{hierarchy}/levels', [RoleHierarchyController::class, 'addLevel'])->name('levels.store');
+        Route::patch('levels/{level}/members', [RoleHierarchyController::class, 'syncLevelMembers'])->name('levels.members');
+        Route::delete('levels/{level}', [RoleHierarchyController::class, 'destroyLevel'])->name('levels.destroy');
+        Route::delete('{hierarchy}', [RoleHierarchyController::class, 'destroy'])->name('destroy');
+    });
+
+    Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::post('notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');
+    Route::get('notifications/{notification}/read', [NotificationController::class, 'markRead'])->name('notifications.read');
 
     // Groups
     Route::prefix('groups')->name('groups.')->group(function () {
@@ -117,8 +140,13 @@ Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
     // Messages
     Route::prefix('messages')->name('messages.')->group(function () {
         Route::get('{message}/attachment', [MessageController::class, 'attachment'])->name('attachment');
+        Route::get('{message}/attachments/{attachment}', [MessageController::class, 'downloadAttachment'])->name('attachments.download');
+        Route::get('{chatType}/{chatId}/mentions', [MessageController::class, 'mentions'])->name('mentions');
         Route::get('{chatType}/{chatId}/poll', [MessageController::class, 'poll'])->name('poll');
+        Route::post('{message}/mentions/read', [MessageController::class, 'markMentionRead'])->name('mentions.read');
+        Route::post('{message}/thread/mute', [MessageController::class, 'toggleThreadMute'])->name('thread.mute');
         Route::get('{message}/thread', [MessageController::class, 'thread'])->name('thread');
+        Route::post('{chatType}/{chatId}/mute', [MessageController::class, 'toggleMute'])->name('mute');
         Route::get('{chatType}/{chatId}', [MessageController::class, 'index'])->name('index');
         Route::post('{chatType}/{chatId}', [MessageController::class, 'store'])->name('store');
         Route::patch('{message}', [MessageController::class, 'update'])->name('update');

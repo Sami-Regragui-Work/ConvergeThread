@@ -34,6 +34,10 @@ class RememberSafeUrl
     {
         return $request->isMethod('GET')
             && !$request->expectsJson()
-            && !$request->is('storage/*');
+            && !$request->is('storage/*')
+            && !$request->routeIs(
+                'messages.attachment',
+                'messages.attachments.download',
+            );
     }
 }

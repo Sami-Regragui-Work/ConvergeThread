@@ -14,6 +14,7 @@ return new class extends Migration {
             $table->foreignId('tenant_id')->nullable()->constrained()->cascadeOnDelete();
             $table->boolean('is_system')->default(false);
             $table->string('name', 100);
+            $table->string('color', 7)->nullable();
             $table->json('permissions');
             $table->unique(['tenant_id', 'name']);
             $table->unique(['name', 'is_system']);

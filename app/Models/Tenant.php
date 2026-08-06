@@ -3,8 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
 class Tenant extends Model
@@ -12,7 +12,6 @@ class Tenant extends Model
     protected $fillable = [
         'slug',
         'admin_email',
-        'closed_by_id',
     ];
 
     protected function casts(): array
@@ -38,14 +37,31 @@ class Tenant extends Model
         return $this->hasMany(TenantRole::class);
     }
 
-    public function closedBy(): BelongsTo
+    public function closure(): HasOne
     {
-        return $this->belongsTo(User::class, 'closed_by_id');
+        return $this->hasOne(TenantClosure::class);
     }
 
     public function isClosed(): bool
     {
-        return $this->closed_by_id !== null;
+        if ($this->relationLoaded('closure')) {
+            return $this->closure !== null;
+        }
+
+        return $this->closure()->exists();
+    }
+
+    public function close(User $by): TenantClosure
+    {
+        return $this->closure()->create([
+            'closed_by_id' => $by->id,
+            'closed_at' => now(),
+        ]);
+    }
+
+    public function reopen(): void
+    {
+        $this->closure()?->delete();
     }
 
     public function getNameAttribute(): string

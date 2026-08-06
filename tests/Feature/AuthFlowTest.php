@@ -76,8 +76,8 @@ class AuthFlowTest extends TestCase
         $tenant = Tenant::create([
             'slug' => 'closed_corp',
             'admin_email' => 'admin@closed.com',
-            'closed_by_id' => $owner->id,
         ]);
+        $tenant->close($owner);
         $memberRoleId = TenantRole::where('is_system', true)->where('name', 'Member')->value('id');
 
         User::factory()->create([
@@ -98,11 +98,11 @@ class AuthFlowTest extends TestCase
     public function test_register_rejects_closed_tenant(): void
     {
         $owner = User::where('tenant_id', 1)->first();
-        Tenant::create([
+        $tenant = Tenant::create([
             'slug' => 'closed_corp',
             'admin_email' => 'admin@closed.com',
-            'closed_by_id' => $owner->id,
         ]);
+        $tenant->close($owner);
 
         $response = $this->post(route('auth.register.store'), [
             'email' => 'newuser@example.com',

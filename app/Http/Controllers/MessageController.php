@@ -5,20 +5,163 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Concerns\ResolvesChatable;
 use App\Http\Requests\StoreMessageRequest;
 use App\Http\Requests\UpdateMessageRequest;
+use App\Models\Duo;
+use App\Models\Group;
+use App\Models\MergeSession;
 use App\Models\Message;
+use App\Models\MessageAttachment;
+use App\Models\TenantRole;
+use App\Services\ChatParticipantService;
+use App\Services\MentionService;
 use App\Services\MessageService;
+use App\Services\NotificationStackService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class MessageController extends Controller
 {
     use ResolvesChatable;
 
-    public function __construct(private readonly MessageService $messageService)
+    public function __construct(
+        private readonly MessageService $messageService,
+        private readonly MentionService $mentionService,
+        private readonly NotificationStackService $notificationStackService,
+    ) {
+    }
+
+    private function payload(
+        Message $message,
+        ?int $viewerId = null,
+        ?array $renderContext = null,
+        ?string $chatType = null,
+        Group|Duo|MergeSession|null $chatable = null,
+    ): array {
+        $payload = $message->toChatPayload($viewerId);
+        $ctx = $renderContext ?? ['roleColors' => [], 'usernameLabels' => [], 'mergeUserLabels' => []];
+
+        if ($payload['content']) {
+            $payload['content_html'] = $this->mentionService->renderContentHtml(
+                $payload['content'],
+                $ctx['roleColors'],
+                $ctx['usernameLabels'],
+                $ctx['mergeUserLabels'],
+            );
+        } else {
+            $payload['content_html'] = null;
+        }
+
+        $message->loadMissing(['chatable', 'user']);
+
+        if ($chatType === 'merge' && $chatable) {
+            $payload['user_name'] = app(ChatParticipantService::class)
+                ->displayLabelFor($message->user, $chatable, $chatType);
+        }
+
+        $viewer = $viewerId ? Auth::user() : null;
+        $payload['can_edit'] = $viewer
+            && (int) $message->user_id === (int) $viewerId
+            && Gate::forUser($viewer)->allows('update', $message);
+
+        return $payload;
+    }
+
+    private function renderContextFor(Group|Duo|MergeSession $chatable, string $chatType, ?int $tenantId): array
     {
+        return $this->mentionService->renderContextForChatable($chatable, $chatType, $tenantId);
+    }
+
+    private function mapParticipants(Group|Duo|MergeSession $chatable): Collection
+    {
+        return app(ChatParticipantService::class)
+            ->participants($chatable)
+            ->map(fn ($u) => [
+                'id' => $u->id,
+                'username' => $u->username,
+                'display_name' => $u->display_name ?? $u->username,
+                'role' => $u->tenantRole?->name,
+                'role_color' => $u->tenantRole?->color,
+            ])->values();
+    }
+
+    /**
+     * @param  Collection<int, array{id:int,username:string,display_name:string,role:?string,role_color:?string}>  $participants
+     * @return list<array{token:string,label:string,color:?string,special?:string}>
+     */
+    private function mentionSuggestions(
+        Group|Duo|MergeSession $chatable,
+        Collection $participants,
+        int $viewerId,
+        string $chatType,
+        ?int $tenantId = null,
+    ): array {
+        $participantService = app(ChatParticipantService::class);
+        $roleColors = TenantRole::query()
+            ->when($tenantId, fn ($q) => $q->forTenant($tenantId))
+            ->pluck('color', 'name');
+
+        $suggestions = [
+            ['token' => '@all', 'label' => 'Everyone in this chat', 'color' => null],
+            ['token' => '@selected', 'label' => 'Pick specific people…', 'special' => 'selected', 'color' => null],
+        ];
+
+        if ($chatType === 'merge') {
+            foreach ($participantService->groupsInChat($chatable) as $group) {
+                $suggestions[] = [
+                    'token' => '@group:'.$group->name,
+                    'label' => 'Group · '.$group->name,
+                    'color' => null,
+                ];
+
+                foreach ($participantService->participants($group) as $user) {
+                    if ((int) $user->id === $viewerId) {
+                        continue;
+                    }
+
+                    $suggestions[] = [
+                        'token' => '@'.$group->name.'.'.$user->username,
+                        'label' => $user->display_name ?? $user->username,
+                        'color' => $user->tenantRole?->color,
+                    ];
+                }
+            }
+        } else {
+            foreach ($participants->pluck('role')->filter()->unique() as $role) {
+                $suggestions[] = [
+                    'token' => '@role:'.$role,
+                    'label' => 'Role · '.$role,
+                    'color' => $roleColors[$role] ?? null,
+                ];
+            }
+
+            foreach ($participants as $participant) {
+                if ((int) $participant['id'] === $viewerId) {
+                    continue;
+                }
+
+                $suggestions[] = [
+                    'token' => '@'.$participant['username'],
+                    'label' => $participant['display_name'],
+                    'color' => $participant['role_color'] ?? null,
+                ];
+            }
+        }
+
+        if ($chatType === 'merge') {
+            foreach ($participants->pluck('role')->filter()->unique() as $role) {
+                $suggestions[] = [
+                    'token' => '@role:'.$role,
+                    'label' => 'Role · '.$role,
+                    'color' => $roleColors[$role] ?? null,
+                ];
+            }
+        }
+
+        return $suggestions;
     }
 
     public function index(string $chatType, int $chatId)
@@ -31,14 +174,34 @@ class MessageController extends Controller
         $messages = Message::where('chatable_type', $chatable->getMorphClass())
             ->where('chatable_id', $chatable->id)
             ->whereNull('parent_id')
-            ->with(['user', 'replies'])
+            ->with(['user.tenantRole', 'attachments', 'replies'])
             ->oldest()
             ->limit(100)
             ->get();
 
-        $initialMessages = $messages->map->toChatPayload()->values();
+        $renderContext = $this->renderContextFor($chatable, $chatType, $user->tenant_id);
+        $initialMessages = $messages->map(fn (Message $m) => $this->payload($m, $user->id, $renderContext, $chatType, $chatable))->values();
 
-        return view('messages.index', compact('chatable', 'chatType', 'chatId', 'initialMessages'));
+        $participants = $this->mapParticipants($chatable);
+
+        $mentionIds = $this->mentionService->unreadMessageIdsForUser($user, $chatable);
+        $mentionSuggestions = $this->mentionSuggestions($chatable, $participants, $user->id, $chatType, $user->tenant_id);
+        $chatMuted = $this->notificationStackService->isChatMuted(
+            $user,
+            $chatable->getMorphClass(),
+            $chatable->id,
+        );
+
+        return view('messages.index', compact(
+            'chatable',
+            'chatType',
+            'chatId',
+            'initialMessages',
+            'participants',
+            'mentionIds',
+            'mentionSuggestions',
+            'chatMuted',
+        ));
     }
 
     public function poll(Request $request, string $chatType, int $chatId)
@@ -54,7 +217,7 @@ class MessageController extends Controller
         $query = Message::where('chatable_type', $chatable->getMorphClass())
             ->where('chatable_id', $chatable->id)
             ->where('id', '>', $afterId)
-            ->with(['user', 'replies']);
+            ->with(['user.tenantRole', 'attachments', 'replies']);
 
         if ($parentId !== null && $parentId !== '') {
             $query->where('parent_id', $parentId);
@@ -63,9 +226,10 @@ class MessageController extends Controller
         }
 
         $messages = $query->oldest()->get();
+        $renderContext = $this->renderContextFor($chatable, $chatType, $user->tenant_id);
 
         return response()->json([
-            'messages' => $messages->map->toChatPayload()->values(),
+            'messages' => $messages->map(fn (Message $m) => $this->payload($m, $user->id, $renderContext, $chatType, $chatable))->values(),
         ]);
     }
 
@@ -83,16 +247,28 @@ class MessageController extends Controller
                 ->findOrFail($credentials['parent_id'])
             : null;
 
+        $files = array_values(array_filter($request->file('files', []) ?? []));
+        $singleFile = $request->file('file');
+        if ($singleFile) {
+            $files[] = $singleFile;
+        }
+
+        $mentionUserIds = $credentials['mention_user_ids'] ?? null;
+
         $message = $this->messageService->create(
             $chatable,
             $user,
             $credentials['content'] ?? null,
-            $request->file('file'),
-            $parent
+            $files !== [] ? $files : null,
+            $parent,
+            $chatType,
+            $mentionUserIds,
         );
 
+        $renderContext = $this->renderContextFor($chatable, $chatType, $user->tenant_id);
+
         if ($request->wantsJson()) {
-            return response()->json(['message' => $message->toChatPayload()]);
+            return response()->json(['message' => $this->payload($message, $user->id, $renderContext, $chatType, $chatable)]);
         }
 
         if ($parent) {
@@ -111,6 +287,14 @@ class MessageController extends Controller
         $credentials = $request->validated();
         Gate::authorize('update', $message);
 
+        $message->loadMissing('chatable');
+        $chatType = match ($message->chatable_type) {
+            'group' => 'group',
+            'duo' => 'duo',
+            'merge' => 'merge',
+            default => 'group',
+        };
+
         $this->messageService->update(
             $message,
             $credentials['content'] ?? null,
@@ -118,6 +302,14 @@ class MessageController extends Controller
             $credentials['remove_file'] ?? false,
             $credentials['empty_content'] ?? false
         );
+
+        $user = Auth::user();
+        $renderContext = $this->renderContextFor($message->chatable, $chatType, $user->tenant_id);
+        $fresh = $message->fresh(['user.tenantRole', 'attachments']);
+
+        if ($request->wantsJson()) {
+            return response()->json(['message' => $this->payload($fresh, $user->id, $renderContext, $chatType, $message->chatable)]);
+        }
 
         return redirect()
             ->back()
@@ -142,8 +334,8 @@ class MessageController extends Controller
         $message->load('chatable');
         $thread = $this->messageService->getThread($message);
 
-        $thread['message']->load(['user', 'parent']);
-        $thread['replies']->load('user');
+        $thread['message']->load(['user.tenantRole', 'parent', 'attachments']);
+        $thread['replies']->load(['user.tenantRole', 'attachments']);
 
         $chatType = match ($message->chatable_type) {
             'group' => 'group',
@@ -152,24 +344,110 @@ class MessageController extends Controller
             default => 'group',
         };
 
-        $initialReplies = $thread['replies']->sortBy('id')->values()->map->toChatPayload()->values();
+        $user = Auth::user();
+        $chatable = $message->chatable;
+        $participants = $this->mapParticipants($chatable);
+        $renderContext = $this->renderContextFor($chatable, $chatType, $user->tenant_id);
+
+        $initialReplies = $thread['replies']->sortBy('id')->values()
+            ->map(fn (Message $m) => $this->payload($m, $user->id, $renderContext, $chatType, $chatable))->values();
+
+        $mentionIds = $this->mentionService->unreadMessageIdsForUser($user, $chatable);
+        $mentionSuggestions = $this->mentionSuggestions($chatable, $participants, $user->id, $chatType, $user->tenant_id);
+        $parentPayload = $this->payload($thread['message'], $user->id, $renderContext, $chatType, $chatable);
+        $threadMuted = $this->notificationStackService->isThreadMuted($user, $message->id);
 
         return view('messages.thread', array_merge($thread, [
             'chatType' => $chatType,
             'initialReplies' => $initialReplies,
+            'participants' => $participants,
+            'mentionIds' => $mentionIds,
+            'mentionSuggestions' => $mentionSuggestions,
+            'parentPayload' => $parentPayload,
+            'threadMuted' => $threadMuted,
         ]));
     }
 
-    public function attachment(Message $message): StreamedResponse
+    public function attachment(Message $message): BinaryFileResponse|StreamedResponse
     {
         Gate::authorize('view', $message);
 
         abort_unless($message->is_file && $message->file_path, 404);
         abort_unless(Storage::disk('public')->exists($message->file_path), 404);
 
-        return Storage::disk('public')->download(
+        return $this->streamPublicFile(
             $message->file_path,
             basename($message->file_path),
+            (bool) preg_match('/\.(jpe?g|png|gif|webp)$/i', $message->file_path),
         );
+    }
+
+    public function downloadAttachment(Message $message, MessageAttachment $attachment): BinaryFileResponse|StreamedResponse
+    {
+        Gate::authorize('view', $message);
+        abort_unless((int) $attachment->message_id === (int) $message->id, 404);
+        abort_unless(Storage::disk('public')->exists($attachment->file_path), 404);
+
+        return $this->streamPublicFile(
+            $attachment->file_path,
+            $attachment->original_name ?? basename($attachment->file_path),
+            $attachment->isImage(),
+        );
+    }
+
+    private function streamPublicFile(string $path, string $name, bool $inlineImage = false): BinaryFileResponse|StreamedResponse
+    {
+        $absolute = Storage::disk('public')->path($path);
+
+        if ($inlineImage) {
+            return response()->file($absolute, [
+                'Content-Disposition' => 'inline; filename="'.$name.'"',
+            ]);
+        }
+
+        return response()->download($absolute, $name);
+    }
+
+    public function mentions(string $chatType, int $chatId)
+    {
+        $user = Auth::user();
+        $chatable = $this->resolveChatable($user, $chatType, $chatId);
+        Gate::authorize('viewAny', [Message::class, $chatable]);
+
+        return response()->json([
+            'message_ids' => $this->mentionService->unreadMessageIdsForUser($user, $chatable),
+        ]);
+    }
+
+    public function markMentionRead(Message $message)
+    {
+        Gate::authorize('view', $message);
+        $this->mentionService->markMessageReadForUser($message->id, Auth::user());
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function toggleMute(string $chatType, int $chatId)
+    {
+        $user = Auth::user();
+        $chatable = $this->resolveChatable($user, $chatType, $chatId);
+        Gate::authorize('viewAny', [Message::class, $chatable]);
+
+        $muted = $this->notificationStackService->toggleChatMute(
+            $user,
+            $chatable->getMorphClass(),
+            $chatable->id,
+        );
+
+        return back()->with('success', $muted ? 'Chat notifications muted.' : 'Chat notifications unmuted.');
+    }
+
+    public function toggleThreadMute(Message $message)
+    {
+        Gate::authorize('thread', $message);
+
+        $muted = $this->notificationStackService->toggleThreadMute(Auth::user(), $message->id);
+
+        return back()->with('success', $muted ? 'Thread notifications muted.' : 'Thread notifications unmuted.');
     }
 }

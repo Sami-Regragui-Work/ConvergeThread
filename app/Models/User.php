@@ -68,7 +68,7 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Group::class, 'group_members')
             ->using(GroupMember::class)
-            ->withPivot(['group_role_override_id', 'permissions', 'left_at'])
+            ->withPivot(['group_role_override_id', 'left_at'])
             ->withTimestamps()
             ->wherePivotNull('left_at');
     }
@@ -101,5 +101,18 @@ class User extends Authenticatable
     public function isOwner(): bool
     {
         return $this->tenant_id === 1;
+    }
+
+    public function displayLabel(): string
+    {
+        if ($this->display_name !== null && $this->display_name !== '') {
+            return $this->display_name;
+        }
+
+        if ($this->username !== null && $this->username !== '') {
+            return $this->username;
+        }
+
+        return $this->email;
     }
 }

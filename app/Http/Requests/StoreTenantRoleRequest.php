@@ -25,6 +25,7 @@ class StoreTenantRoleRequest extends FormRequest
     {
         return [
             'name' => 'required|string|max:100|unique:tenant_roles,name,NULL,id,tenant_id,' . Auth::user()->tenant_id,
+            'color' => 'required|string|regex:/^#[0-9A-Fa-f]{6}$/',
             'permissions' => 'required|array',
             'permissions.*' => 'string',
         ];

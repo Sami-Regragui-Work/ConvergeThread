@@ -20,6 +20,7 @@ class SystemTenantRoleSeeder extends Seeder
                 'name' => 'Admin',
             ],
             [
+                'color' => '#ef4444',
                 'permissions' => [
                     Permissions::GROUP_VIEW,
                     Permissions::GROUP_CREATE,
@@ -50,6 +51,7 @@ class SystemTenantRoleSeeder extends Seeder
                     Permissions::MESSAGES_DELETE_ANY,
 
                     Permissions::INVITATIONS_CREATE_MEMBER,
+                    Permissions::WORKSPACE_MEMBERS_VIEW,
 
                     Permissions::TENANT_ROLES_VIEW,
                     Permissions::TENANT_ROLES_CREATE,
@@ -66,6 +68,7 @@ class SystemTenantRoleSeeder extends Seeder
                 'name' => 'Moderator',
             ],
             [
+                'color' => '#f59e0b',
                 'permissions' => [
                     Permissions::GROUP_VIEW,
                     Permissions::GROUP_CREATE,
@@ -91,6 +94,7 @@ class SystemTenantRoleSeeder extends Seeder
                     Permissions::MESSAGES_DELETE_ANY,
 
                     Permissions::INVITATIONS_CREATE_MEMBER,
+                    Permissions::WORKSPACE_MEMBERS_VIEW,
                 ],
             ]
         );
@@ -102,10 +106,13 @@ class SystemTenantRoleSeeder extends Seeder
                 'name' => 'Member',
             ],
             [
+                'color' => '#94a3b8',
                 'permissions' => [
                     Permissions::GROUP_VIEW,
 
                     Permissions::GROUP_MEMBERS_VIEW,
+
+                    Permissions::WORKSPACE_MEMBERS_VIEW,
 
                     Permissions::DUOS_VIEW,
 

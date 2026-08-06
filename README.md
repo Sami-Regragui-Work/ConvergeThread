@@ -72,3 +72,10 @@ Scope documents: the two `.docx` files in `references/` (full project + MVP SOW)
 ## Branching
 
 Feature work uses `feature/*` branches merged into `main`. See `references/branching.md` on the docs branch.
+
+## Roadmap / Todo
+
+- **E2EE (end-to-end encryption)** for messages and attachments
+- WebSocket real-time sync (replacing poll-based updates)
+- Voice and video calls in chat header
+- Full hierarchy UI polish and cross-hierarchy rules

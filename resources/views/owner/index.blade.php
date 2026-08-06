@@ -109,10 +109,15 @@
                                         <td class="px-4 py-3">{{ $tenant->users_count }}</td>
                                         <td class="px-4 py-3">{{ $tenant->groups_count }}</td>
                                         <td class="px-4 py-3">
-                                            @if ($tenant->closed_by_id)
+                                            @if ($tenant->isClosed())
                                                 <span class="inline-flex rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-xs font-medium text-red-300">
                                                     Closed
                                                 </span>
+                                                @if ($tenant->closure?->closedBy)
+                                                    <span class="block text-[10px] text-slate-500 mt-0.5">
+                                                        by {{ $tenant->closure->closedBy->displayLabel() }}
+                                                    </span>
+                                                @endif
                                             @else
                                                 <span class="inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-300">
                                                     Active
@@ -122,7 +127,7 @@
                                         <td class="px-4 py-3">
                                             @if ($tenant->id === 1)
                                                 <span class="text-xs text-slate-600">—</span>
-                                            @elseif ($tenant->closed_by_id)
+                                            @elseif ($tenant->isClosed())
                                                 <form method="POST" action="{{ route('owner.tenants.reopen', $tenant) }}">
                                                     @csrf @method('DELETE')
                                                     <button type="submit" class="text-xs text-emerald-400 hover:text-emerald-300">Reopen</button>

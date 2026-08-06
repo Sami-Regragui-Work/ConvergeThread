@@ -9,6 +9,8 @@ final class Permissions
 
     public const INVITATIONS_CREATE_MEMBER = 'invitations.create_member';
 
+    public const WORKSPACE_MEMBERS_VIEW = 'workspace.members.view';
+
     public const TENANT_ROLES_ALL = 'tenantroles.*';
     public const TENANT_ROLES_VIEW = 'tenantroles.view';
     public const TENANT_ROLES_CREATE = 'tenantroles.create';
@@ -83,6 +85,7 @@ final class Permissions
 
             self::TENANT_MOD => [
                 self::INVITATIONS_CREATE_MEMBER,
+                self::WORKSPACE_MEMBERS_VIEW,
                 self::TENANT_ROLES_ALL,
                 self::GROUP_ALL,
             ],
@@ -184,6 +187,7 @@ final class Permissions
             self::TENANT_ALL,
             self::TENANT_MOD,
             self::INVITATIONS_CREATE_MEMBER,
+            self::WORKSPACE_MEMBERS_VIEW,
             self::TENANT_ROLES_ALL,
             self::TENANT_ROLES_VIEW,
             self::TENANT_ROLES_CREATE,

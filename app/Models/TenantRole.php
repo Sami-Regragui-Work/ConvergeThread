@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\RoleHierarchyService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -13,6 +14,7 @@ class TenantRole extends Model
     protected $fillable = [
         'tenant_id',
         'name',
+        'color',
         'permissions',
         'is_system',
     ];
@@ -62,12 +64,6 @@ class TenantRole extends Model
 
     public static function assignableForInviter(User $inviter): Collection
     {
-        $query = static::query()->forTenant($inviter->tenant_id)->orderBy('name');
-
-        if ($inviter->tenantRole?->name !== 'Admin') {
-            $query->where('name', '!=', 'Admin');
-        }
-
-        return $query->get();
+        return app(RoleHierarchyService::class)->assignableRolesFor($inviter);
     }
 }

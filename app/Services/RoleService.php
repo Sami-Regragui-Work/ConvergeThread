@@ -10,11 +10,12 @@ use Illuminate\Validation\ValidationException;
 
 class RoleService
 {
-    public function createTenantRole(Tenant $tenant, string $name, array $permissions): TenantRole
+    public function createTenantRole(Tenant $tenant, string $name, array $permissions, ?string $color = null): TenantRole
     {
         return TenantRole::create([
             'tenant_id' => $tenant->id,
             'name' => $name,
+            'color' => $color,
             'permissions' => $permissions,
             'is_system' => false,
         ]);
@@ -35,16 +36,19 @@ class RoleService
         ]);
     }
 
-    public function updateTenantRole(TenantRole $tenantRole, string $name, array $permissions): TenantRole
+    public function updateTenantRole(TenantRole $tenantRole, string $name, array $permissions, ?string $color = null): TenantRole
     {
         if ($tenantRole->is_system) {
-            throw ValidationException::withMessages([
-                'tenant_role' => 'System roles cannot be edited.',
+            $tenantRole->update([
+                'color' => $color ?? $tenantRole->color,
             ]);
+
+            return $tenantRole->fresh();
         }
 
         $tenantRole->update([
             'name' => $name,
+            'color' => $color ?? $tenantRole->color,
             'permissions' => $permissions,
         ]);
 

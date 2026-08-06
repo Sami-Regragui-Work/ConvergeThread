@@ -7,6 +7,7 @@ use App\Models\Duo;
 use App\Models\Group;
 use App\Models\MergeSession;
 use App\Models\Message;
+use App\Models\MessageAttachment;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -14,32 +15,108 @@ use Illuminate\Validation\ValidationException;
 
 class MessageService
 {
+    public function __construct(
+        private readonly MentionService $mentionService,
+        private readonly NotificationStackService $notificationStackService,
+        private readonly ChatParticipantService $participantService,
+    ) {
+    }
+
+    /**
+     * @param  \Illuminate\Http\UploadedFile|list<\Illuminate\Http\UploadedFile>|null  $file
+     */
     public function create(
         Group|Duo|MergeSession $chatable,
         User $user,
         ?string $content = null,
-        ?UploadedFile $file = null,
-        ?Message $parent = null
+        UploadedFile|array|null $file = null,
+        ?Message $parent = null,
+        string $chatType = 'group',
+        ?array $mentionUserIds = null,
     ): Message {
+        $files = match (true) {
+            $file instanceof UploadedFile => [$file],
+            is_array($file) => $file,
+            default => [],
+        };
+
         $data = [
             'chatable_id' => $chatable->id,
             'chatable_type' => $chatable->getMorphClass(),
             'user_id' => $user->id,
             'content' => $content,
             'parent_id' => $parent?->id,
+            'is_file' => count($files) > 0,
         ];
 
-        if ($file) {
-            $data['is_file'] = true;
-            $data['file_path'] = $file->store('messages', 'public');
+        if (count($files) === 1 && blank($content)) {
+            $data['file_path'] = $files[0]->store('messages', 'public');
         }
 
         $message = Message::create($data);
-        $message->load('user');
+
+        foreach ($files as $index => $uploaded) {
+            MessageAttachment::create([
+                'message_id' => $message->id,
+                'file_path' => $uploaded->store('messages', 'public'),
+                'original_name' => $uploaded->getClientOriginalName(),
+                'sort' => $index,
+            ]);
+        }
+
+        $message->load(['user.tenantRole', 'attachments']);
+
+        $mentionedIds = $this->mentionService->syncForMessage($message, $chatable, $chatType, $mentionUserIds);
+
+        $this->dispatchChatNotifications($message, $chatable, $chatType, $mentionedIds, $parent);
 
         MessageSent::dispatch($message);
 
         return $message;
+    }
+
+    private function dispatchChatNotifications(
+        Message $message,
+        Group|Duo|MergeSession $chatable,
+        string $chatType,
+        array $mentionedIds,
+        ?Message $parent,
+    ): void {
+        $chatLabel = match (true) {
+            $chatable instanceof Group => $chatable->name,
+            $chatable instanceof Duo => $chatable->name ?? 'Duo',
+            $chatable instanceof MergeSession => 'Merge session',
+            default => 'Chat',
+        };
+
+        $participants = $this->participantService->participants($chatable);
+
+        foreach ($participants as $participant) {
+            if ($participant->id === $message->user_id) {
+                continue;
+            }
+
+            if (in_array($participant->id, $mentionedIds, true)) {
+                continue;
+            }
+
+            if ($parent && (int) $parent->user_id === (int) $participant->id) {
+                $this->notificationStackService->notifyChatMessage(
+                    $message,
+                    $chatType,
+                    $chatLabel.' (thread)',
+                    $participant,
+                );
+                continue;
+            }
+
+            $this->notificationStackService->notifyChatMessage(
+                $message,
+                $chatType,
+                $chatLabel,
+                $participant,
+            );
+        }
     }
 
     public function getThread(Message $message): array
@@ -65,30 +142,52 @@ class MessageService
             $data['content'] = $content;
         }
 
-        if ($removeFile && $message->file_path) {
-            Storage::disk('public')->delete($message->file_path);
+        if ($removeFile) {
+            foreach ($message->attachments as $attachment) {
+                Storage::disk('public')->delete($attachment->file_path);
+                $attachment->delete();
+            }
+
+            if ($message->file_path) {
+                Storage::disk('public')->delete($message->file_path);
+            }
+
             $data['is_file'] = false;
             $data['file_path'] = null;
         }
 
         if ($file) {
+            foreach ($message->attachments as $attachment) {
+                Storage::disk('public')->delete($attachment->file_path);
+                $attachment->delete();
+            }
+
             if ($message->file_path) {
                 Storage::disk('public')->delete($message->file_path);
             }
 
+            $path = $file->store('messages', 'public');
             $data['is_file'] = true;
-            $data['file_path'] = $file->store('messages', 'public');
+            $data['file_path'] = $path;
+
+            MessageAttachment::create([
+                'message_id' => $message->id,
+                'file_path' => $path,
+                'original_name' => $file->getClientOriginalName(),
+                'sort' => 0,
+            ]);
         }
 
         $finalContent = array_key_exists('content', $data)
             ? $data['content']
             : $message->content;
 
-        $finalFilePath = array_key_exists('file_path', $data)
-            ? $data['file_path']
-            : $message->file_path;
+        $message->load('attachments');
 
-        if (blank($finalContent) && blank($finalFilePath)) {
+        $willHaveAttachments = $file !== null
+            || (!$removeFile && ($message->attachments->isNotEmpty() || $message->file_path));
+
+        if (blank($finalContent) && !$willHaveAttachments) {
             throw ValidationException::withMessages([
                 'content' => ['Message must have content or file.'],
             ]);
@@ -96,11 +195,15 @@ class MessageService
 
         $message->update($data);
 
-        return $message->fresh();
+        return $message->fresh(['user.tenantRole', 'attachments']);
     }
 
     public function delete(Message $message): bool
     {
+        foreach ($message->attachments as $attachment) {
+            Storage::disk('public')->delete($attachment->file_path);
+        }
+
         if ($message->is_file && $message->file_path) {
             Storage::disk('public')->delete($message->file_path);
         }

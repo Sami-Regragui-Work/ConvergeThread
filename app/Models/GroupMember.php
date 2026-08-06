@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\Pivot;
 
 class GroupMember extends Pivot
 {
@@ -13,14 +13,12 @@ class GroupMember extends Pivot
         'group_id',
         'user_id',
         'group_role_override_id',
-        'permissions',
         'left_at',
     ];
 
     protected function casts(): array
     {
         return [
-            'permissions' => 'array',
             'left_at' => 'datetime',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',

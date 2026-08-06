@@ -34,12 +34,10 @@ class GroupPermissionService
 
         $tenantPermissions = $user->tenantRole?->permissions ?? [];
         $groupRolePermissions = $membership?->groupRoleOverride?->permissions ?? [];
-        $membershipPermissions = $membership?->permissions ?? [];
 
         $directPermissions = [
             ...$tenantPermissions,
             ...$groupRolePermissions,
-            ...$membershipPermissions,
         ];
 
         if ($membership) {
@@ -66,31 +64,31 @@ class GroupPermissionService
     }
 
     public function hasPermission(?Group $group, User $user, string $permission): bool
-{
-    if ($user->banned_by_id !== null) {
-        return false;
-    }
+    {
+        if ($user->banned_by_id !== null) {
+            return false;
+        }
 
-    if ($group !== null && $user->tenant_id !== $group->tenant_id) {
-        return false;
-    }
+        if ($group !== null && $user->tenant_id !== $group->tenant_id) {
+            return false;
+        }
 
-    if ($group === null) {
-        $permissions = Permissions::expand($user->tenantRole?->permissions ?? []);
+        if ($group === null) {
+            $permissions = Permissions::expand($user->tenantRole?->permissions ?? []);
 
-        return in_array($permission, $permissions, true);
-    }
+            return in_array($permission, $permissions, true);
+        }
 
-    $permissions = $this->getEffectivePermissions($group, $user);
+        $permissions = $this->getEffectivePermissions($group, $user);
 
-    if (!in_array($permission, $permissions, true)) {
-        return false;
-    }
+        if (!in_array($permission, $permissions, true)) {
+            return false;
+        }
 
-    if (!Permissions::requiresGroupMembership($permission)) {
-        return true;
-    }
+        if (!Permissions::requiresGroupMembership($permission)) {
+            return true;
+        }
 
-    return $this->isActiveMember($group, $user);
+        return $this->isActiveMember($group, $user);
     }
 }

@@ -6,7 +6,6 @@
 
     <div class="max-w-5xl mx-auto space-y-6">
 
-        {{-- Header --}}
         <div
             class="bg-surface-200 border border-white/5 rounded-2xl px-6 py-5 flex flex-col sm:flex-row sm:items-center gap-4">
             <div class="flex items-center gap-4 flex-1">
@@ -49,13 +48,15 @@
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-            {{-- Members --}}
             <div class="bg-surface-200 border border-white/5 rounded-2xl overflow-hidden">
                 <div class="px-5 py-4 border-b border-white/5 flex items-center justify-between">
                     <h2 class="text-sm font-semibold text-white">Members</h2>
                     @can('create', [App\Models\GroupMember::class, $group])
                         <a href="{{ route('groups.members.index', $group) }}"
-                            class="text-xs text-brand-400 hover:text-brand-300 transition">+ Add</a>
+                            class="text-xs text-brand-400 hover:text-brand-300 transition">Manage</a>
+                    @elsecan('viewAny', [App\Models\GroupMember::class, $group])
+                        <a href="{{ route('groups.members.index', $group) }}"
+                            class="text-xs text-slate-400 hover:text-slate-300 transition">View</a>
                     @endcan
                 </div>
                 <div class="divide-y divide-white/5">
@@ -63,9 +64,21 @@
                         <div class="px-5 py-3 flex items-center gap-3">
                             <div
                                 class="w-7 h-7 rounded-full bg-brand-500/10 text-brand-400 flex items-center justify-center text-xs font-semibold shrink-0">
-                                {{ strtoupper(substr($member->display_name ?? $member->email, 0, 1)) }}
+                                {{ strtoupper(substr($member->displayLabel(), 0, 1)) }}
                             </div>
-                            <span class="text-sm text-slate-300 truncate">{{ $member->display_name ?? $member->email }}</span>
+                            <div class="min-w-0 flex-1">
+                                <p class="text-sm text-slate-300 truncate">
+                                    {{ $member->displayLabel() }}
+                                </p>
+                                <div class="flex flex-col gap-1 mt-0.5">
+                                    @if($member->tenantRole)
+                                        <span class="text-[10px] text-brand-400/70 w-fit">Role: {{ $member->tenantRole->name }}</span>
+                                    @endif
+                                    @if((int) $group->creator_id === (int) $member->id)
+                                        <span class="text-[10px] uppercase tracking-wide text-amber-400/90 bg-amber-400/10 px-1.5 py-0.5 rounded w-fit">Group creator</span>
+                                    @endif
+                                </div>
+                            </div>
                         </div>
                     @empty
                         <p class="px-5 py-4 text-sm text-slate-500">No members yet.</p>
@@ -73,7 +86,6 @@
                 </div>
             </div>
 
-            {{-- Duos --}}
             <div class="bg-surface-200 border border-white/5 rounded-2xl overflow-hidden">
                 <div class="px-5 py-4 border-b border-white/5 flex items-center justify-between">
                     <h2 class="text-sm font-semibold text-white">Duos</h2>
@@ -103,7 +115,6 @@
             </div>
         @endcan
 
-        {{-- Group Chat --}}
         @can('viewAny', [App\Models\Message::class, $group])
             <div class="bg-surface-200 border border-white/5 rounded-2xl overflow-hidden">
                 <div class="px-5 py-4 border-b border-white/5 flex items-center justify-between">

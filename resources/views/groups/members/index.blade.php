@@ -21,7 +21,7 @@
                     <select name="tenant_role_id"
                         class="bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm min-w-40">
                         <option value="">Member (default)</option>
-                        @foreach($tenantRoles as $role)
+                        @foreach($inviteRoles as $role)
                             <option value="{{ $role->id }}" @selected(old('tenant_role_id') == $role->id)>{{ $role->name }}</option>
                         @endforeach
                     </select>
@@ -62,27 +62,32 @@
                         <div class="flex items-center gap-4 flex-1 min-w-0">
                             <div
                                 class="w-9 h-9 rounded-full bg-brand-500/10 text-brand-400 flex items-center justify-center text-sm font-semibold shrink-0">
-                                {{ strtoupper(substr($member->user->display_name ?? $member->user->email, 0, 1)) }}
+                                {{ strtoupper(substr($member->user->displayLabel(), 0, 1)) }}
                             </div>
                             <div class="min-w-0">
                                 <p class="text-sm text-white font-medium truncate">
-                                    {{ $member->user->display_name ?? $member->user->email }}
+                                    {{ $member->user->displayLabel() }}
                                 </p>
                                 <p class="text-xs text-slate-500">{{ $member->user->email }}</p>
-                                <p class="text-xs text-brand-400/80 mt-0.5">
-                                    Role: {{ $member->user->tenantRole?->name ?? 'Unassigned' }}
-                                </p>
+                                <div class="flex flex-col gap-1 mt-0.5">
+                                    <span class="text-[10px] text-brand-400/70 w-fit">Role: {{ $member->user->tenantRole?->name ?? 'Unassigned' }}</span>
+                                    @if((int) $group->creator_id === (int) $member->user_id)
+                                        <span class="text-[10px] uppercase tracking-wide text-amber-400/90 bg-amber-400/10 px-1.5 py-0.5 rounded w-fit">Group creator</span>
+                                    @endif
+                                </div>
                             </div>
                         </div>
 
                         @can('assignTenantRole', [App\Models\GroupMember::class, $group])
+                            @php $roles = $assignableByMember[$member->user_id] ?? collect(); @endphp
+                            @if($roles->isNotEmpty())
                             <form method="POST" action="{{ route('groups.members.assign-tenant-role', $group) }}"
                                 class="flex items-center gap-2">
                                 @csrf @method('PATCH')
                                 <input type="hidden" name="user_id" value="{{ $member->user_id }}">
                                 <select name="tenant_role_id" required
                                     class="bg-surface-300 border border-white/10 text-white text-xs rounded-lg px-2 py-1.5 max-w-36">
-                                    @foreach($tenantRoles as $role)
+                                    @foreach($roles as $role)
                                         <option value="{{ $role->id }}"
                                             @selected($member->user->tenant_role_id == $role->id)>
                                             {{ $role->name }}
@@ -92,6 +97,7 @@
                                 <button type="submit"
                                     class="text-xs text-brand-400 hover:text-brand-300 px-2 py-1 whitespace-nowrap">Set role</button>
                             </form>
+                            @endif
                         @endcan
 
                         @can('assignRole', [App\Models\GroupMember::class, $group])

@@ -15,14 +15,18 @@ class OwnerTenantController extends Controller
             abort(403, 'The owner workspace cannot be closed.');
         }
 
-        $tenant->update(['closed_by_id' => Auth::id()]);
+        if ($tenant->isClosed()) {
+            return back()->with('success', "Workspace \"{$tenant->name}\" is already closed.");
+        }
+
+        $tenant->close(Auth::user());
 
         return back()->with('success', "Workspace \"{$tenant->name}\" has been closed.");
     }
 
     public function reopen(Tenant $tenant): RedirectResponse
     {
-        $tenant->update(['closed_by_id' => null]);
+        $tenant->reopen();
 
         return back()->with('success', "Workspace \"{$tenant->name}\" has been reopened.");
     }

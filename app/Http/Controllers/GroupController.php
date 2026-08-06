@@ -70,8 +70,8 @@ class GroupController extends Controller
         Gate::authorize('view', $group);
 
         $group->load([
-            'creator:id,display_name',
-            'activeMembers:id,display_name,username',
+            'creator:id,display_name,username,email',
+            'activeMembers.tenantRole',
             'tenant:id,slug',
             'duos:id,group_id,name,user1_id,user2_id',
         ]);

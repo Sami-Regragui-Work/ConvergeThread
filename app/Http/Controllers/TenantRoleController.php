@@ -48,7 +48,8 @@ class TenantRoleController extends Controller
         $this->roleService->createTenantRole(
             $tenant,
             $credentials['name'],
-            $credentials['permissions']
+            $credentials['permissions'],
+            $credentials['color'],
         );
 
         return redirect()
@@ -74,7 +75,8 @@ class TenantRoleController extends Controller
         $this->roleService->updateTenantRole(
             $tenantRole,
             $credentials['name'],
-            $credentials['permissions']
+            $credentials['permissions'] ?? $tenantRole->permissions ?? [],
+            $credentials['color'],
         );
 
         return redirect()

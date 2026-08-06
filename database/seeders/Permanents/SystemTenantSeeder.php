@@ -20,7 +20,6 @@ class SystemTenantSeeder extends Seeder
             [
                 'slug' => Str::slug('ConvergeThread Owner', '_'),
                 'admin_email' => 'sami.regragui.work@protonmail.com',
-                'closed_by_id' => null,
             ]
         );
     }

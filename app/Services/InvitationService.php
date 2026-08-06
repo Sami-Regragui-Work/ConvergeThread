@@ -188,7 +188,6 @@ class InvitationService
                     ],
                     [
                         'group_role_override_id' => null,
-                        'permissions' => null,
                         'left_at' => null,
                     ]
                 );

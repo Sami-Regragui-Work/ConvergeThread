@@ -1,12 +1,10 @@
 <?php
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('group_role_overrides', function (Blueprint $table) {
@@ -15,12 +13,11 @@ return new class extends Migration {
             $table->foreignId('tenant_role_id')->constrained('tenant_roles')->cascadeOnDelete();
             $table->json('permissions')->nullable();
             $table->timestamps();
+
+            $table->unique(['group_id', 'tenant_role_id']);
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('group_role_overrides');

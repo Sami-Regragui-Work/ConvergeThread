@@ -7,37 +7,55 @@ use App\Models\GroupMember;
 use App\Models\GroupRoleOverride;
 use App\Models\TenantRole;
 use App\Models\User;
+use App\Notifications\AddedToGroupNotification;
+use App\Notifications\GroupPermissionsChangedNotification;
+use App\Notifications\RoleChangedNotification;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Validation\ValidationException;
 
 class GroupMemberService
 {
-    public function add(Group $group, User $member): GroupMember
+    public function add(Group $group, User $member, ?User $addedBy = null): GroupMember
     {
         $existingMembership = GroupMember::where('group_id', $group->id)
             ->where('user_id', $member->id)
             ->first();
 
         if ($existingMembership) {
+            $wasLeft = $existingMembership->left_at !== null;
             $existingMembership->update([
                 'group_role_override_id' => null,
-                'permissions' => null,
                 'left_at' => null,
             ]);
+
+            if ($wasLeft && $addedBy && $member->id !== $addedBy->id) {
+                $member->notify(new AddedToGroupNotification(
+                    $group,
+                    $addedBy->display_name ?? $addedBy->username,
+                ));
+            }
 
             return $existingMembership->fresh();
         }
 
         $group->members()->attach($member, [
             'group_role_override_id' => null,
-            'permissions' => null,
             'left_at' => null,
         ]);
 
-        return GroupMember::where('group_id', $group->id)
+        $groupMember = GroupMember::where('group_id', $group->id)
             ->where('user_id', $member->id)
             ->whereNull('left_at')
             ->firstOrFail();
+
+        if ($addedBy && $member->id !== $addedBy->id) {
+            $member->notify(new AddedToGroupNotification(
+                $group,
+                $addedBy->display_name ?? $addedBy->username,
+            ));
+        }
+
+        return $groupMember;
     }
 
     public function remove(Group $group, User $member): void
@@ -59,8 +77,12 @@ class GroupMemberService
 
         $groupMember->update([
             'group_role_override_id' => $roleOverride?->id,
-            'permissions' => $roleOverride?->permissions,
         ]);
+
+        $member->notify(new GroupPermissionsChangedNotification(
+            $group,
+            $roleOverride ? 'New permissions in '.$group->name : 'Permissions reset in '.$group->name,
+        ));
 
         return $groupMember->fresh();
     }
@@ -80,6 +102,8 @@ class GroupMemberService
         }
 
         $member->update(['tenant_role_id' => $tenantRole->id]);
+
+        $member->notify(new RoleChangedNotification($tenantRole->name, $group->name));
 
         return $member->fresh(['tenantRole']);
     }

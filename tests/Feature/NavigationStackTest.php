@@ -6,7 +6,7 @@ use App\Models\Tenant;
 use App\Models\TenantRole;
 use App\Models\User;
 use App\Services\GroupService;
-use App\Support\BackNavigation;
+use App\Support\NavigationStack;
 use Database\Seeders\Permanents\SystemTenantRoleSeeder;
 use Database\Seeders\Permanents\SystemTenantSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -42,25 +42,26 @@ class NavigationStackTest extends TestCase
         $this->actingAs($admin)->get(route('groups.show', $group));
 
         $membersUrl = route('groups.members.index', $group);
-        $this->actingAs($admin)->get($membersUrl);
+        $this->actingAs($admin)->get($membersUrl)->assertOk();
 
         $this->assertSame(
             route('groups.show', $group),
-            BackNavigation::url(),
+            NavigationStack::parentUrl($membersUrl),
         );
 
-        $this->actingAs($admin)->get(route('groups.show', $group));
+        $showUrl = route('groups.show', $group);
+        $this->actingAs($admin)->get($showUrl)->assertOk();
 
         $this->assertSame(
             route('groups.index'),
-            BackNavigation::url(),
+            NavigationStack::parentUrl($showUrl),
         );
 
-        $this->actingAs($admin)->get($membersUrl);
+        $this->actingAs($admin)->get($membersUrl)->assertOk();
 
         $this->assertSame(
             route('groups.show', $group),
-            BackNavigation::url(),
+            NavigationStack::parentUrl($membersUrl),
         );
     }
 }

@@ -35,11 +35,7 @@ class TenantRolePolicy
      */
     public function update(User $editor, TenantRole $tenantRole): bool
     {
-        if ($tenantRole->is_system) {
-            return false;
-        }
-
-        if ($editor->tenant_id !== $tenantRole->tenant_id) {
+        if (!$tenantRole->is_system && $editor->tenant_id !== $tenantRole->tenant_id) {
             return false;
         }
 

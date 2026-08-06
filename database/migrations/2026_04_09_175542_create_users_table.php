@@ -22,10 +22,6 @@ return new class extends Migration {
 
             $table->unique(['tenant_id', 'username']);
         });
-
-        Schema::table('tenants', function (Blueprint $table) {
-            $table->foreign('closed_by_id')->references('id')->on('users')->nullOnDelete();
-        });
     }
 
     /**
@@ -33,10 +29,6 @@ return new class extends Migration {
      */
     public function down(): void
     {
-        Schema::table('tenants', function (Blueprint $table) {
-            $table->dropForeign(['closed_by_id']);
-        });
-
         Schema::dropIfExists('users');
     }
 };
