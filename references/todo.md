@@ -19,31 +19,33 @@
 
 ---
 
-## Video call
+## Todo
 
-## Voice / normal call
+### Video call
 
-## Workspace members (Admin & Moderator)
+### Voice / normal call
+
+### Workspace members (Admin & Moderator)
 
 Sidebar section to list all workspace members outside any group — assign roles (e.g. Moderator) without group membership.
 
-## Sidebar UX
+### Sidebar UX
 
 Toggleable sidebar on desktop; closed by default on small screens (mobile overlay exists, desktop toggle pending).
 
-## Thread reply attachments
+### Thread reply attachments
 
 Allow file uploads on thread replies.
 
-## Multi-file message upload
+### Multi-file message upload
 
 Send several files in one message.
 
-## File preview in chat
+### File preview in chat
 
 WhatsApp-style previews (or a ConvergeThread-specific treatment) for images, video, documents.
 
-## @selected mentions
+### @selected mentions
 
 Dropup picker when typing `@selected`:
 
@@ -52,14 +54,14 @@ Dropup picker when typing `@selected`:
 - Header also: **Select filtered** / **Unselect filtered** for current search results (clear labels or icons)
 - Mention resolves to the chosen subset (with exclusions supported)
 
-## Tagging (SOW #7)
+### Tagging (SOW #7)
 
 General `@user` mentions and notification hooks — deferred from MVP.
 
-## WebSocket upgrade
+### WebSocket upgrade
 
 Replace polling client with Laravel Reverb or similar.
 
-## Invitation management UI
+### Invitation management UI
 
 List pending invitations, revoke / expire from dashboard.
