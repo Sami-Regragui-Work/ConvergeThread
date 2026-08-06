@@ -45,7 +45,7 @@
 - Pending invitations list + revoke
 
 ### Realtime & owner UX
-- Laravel Reverb broadcasts for chat messages and workspace list sync
+- Laravel Reverb broadcasts for chat messages, workspace list sync, and call signaling
 - Owner dashboard live client-side search (no Enter submit)
 - Display-name capitalization helper (first letter only)
 
@@ -60,13 +60,19 @@
 - Per-user ECDH identity keys (private key in browser) + per-chat AES room keys
 - Server stores ciphertext only; notifications show generic encrypted previews
 
+### Voice & video calls
+- WebRTC voice/video in chat (invite / join / offer / answer / ICE via Reverb)
+- Mesh between joined peers; mute / camera toggles; Google public STUN
+
 ---
 
 ## Todo
 
-### Voice and video calls
-Voice and video call UI exists in chat; **WebRTC media calls are not working yet**
+### TURN for restrictive NATs
+Calls use public STUN today; some networks need a TURN relay.
+
+### Multi-device E2EE
+Private-key sync / recovery across devices.
 
 ### Sidebar UX
 Further polish for desktop toggle defaults on very small screens if needed.
-
