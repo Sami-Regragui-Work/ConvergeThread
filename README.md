@@ -55,7 +55,7 @@ composer run dev
 
 Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
 
-`.env.example` defaults to `BROADCAST_CONNECTION=reverb`. If Reverb is not running, the UI falls back to polling.
+`.env.example` defaults to `BROADCAST_CONNECTION=reverb`. If Reverb is not running, the UI falls back to polling (chat still works; **live calls need Reverb**).
 
 After seeding, sign in with the owner account from `database/seeders/Permanents/OwnerSeeder.php` (check that file for the seeded email/password), or register into the default workspace tenant.
 
@@ -72,8 +72,9 @@ php artisan test
 - PHP, Laravel 12
 - Blade + Tailwind (CDN) + Alpine.js
 - Session authentication (`web` guard)
-- Laravel Reverb WebSockets for chat and workspace sync (HTTP poll fallback)
+- Laravel Reverb WebSockets for chat, workspace sync, and WebRTC call signaling
 - Client-side E2EE for chat text and attachments (Web Crypto; private keys stay in the browser)
+- WebRTC voice/video calls in chat (STUN; mesh between joined peers)
 
 ## Documentation
 
@@ -87,4 +88,5 @@ Feature work uses `feature/*` branches merged into `main`. See `references/branc
 
 ## Roadmap / Todo
 
-- Voice and video call UI exists in chat; **WebRTC media calls are not working yet**
+- TURN servers for restrictive NATs (calls use public STUN today)
+- Multi-device E2EE private-key sync / recovery

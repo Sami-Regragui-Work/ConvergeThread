@@ -20,6 +20,8 @@
             cryptoShowUrl: config.cryptoShowUrl ?? null,
             cryptoSharesUrl: config.cryptoSharesUrl ?? null,
             cryptoPublicKeyUrl: config.cryptoPublicKeyUrl ?? null,
+            callSignalUrl: config.callSignalUrl ?? null,
+            currentUserName: config.currentUserName ?? 'You',
             draft: '',
             files: [],
             filePreviews: [],
@@ -44,6 +46,16 @@
             editDraft: '',
             showCallModal: false,
             callType: 'voice',
+            callId: null,
+            callState: 'idle',
+            callError: '',
+            incomingCall: null,
+            localStream: null,
+            localMuted: false,
+            localVideoOff: false,
+            peers: [],
+            peerConnections: {},
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }],
 
             async init() {
                 this.scrollToBottom();
@@ -59,6 +71,7 @@
                 if (this.echoBound && window.Echo && this.chatType && this.chatId) {
                     window.Echo.leave('chat.' + this.chatType + '.' + this.chatId);
                 }
+                this.teardownCall();
                 this.revokeFilePreviews();
             },
 
@@ -210,8 +223,9 @@
             setupRealtime() {
                 if (!window.Echo || !this.chatType || !this.chatId) return;
 
-                window.Echo.private('chat.' + this.chatType + '.' + this.chatId)
-                    .listen('.message.sent', (e) => {
+                const channel = window.Echo.private('chat.' + this.chatType + '.' + this.chatId);
+
+                channel.listen('.message.sent', (e) => {
                         const message = e?.message;
                         if (!message) {
                             this.poll();
@@ -226,6 +240,8 @@
 
                         this.appendMessages([message]);
                     });
+
+                channel.listen('.call.signal', (payload) => this.onCallSignal(payload));
 
                 this.echoBound = true;
             },
@@ -603,8 +619,305 @@
             },
 
             openCall(type) {
-                this.callType = type;
-                this.showCallModal = true;
+                this.startCall(type);
+            },
+
+            async signalCall(payload) {
+                if (!this.callSignalUrl) return;
+                await fetch(this.callSignalUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(payload),
+                });
+            },
+
+            async ensureLocalMedia(type) {
+                if (this.localStream) {
+                    this.localStream.getTracks().forEach((t) => t.stop());
+                    this.localStream = null;
+                }
+
+                this.localStream = await navigator.mediaDevices.getUserMedia({
+                    audio: true,
+                    video: type === 'video',
+                });
+                this.localMuted = false;
+                this.localVideoOff = false;
+                this.$nextTick(() => {
+                    if (this.$refs.localVideo) this.$refs.localVideo.srcObject = this.localStream;
+                });
+            },
+
+            async startCall(type) {
+                if (this.callState !== 'idle' || !this.callSignalUrl) {
+                    this.callError = this.callSignalUrl ? 'Already in a call.' : 'Calling requires realtime (Reverb).';
+                    this.showCallModal = true;
+                    return;
+                }
+
+                try {
+                    this.callType = type;
+                    this.callId = 'call_' + this.currentUserId + '_' + Date.now();
+                    this.callState = 'outgoing';
+                    this.callError = '';
+                    this.showCallModal = true;
+                    this.peers = [];
+                    this.peerConnections = {};
+                    await this.ensureLocalMedia(type);
+                    await this.signalCall({
+                        action: 'invite',
+                        call_id: this.callId,
+                        call_type: type,
+                    });
+                } catch (e) {
+                    this.callError = 'Microphone/camera permission denied or unavailable.';
+                    this.callState = 'idle';
+                    this.showCallModal = true;
+                }
+            },
+
+            async acceptIncoming() {
+                if (!this.incomingCall) return;
+                try {
+                    this.callId = this.incomingCall.call_id;
+                    this.callType = this.incomingCall.call_type;
+                    this.callState = 'active';
+                    this.callError = '';
+                    this.showCallModal = true;
+                    this.peers = [];
+                    this.peerConnections = {};
+                    await this.ensureLocalMedia(this.callType);
+                    const fromId = this.incomingCall.from_user_id;
+                    const fromName = this.incomingCall.from_user_name;
+                    this.incomingCall = null;
+                    await this.signalCall({
+                        action: 'join',
+                        call_id: this.callId,
+                        call_type: this.callType,
+                    });
+                    await this.createOfferFor(fromId, fromName);
+                } catch (e) {
+                    this.callError = 'Could not access microphone/camera.';
+                    this.incomingCall = null;
+                    this.callState = 'idle';
+                }
+            },
+
+            async rejectIncoming() {
+                if (!this.incomingCall) return;
+                await this.signalCall({
+                    action: 'reject',
+                    call_id: this.incomingCall.call_id,
+                    call_type: this.incomingCall.call_type,
+                    to_user_id: this.incomingCall.from_user_id,
+                });
+                this.incomingCall = null;
+            },
+
+            async endCall() {
+                const id = this.callId;
+                const type = this.callType;
+                if (id) {
+                    try {
+                        await this.signalCall({ action: 'leave', call_id: id, call_type: type || 'voice' });
+                    } catch (e) {}
+                }
+                this.teardownCall();
+            },
+
+            teardownCall() {
+                Object.values(this.peerConnections).forEach((pc) => {
+                    try { pc.close(); } catch (e) {}
+                });
+                this.peerConnections = {};
+                this.peers = [];
+                if (this.localStream) {
+                    this.localStream.getTracks().forEach((t) => t.stop());
+                    this.localStream = null;
+                }
+                this.callId = null;
+                this.callState = 'idle';
+                this.showCallModal = false;
+                this.incomingCall = null;
+                this.callError = '';
+            },
+
+            toggleMute() {
+                if (!this.localStream) return;
+                this.localMuted = !this.localMuted;
+                this.localStream.getAudioTracks().forEach((t) => { t.enabled = !this.localMuted; });
+            },
+
+            toggleVideo() {
+                if (!this.localStream || this.callType !== 'video') return;
+                this.localVideoOff = !this.localVideoOff;
+                this.localStream.getVideoTracks().forEach((t) => { t.enabled = !this.localVideoOff; });
+            },
+
+            upsertPeer(userId, name, stream = null) {
+                const idx = this.peers.findIndex((p) => Number(p.userId) === Number(userId));
+                if (idx >= 0) {
+                    this.peers[idx] = {
+                        ...this.peers[idx],
+                        name: name || this.peers[idx].name,
+                        stream: stream || this.peers[idx].stream,
+                    };
+                } else {
+                    this.peers.push({ userId: Number(userId), name: name || ('User #' + userId), stream });
+                }
+                this.peers = [...this.peers];
+                this.$nextTick(() => {
+                    const video = document.getElementById('remote-video-' + userId);
+                    const audio = document.getElementById('remote-audio-' + userId);
+                    const peer = this.peers.find((p) => Number(p.userId) === Number(userId));
+                    if (peer?.stream) {
+                        if (video) video.srcObject = peer.stream;
+                        if (audio) audio.srcObject = peer.stream;
+                    }
+                });
+            },
+
+            removePeer(userId) {
+                const pc = this.peerConnections[userId];
+                if (pc) {
+                    try { pc.close(); } catch (e) {}
+                    delete this.peerConnections[userId];
+                }
+                this.peers = this.peers.filter((p) => Number(p.userId) !== Number(userId));
+            },
+
+            createPeerConnection(userId, name) {
+                if (this.peerConnections[userId]) return this.peerConnections[userId];
+
+                const pc = new RTCPeerConnection({ iceServers: this.iceServers });
+                this.peerConnections[userId] = pc;
+
+                if (this.localStream) {
+                    this.localStream.getTracks().forEach((track) => pc.addTrack(track, this.localStream));
+                }
+
+                pc.onicecandidate = (event) => {
+                    if (!event.candidate || !this.callId) return;
+                    this.signalCall({
+                        action: 'ice',
+                        call_id: this.callId,
+                        call_type: this.callType,
+                        to_user_id: Number(userId),
+                        candidate: event.candidate.toJSON(),
+                    });
+                };
+
+                pc.ontrack = (event) => {
+                    const stream = event.streams[0] || new MediaStream([event.track]);
+                    this.upsertPeer(userId, name, stream);
+                };
+
+                pc.onconnectionstatechange = () => {
+                    if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) {
+                        this.removePeer(userId);
+                        if (!this.peers.length && this.callState === 'active') {
+                            // keep local UI until hangup
+                        }
+                    }
+                };
+
+                this.upsertPeer(userId, name);
+                return pc;
+            },
+
+            async createOfferFor(userId, name) {
+                const pc = this.createPeerConnection(userId, name);
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                await this.signalCall({
+                    action: 'offer',
+                    call_id: this.callId,
+                    call_type: this.callType,
+                    to_user_id: Number(userId),
+                    sdp: offer,
+                });
+            },
+
+            async onCallSignal(payload) {
+                if (!payload || Number(payload.from_user_id) === Number(this.currentUserId)) return;
+                if (payload.to_user_id && Number(payload.to_user_id) !== Number(this.currentUserId)) return;
+
+                const action = payload.action;
+
+                if (action === 'invite') {
+                    if (this.callState !== 'idle') return;
+                    this.incomingCall = {
+                        call_id: payload.call_id,
+                        call_type: payload.call_type,
+                        from_user_id: payload.from_user_id,
+                        from_user_name: payload.from_user_name,
+                    };
+                    return;
+                }
+
+                if (action === 'reject') {
+                    if (this.callId && payload.call_id === this.callId && this.callState === 'outgoing') {
+                        this.callError = (payload.from_user_name || 'Someone') + ' declined the call.';
+                    }
+                    return;
+                }
+
+                if (action === 'leave') {
+                    if (this.callId && payload.call_id === this.callId) {
+                        this.removePeer(payload.from_user_id);
+                        if (!this.peers.length && this.callState === 'active') {
+                            this.callError = 'Everyone else left the call.';
+                        }
+                    }
+                    return;
+                }
+
+                if (action === 'join') {
+                    if (!this.callId || payload.call_id !== this.callId) return;
+                    if (this.callState === 'outgoing') this.callState = 'active';
+                    if (!this.localStream) return;
+                    await this.createOfferFor(payload.from_user_id, payload.from_user_name);
+                    return;
+                }
+
+                if (action === 'offer') {
+                    if (!this.callId || payload.call_id !== this.callId || !payload.sdp) return;
+                    if (this.callState === 'outgoing') this.callState = 'active';
+                    const pc = this.createPeerConnection(payload.from_user_id, payload.from_user_name);
+                    await pc.setRemoteDescription(payload.sdp);
+                    const answer = await pc.createAnswer();
+                    await pc.setLocalDescription(answer);
+                    await this.signalCall({
+                        action: 'answer',
+                        call_id: this.callId,
+                        call_type: this.callType,
+                        to_user_id: Number(payload.from_user_id),
+                        sdp: answer,
+                    });
+                    return;
+                }
+
+                if (action === 'answer') {
+                    if (!this.callId || payload.call_id !== this.callId || !payload.sdp) return;
+                    const pc = this.peerConnections[payload.from_user_id];
+                    if (!pc) return;
+                    await pc.setRemoteDescription(payload.sdp);
+                    if (this.callState === 'outgoing') this.callState = 'active';
+                    return;
+                }
+
+                if (action === 'ice') {
+                    if (!this.callId || payload.call_id !== this.callId || !payload.candidate) return;
+                    const pc = this.peerConnections[payload.from_user_id] || this.createPeerConnection(payload.from_user_id, payload.from_user_name);
+                    try {
+                        await pc.addIceCandidate(payload.candidate);
+                    } catch (e) {}
+                }
             },
 
             async sendMessage() {

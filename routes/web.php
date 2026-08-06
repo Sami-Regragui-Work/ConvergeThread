@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CallController;
 use App\Http\Controllers\ChatCryptoController;
 use App\Http\Controllers\DuoController;
 use App\Http\Controllers\GroupController;
@@ -140,6 +141,7 @@ Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
 
     // Messages
     Route::prefix('messages')->name('messages.')->group(function () {
+        Route::post('{chatType}/{chatId}/call/signal', [CallController::class, 'signal'])->name('call.signal');
         Route::post('crypto/public-key', [ChatCryptoController::class, 'storePublicKey'])->name('crypto.public-key');
         Route::get('{chatType}/{chatId}/crypto', [ChatCryptoController::class, 'show'])->name('crypto.show');
         Route::post('{chatType}/{chatId}/crypto/shares', [ChatCryptoController::class, 'storeShares'])->name('crypto.shares');
