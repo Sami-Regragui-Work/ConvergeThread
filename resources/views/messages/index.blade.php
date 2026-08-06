@@ -79,7 +79,11 @@
 
                 <div class="space-y-3" x-show="messages.length > 0">
                 <template x-for="message in messages" :key="message.id">
-                    <div class="flex gap-3" :class="message.user_id === currentUserId ? 'flex-row-reverse' : ''"
+                    <div class="flex gap-3 rounded-xl transition"
+                        :class="[
+                            message.user_id === currentUserId ? 'flex-row-reverse' : '',
+                            focusMessageId === message.id ? 'msg-focus-pulse bg-brand-500/10' : '',
+                        ]"
                         :data-message-id="message.id">
                         <div
                             class="w-7 h-7 rounded-full bg-brand-500/10 text-brand-400 flex items-center justify-center text-xs font-semibold shrink-0 mt-1"

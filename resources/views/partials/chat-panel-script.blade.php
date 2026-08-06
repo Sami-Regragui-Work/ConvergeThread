@@ -56,14 +56,21 @@
             peers: [],
             peerConnections: {},
             iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }],
+            focusMessageId: null,
 
             async init() {
+                const params = new URLSearchParams(window.location.search);
+                const focus = params.get('message');
+                if (focus) this.focusMessageId = Number(focus);
+
                 this.scrollToBottom();
                 this.$nextTick(() => this.focusDraft());
                 this.setupRealtime();
                 this.pollTimer = setInterval(() => this.poll(), this.echoBound ? 15000 : 3000);
                 await this.setupE2ee();
                 await this.decryptMessages(this.messages);
+                await this.indexMessagesForSearch(this.messages);
+                this.$nextTick(() => this.scrollToFocusedMessage());
             },
 
             destroy() {
@@ -157,6 +164,23 @@
                 for (const message of list) {
                     await this.decryptMessageInPlace(message);
                 }
+            },
+
+            async indexMessagesForSearch(list) {
+                if (!window.ChatSearchIndex || !this.chatType || !this.chatId || !Array.isArray(list)) return;
+                for (const message of list) {
+                    try {
+                        await window.ChatSearchIndex.indexDecryptedMessage(this.chatType, this.chatId, message);
+                    } catch (e) {}
+                }
+            },
+
+            scrollToFocusedMessage() {
+                if (!this.focusMessageId) return;
+                this.scrollToMessage(this.focusMessageId);
+                const url = new URL(window.location.href);
+                url.searchParams.delete('message');
+                window.history.replaceState({}, '', url.pathname + url.search + url.hash);
             },
 
             async decryptMessageInPlace(message) {
@@ -467,6 +491,7 @@
                             this.messages.push(decoded);
                             this.scrollToBottom();
                         }
+                        this.indexMessagesForSearch([decoded]);
                     });
                     if (!existing.has(message.id)) added = true;
                 }

@@ -165,12 +165,27 @@ class MessageController extends Controller
         return $suggestions;
     }
 
-    public function index(string $chatType, int $chatId)
+    public function index(Request $request, string $chatType, int $chatId)
     {
         $user = Auth::user();
         $chatable = $this->resolveChatable($user, $chatType, $chatId);
 
         Gate::authorize('viewAny', [Message::class, $chatable]);
+
+        $focusId = (int) $request->query('message', 0);
+        if ($focusId > 0) {
+            $focus = Message::query()
+                ->where('chatable_type', $chatable->getMorphClass())
+                ->where('chatable_id', $chatable->id)
+                ->where('id', $focusId)
+                ->first();
+
+            if ($focus?->parent_id) {
+                return redirect()->to(
+                    route('messages.thread', $focus->parent_id).'?message='.$focus->id
+                );
+            }
+        }
 
         $messages = Message::where('chatable_type', $chatable->getMorphClass())
             ->where('chatable_id', $chatable->id)

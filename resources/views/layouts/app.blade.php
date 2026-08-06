@@ -81,6 +81,15 @@
             box-decoration-break: clone;
             -webkit-box-decoration-break: clone;
         }
+
+        .msg-focus-pulse {
+            animation: msg-focus-pulse 1.6s ease-out 1;
+        }
+
+        @keyframes msg-focus-pulse {
+            0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.55); }
+            100% { box-shadow: 0 0 0 12px rgba(99, 102, 241, 0); }
+        }
     </style>
 </head>
 
@@ -303,6 +312,25 @@
                                     class="bg-surface-200 border border-white/10 text-white text-xs rounded-lg px-3 py-1.5 w-48 focus:outline-none focus:ring-1 focus:ring-brand-500/50"
                                     @keydown.enter.prevent>
                             </div>
+                        @else
+                            <button type="button" onclick="window.__openChatSearch && window.__openChatSearch()"
+                                class="inline-flex items-center gap-1.5 p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition"
+                                title="Search chats">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                                <span class="hidden sm:inline text-xs">Search</span>
+                            </button>
+                            <button type="button" onclick="window.__openChatMedia && window.__openChatMedia()"
+                                class="inline-flex items-center gap-1.5 p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition"
+                                title="Files by thread">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                                </svg>
+                                <span class="hidden sm:inline text-xs">Files</span>
+                            </button>
                         @endif
                         <a href="{{ route('notifications.index') }}"
                             class="relative inline-flex items-center justify-center p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition"
@@ -348,6 +376,13 @@
     </div>
 
     @include('partials.confirm-dialog')
+    @auth
+        @unless(auth()->user()->isOwner())
+            @include('partials.chat-crypto')
+            @include('partials.chat-search-index')
+            @include('partials.chat-browse-ui')
+        @endunless
+    @endauth
 
     @stack('scripts')
 </body>

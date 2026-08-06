@@ -75,6 +75,7 @@ php artisan test
 - Laravel Reverb WebSockets for chat, workspace sync, and WebRTC call signaling
 - Client-side E2EE for chat text and attachments (Web Crypto; private keys stay in the browser)
 - WebRTC voice/video calls in chat (STUN; mesh between joined peers)
+- Header chat search (Proton-style: decrypt locally → IndexedDB body keywords) and files-by-thread browse
 
 ## Documentation
 
@@ -96,7 +97,8 @@ See `references/todo.md` and `references/known-limitations.md` (docs branch). Hi
 - Multi-device E2EE private-key sync / recovery; late-joiner room-key share
 - SFU if large group calls; call UI on thread view
 - Reverb required for live calls; HTTPS (or localhost) for mic/camera
-- Opaque encrypted notification previews (E2EE tradeoff)
+- Harden local search IndexedDB (encrypt at rest); cross-chat search in one query
+- Convert simple edit pages to modals (live sync already exists)
 - Sidebar UX polish on very small screens
 
 Fresh installs assumed for E2EE — no plaintext history migration.

@@ -124,6 +124,7 @@ class Message extends Model
             'attachments' => $attachmentPayload,
             'parent_id' => $this->parent_id,
             'created_at' => $this->created_at?->diffForHumans(),
+            'created_at_iso' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->gt($this->created_at)
                 ? $this->updated_at->diffForHumans()
                 : null,
