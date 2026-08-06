@@ -67,6 +67,8 @@ class MessageController extends Controller
         $payload['can_edit'] = $viewer
             && (int) $message->user_id === (int) $viewerId
             && Gate::forUser($viewer)->allows('update', $message);
+        $payload['can_delete'] = $viewer
+            && Gate::forUser($viewer)->allows('delete', $message);
 
         return $payload;
     }
@@ -336,11 +338,32 @@ class MessageController extends Controller
             ->with('success', 'Message updated successfully.');
     }
 
-    public function destroy(Message $message)
+    public function destroy(\Illuminate\Http\Request $request, Message $message)
     {
         Gate::authorize('delete', $message);
 
+        $message->loadMissing('chatable');
+        $chatType = match ($message->chatable_type) {
+            'group' => 'group',
+            'duo' => 'duo',
+            'merge' => 'merge',
+            default => 'group',
+        };
+        $chatId = $message->chatable_id;
+        $wasRoot = $message->parent_id === null;
+        $messageId = $message->id;
+
         $this->messageService->delete($message);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'ok' => true,
+                'id' => $messageId,
+                'redirect' => $wasRoot
+                    ? route('messages.index', [$chatType, $chatId])
+                    : null,
+            ]);
+        }
 
         return redirect()
             ->back()

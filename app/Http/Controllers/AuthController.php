@@ -53,11 +53,27 @@ class AuthController extends Controller
                 $credentials['password']
             );
         } catch (\Exception $e) {
+            if ($request->wantsJson()) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+
             return back()->withErrors(['email' => $e->getMessage()])->withInput();
         }
 
         /** @var User $user */
         $user = Auth::user();
+        $redirect = $user->isOwner()
+            ? route('owner.index')
+            : route('groups.index');
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'redirect' => redirect()->intended($redirect)->getTargetUrl(),
+                'user_id' => $user->id,
+                'e2ee_backup' => $user->e2ee_private_backup,
+            ]);
+        }
+
         if ($user->isOwner()) {
             return redirect()->intended(route('owner.index'));
         }

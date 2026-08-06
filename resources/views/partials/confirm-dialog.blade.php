@@ -1,5 +1,5 @@
 <div x-data="confirmDialog()"
-    @confirm-action.window="ask($event.detail.message, $event.detail.form)"
+    @confirm-action.window="ask($event.detail.message, $event.detail.form, $event.detail.onConfirm)"
     x-cloak>
     <div x-show="open" class="fixed inset-0 z-300 flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/60" @click="cancel()"></div>
@@ -38,19 +38,28 @@
                     open: false,
                     message: '',
                     form: null,
-                    ask(message, form) {
+                    onConfirm: null,
+                    ask(message, form, onConfirm) {
                         this.message = message || 'Are you sure?';
                         this.form = form || null;
+                        this.onConfirm = typeof onConfirm === 'function' ? onConfirm : null;
                         this.open = true;
                     },
                     cancel() {
                         this.open = false;
                         this.form = null;
+                        this.onConfirm = null;
                     },
                     confirm() {
                         const form = this.form;
+                        const onConfirm = this.onConfirm;
                         this.open = false;
                         this.form = null;
+                        this.onConfirm = null;
+                        if (typeof onConfirm === 'function') {
+                            onConfirm();
+                            return;
+                        }
                         if (form) form.submit();
                     },
                 };

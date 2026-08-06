@@ -13,6 +13,7 @@
             markMentionUrlTemplate: @js(preg_replace('/\/\d+\//', '/__ID__/', route('messages.mentions.read', 0))),
             storeUrl: @js(route('messages.store', [$chatType, $message->chatable_id])),
             updateUrlTemplate: @js(preg_replace('/\/\d+$/', '/__ID__', route('messages.update', 0))),
+            destroyUrlTemplate: @js(preg_replace('/\/\d+$/', '/__ID__', route('messages.destroy', 0))),
             parentId: @js($message->id),
             currentUserId: @js(auth()->id()),
             canSend: @js(auth()->user()->can('create', [App\Models\Message::class, $message->chatable])),
@@ -55,37 +56,18 @@
                     x-text="parentMessage?.user_initial"></div>
                 <span class="text-sm text-slate-300" x-text="parentMessage?.user_name"></span>
                 <span class="text-xs text-slate-600" x-text="parentMessage?.created_at"></span>
+                <button type="button" x-show="parentMessage?.can_delete" x-cloak
+                    @click="askDelete(parentMessage)"
+                    class="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-surface-300 border border-white/10 text-red-400 hover:text-red-300">
+                    Delete
+                </button>
             </div>
 
             <template x-if="parentMessage">
                 <div>
-                    <template x-if="parentMessage.attachments && parentMessage.attachments.length">
-                        <div class="mb-3 flex flex-wrap gap-2">
-                            <template x-for="(attachment, ai) in parentMessage.attachments" :key="'parent-att-' + (attachment.id || ai)">
-                                <div class="relative group/att overflow-hidden rounded-xl border border-white/10 bg-black/20 shrink-0"
-                                    :class="(attachment.is_image || attachment.is_video) ? 'w-36 h-36 sm:w-40 sm:h-40' : 'w-36 sm:w-40 min-h-28'">
-                                    <button type="button" @click.stop="downloadAttachment(attachment)"
-                                        class="absolute top-1 right-1 z-10 w-6 h-6 rounded-full bg-black/70 text-white opacity-0 group-hover/att:opacity-100 transition flex items-center justify-center hover:bg-black/90"
-                                        title="Download">
-                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                        </svg>
-                                    </button>
-                                    <a x-show="attachment.is_image" :href="attachment.local_url || attachment.url" target="_blank" rel="noopener" class="block h-full w-full">
-                                        <img :src="attachment.local_url || attachment.preview_url || attachment.url" :alt="attachment.name"
-                                            class="h-full w-full object-cover">
-                                    </a>
-                                    <div x-show="attachment.is_video" class="relative h-full w-full bg-black">
-                                        <video :src="attachment.local_url || attachment.preview_url || attachment.url" class="h-full w-full object-cover" muted playsinline preload="metadata"></video>
-                                    </div>
-                                    <a x-show="!attachment.is_image && !attachment.is_video" :href="attachment.local_url || attachment.url" target="_blank" rel="noopener"
-                                        class="flex flex-col items-center justify-center gap-1.5 px-3 py-4 text-center min-h-28 h-full">
-                                        <span class="text-[10px] font-bold uppercase text-slate-300" x-text="attachment.ext || 'FILE'"></span>
-                                        <span class="text-[11px] truncate w-full text-slate-300" x-text="attachment.name"></span>
-                                    </a>
-                                </div>
-                            </template>
+                    <template x-for="message in [parentMessage]" :key="'parent-' + parentMessage.id">
+                        <div>
+                            @include('partials.chat-attachments')
                         </div>
                     </template>
                     <template x-if="parentMessage.content_html">
@@ -141,9 +123,14 @@
                                     <span x-text="message.content"></span>
                                 </template>
                             </div>
-                                <button type="button" x-show="message.can_edit && editingId !== message.id" x-cloak @click="startEdit(message)"
-                                    class="absolute -top-2 opacity-0 group-hover/msg:opacity-100 transition text-[10px] px-1.5 py-0.5 rounded bg-surface-300 border border-white/10 text-slate-400 hover:text-white"
-                                    :class="message.user_id === currentUserId ? '-left-2' : '-right-2'">Edit</button>
+                                <div class="absolute -top-2 flex gap-1 opacity-0 group-hover/msg:opacity-100 transition"
+                                    :class="message.user_id === currentUserId ? '-left-2' : '-right-2'"
+                                    x-show="editingId !== message.id && (message.can_edit || message.can_delete)" x-cloak>
+                                    <button type="button" x-show="message.can_edit" @click="startEdit(message)"
+                                        class="text-[10px] px-1.5 py-0.5 rounded bg-surface-300 border border-white/10 text-slate-400 hover:text-white">Edit</button>
+                                    <button type="button" x-show="message.can_delete" @click="askDelete(message)"
+                                        class="text-[10px] px-1.5 py-0.5 rounded bg-surface-300 border border-white/10 text-red-400 hover:text-red-300">Delete</button>
+                                </div>
                             </div>
                             <span class="text-xs text-slate-600"><span x-text="message.created_at"></span><span x-show="message.updated_at" x-cloak> · edited</span></span>
                         </div>

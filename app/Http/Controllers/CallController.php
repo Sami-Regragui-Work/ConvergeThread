@@ -27,13 +27,22 @@ class CallController extends Controller
         Gate::authorize('viewAny', [Message::class, $chatable]);
 
         $data = $request->validate([
-            'action' => ['required', Rule::in(['invite', 'join', 'offer', 'answer', 'ice', 'leave', 'reject'])],
+            'action' => ['required', Rule::in(['invite', 'join', 'offer', 'answer', 'ice', 'leave', 'reject', 'heartbeat'])],
             'call_id' => 'required|string|max:64',
             'call_type' => ['required', Rule::in(['voice', 'video'])],
             'to_user_id' => 'nullable|integer|exists:users,id',
             'sdp' => 'nullable|array',
             'candidate' => 'nullable|array',
         ]);
+
+        if (in_array($data['action'], ['invite', 'join'], true)) {
+            $this->callSessions->assertUserCanJoin(
+                (int) $user->id,
+                $chatType,
+                $chatId,
+                $data['call_id'],
+            );
+        }
 
         $payload = [
             'action' => $data['action'],
@@ -44,6 +53,9 @@ class CallController extends Controller
             'to_user_id' => $data['to_user_id'] ?? null,
             'sdp' => $data['sdp'] ?? null,
             'candidate' => $data['candidate'] ?? null,
+            'session_ended' => false,
+            'chat_type' => $chatType,
+            'chat_id' => $chatId,
         ];
 
         if ($data['action'] === 'invite') {
@@ -55,17 +67,29 @@ class CallController extends Controller
                 $data['call_id'],
                 $data['call_type'],
             );
-        } elseif (in_array($data['action'], ['join', 'offer', 'answer', 'ice'], true)) {
+        } elseif (in_array($data['action'], ['join', 'offer', 'answer', 'ice', 'heartbeat'], true)) {
+            $this->callSessions->markParticipant($chatType, $chatId, (int) $user->id, $data['call_id']);
             $this->callSessions->touch($chatType, $chatId);
-        } elseif (in_array($data['action'], ['leave', 'reject'], true)) {
-            if ($data['action'] === 'leave') {
-                $this->callSessions->clear($chatType, $chatId, $data['call_id']);
-            }
+        } elseif ($data['action'] === 'leave') {
+            $ended = $this->callSessions->removeParticipant(
+                $chatType,
+                $chatId,
+                (int) $user->id,
+                $data['call_id'],
+            );
+            $payload['session_ended'] = $ended;
         }
 
-        CallSignal::dispatch($chatType, $chatId, $payload);
+        if ($data['action'] !== 'heartbeat') {
+            CallSignal::dispatch($chatType, $chatId, $payload);
+        }
 
-        return response()->json(['ok' => true]);
+        return response()->json([
+            'ok' => true,
+            'active' => $this->callSessions->active($chatType, $chatId),
+            'session_ended' => $payload['session_ended'],
+            'user_call' => $this->callSessions->userActiveCall((int) $user->id),
+        ]);
     }
 
     public function active(string $chatType, int $chatId)
@@ -76,6 +100,7 @@ class CallController extends Controller
 
         return response()->json([
             'active' => $this->callSessions->active($chatType, $chatId),
+            'user_call' => $this->callSessions->userActiveCall((int) $user->id),
         ]);
     }
 }

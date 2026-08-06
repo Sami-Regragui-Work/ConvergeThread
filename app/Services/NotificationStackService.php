@@ -43,6 +43,15 @@ class NotificationStackService
             $data['author_name'] = $message->user->display_name ?? $message->user->username;
             $existing->update(['data' => $data, 'created_at' => now()]);
 
+            \App\Events\UnreadNotificationsUpdated::dispatch(
+                (int) $recipient->id,
+                (int) $recipient->unreadNotifications()->count(),
+            );
+
+            if ($recipient->tenant_id) {
+                \App\Support\WorkspaceSync::bump((int) $recipient->tenant_id, ['notifications']);
+            }
+
             return;
         }
 

@@ -31,6 +31,7 @@ class User extends Authenticatable
         'tenant_role_id',
         'banned_by_id',
         'e2ee_public_key',
+        'e2ee_private_backup',
     ];
 
     /**
@@ -41,6 +42,7 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'e2ee_public_key',
+        'e2ee_private_backup',
     ];
 
     /**

@@ -116,14 +116,17 @@ class MessageAttachment extends Model
         $url = route('messages.attachments.download', [$message, $this]);
         $size = $this->sizeBytes();
 
+        $encrypted = (bool) $this->is_encrypted;
+
         return [
             'id' => $this->id,
             'url' => $url,
-            'preview_url' => ($isImage || $isVideo) ? $url : null,
+            // Never expose ciphertext as an <img>/<video> src — clients set preview after decrypt.
+            'preview_url' => (! $encrypted && ($isImage || $isVideo)) ? $url : null,
             'name' => $this->displayName(),
             'is_image' => $isImage,
             'is_video' => $isVideo,
-            'is_encrypted' => (bool) $this->is_encrypted,
+            'is_encrypted' => $encrypted,
             'encryption_iv' => $this->encryption_iv,
             'mime_type' => $this->mime_type,
             'kind' => $kind,

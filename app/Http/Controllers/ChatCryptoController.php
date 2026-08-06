@@ -39,6 +39,35 @@ class ChatCryptoController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    public function showBackup()
+    {
+        /** @var User $user */
+        $user = Auth::user();
+
+        return response()->json([
+            'backup' => $user->e2ee_private_backup,
+            'has_public_key' => (bool) $user->e2ee_public_key,
+        ]);
+    }
+
+    public function storeBackup(Request $request)
+    {
+        $data = $request->validate([
+            'backup' => 'required|string|max:20000',
+        ]);
+
+        $json = json_decode($data['backup'], true);
+        if (! is_array($json) || empty($json['salt']) || empty($json['iv']) || empty($json['ciphertext'])) {
+            return response()->json(['message' => 'Invalid backup payload.'], 422);
+        }
+
+        /** @var User $user */
+        $user = Auth::user();
+        $user->update(['e2ee_private_backup' => $data['backup']]);
+
+        return response()->json(['ok' => true]);
+    }
+
     public function show(string $chatType, int $chatId)
     {
         $user = Auth::user();

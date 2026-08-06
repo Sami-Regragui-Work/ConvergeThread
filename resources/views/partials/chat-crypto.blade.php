@@ -24,6 +24,19 @@
             return 'ct_e2ee_private_' + userId;
         }
 
+        function roomStorageKey(userId, chatType, chatId) {
+            return 'ct_e2ee_room_' + userId + '_' + chatType + '_' + chatId;
+        }
+
+        function publicFingerprint(jwk) {
+            try {
+                const obj = typeof jwk === 'string' ? JSON.parse(jwk) : jwk;
+                return String(obj.x || '') + '.' + String(obj.y || '');
+            } catch (e) {
+                return '';
+            }
+        }
+
         async function generateIdentity() {
             return crypto.subtle.generateKey(
                 { name: 'ECDH', namedCurve: 'P-256' },
@@ -55,27 +68,44 @@
         }
 
         async function ensureIdentity(userId, publicKeyUrl) {
+            if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+                throw new Error('Secure context required for E2EE (use HTTPS or localhost).');
+            }
+            if (!window.crypto?.subtle) {
+                throw new Error('Web Crypto API unavailable in this browser.');
+            }
+
             const keyName = storageKey(userId);
             let privateJwk = localStorage.getItem(keyName);
             let keyPair;
+            let minted = false;
 
             if (privateJwk) {
-                const priv = await importPrivateJwk(privateJwk);
-                const pubJwk = JSON.parse(privateJwk);
-                delete pubJwk.d;
-                delete pubJwk.key_ops;
-                delete pubJwk.ext;
-                pubJwk.key_ops = [];
-                const pub = await importPublicJwk(pubJwk);
-                keyPair = { privateKey: priv, publicKey: pub };
-            } else {
+                try {
+                    const priv = await importPrivateJwk(privateJwk);
+                    const pubJwk = JSON.parse(privateJwk);
+                    delete pubJwk.d;
+                    delete pubJwk.key_ops;
+                    delete pubJwk.ext;
+                    pubJwk.key_ops = [];
+                    const pub = await importPublicJwk(pubJwk);
+                    keyPair = { privateKey: priv, publicKey: pub };
+                } catch (e) {
+                    localStorage.removeItem(keyName);
+                    privateJwk = null;
+                }
+            }
+
+            if (!privateJwk) {
                 keyPair = await generateIdentity();
                 privateJwk = JSON.stringify(await exportPrivateJwk(keyPair.privateKey));
                 localStorage.setItem(keyName, privateJwk);
+                minted = true;
             }
 
-            const publicJwk = JSON.stringify(await exportPublicJwk(keyPair.publicKey));
-            await fetch(publicKeyUrl, {
+            const publicJwkObj = await exportPublicJwk(keyPair.publicKey);
+            const publicJwk = JSON.stringify(publicJwkObj);
+            const res = await fetch(publicKeyUrl, {
                 method: 'POST',
                 headers: {
                     'Accept': 'application/json',
@@ -85,8 +115,17 @@
                 credentials: 'same-origin',
                 body: JSON.stringify({ public_key: publicJwk }),
             });
+            if (!res.ok) {
+                throw new Error('Could not register E2EE public key with the server.');
+            }
 
-            return keyPair;
+            return {
+                privateKey: keyPair.privateKey,
+                publicKey: keyPair.publicKey,
+                publicJwk,
+                fingerprint: publicFingerprint(publicJwkObj),
+                minted,
+            };
         }
 
         async function deriveWrapKey(privateKey, publicKey) {
@@ -108,6 +147,29 @@
 
         async function importRoomKeyRaw(raw) {
             return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+        }
+
+        async function cacheRoomKey(userId, chatType, chatId, roomKey) {
+            try {
+                const raw = await exportRoomKeyRaw(roomKey);
+                localStorage.setItem(roomStorageKey(userId, chatType, chatId), b64encode(raw));
+            } catch (e) {}
+        }
+
+        async function loadCachedRoomKey(userId, chatType, chatId) {
+            try {
+                const packed = localStorage.getItem(roomStorageKey(userId, chatType, chatId));
+                if (!packed) return null;
+                return importRoomKeyRaw(b64decode(packed));
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function clearCachedRoomKey(userId, chatType, chatId) {
+            try {
+                localStorage.removeItem(roomStorageKey(userId, chatType, chatId));
+            } catch (e) {}
         }
 
         async function wrapRoomKeyFor(roomKey, recipientPublicJwk) {
@@ -168,16 +230,151 @@
             return typeof content === 'string' && content.startsWith('e2ee:v1:');
         }
 
+        async function derivePasswordKey(password, saltBytes) {
+            const base = await crypto.subtle.importKey(
+                'raw',
+                enc.encode(password),
+                'PBKDF2',
+                false,
+                ['deriveKey']
+            );
+            return crypto.subtle.deriveKey(
+                {
+                    name: 'PBKDF2',
+                    salt: saltBytes,
+                    iterations: 210000,
+                    hash: 'SHA-256',
+                },
+                base,
+                { name: 'AES-GCM', length: 256 },
+                false,
+                ['encrypt', 'decrypt']
+            );
+        }
+
+        async function wrapPrivateKeyWithPassword(privateJwk, password) {
+            const salt = crypto.getRandomValues(new Uint8Array(16));
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const key = await derivePasswordKey(password, salt);
+            const plain = enc.encode(typeof privateJwk === 'string' ? privateJwk : JSON.stringify(privateJwk));
+            const cipher = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plain);
+            return JSON.stringify({
+                version: 1,
+                kdf: 'PBKDF2-SHA256-210000',
+                salt: b64encode(salt),
+                iv: b64encode(iv),
+                ciphertext: b64encode(cipher),
+            });
+        }
+
+        async function unwrapPrivateKeyWithPassword(backupJson, password) {
+            const backup = typeof backupJson === 'string' ? JSON.parse(backupJson) : backupJson;
+            if (!backup?.salt || !backup?.iv || !backup?.ciphertext) {
+                throw new Error('Invalid account key backup.');
+            }
+            const salt = b64decode(backup.salt);
+            const iv = b64decode(backup.iv);
+            const cipher = b64decode(backup.ciphertext);
+            const key = await derivePasswordKey(password, salt);
+            const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipher);
+            return JSON.parse(dec.decode(plain));
+        }
+
+        async function restoreFromAccountBackup(userId, password, backup) {
+            if (!backup || !password) return false;
+            const jwk = await unwrapPrivateKeyWithPassword(backup, password);
+            if (!jwk || jwk.kty !== 'EC' || !jwk.d) {
+                throw new Error('Account key backup is corrupted.');
+            }
+            localStorage.setItem(storageKey(userId), JSON.stringify(jwk));
+            return true;
+        }
+
+        async function uploadAccountBackup(userId, password, backupUrl) {
+            const raw = localStorage.getItem(storageKey(userId));
+            if (!raw || !password || !backupUrl) return false;
+            const backup = await wrapPrivateKeyWithPassword(raw, password);
+            const res = await fetch(backupUrl, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({ backup }),
+            });
+            return res.ok;
+        }
+
+        /**
+         * After login: restore private key from account backup, or upload local key as backup.
+         */
+        async function syncAccountIdentity(userId, password, { backupUrl, publicKeyUrl, backup }) {
+            if (!userId || !password) return { restored: false, uploaded: false };
+
+            let remoteBackup = backup;
+            if (remoteBackup === undefined && backupUrl) {
+                try {
+                    const res = await fetch(backupUrl, {
+                        headers: { 'Accept': 'application/json' },
+                        credentials: 'same-origin',
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        remoteBackup = data.backup || null;
+                    }
+                } catch (e) {
+                    remoteBackup = null;
+                }
+            }
+
+            const local = localStorage.getItem(storageKey(userId));
+            let restored = false;
+            let uploaded = false;
+
+            if (remoteBackup) {
+                try {
+                    await restoreFromAccountBackup(userId, password, remoteBackup);
+                    restored = true;
+                } catch (e) {
+                    console.warn('Could not unlock account E2EE backup', e);
+                    // Wrong password material or corrupt — keep local if present.
+                }
+            }
+
+            if (publicKeyUrl) {
+                await ensureIdentity(userId, publicKeyUrl);
+            }
+
+            if (backupUrl && localStorage.getItem(storageKey(userId))) {
+                // Refresh server backup from the active local key (covers first device + re-mint).
+                uploaded = await uploadAccountBackup(userId, password, backupUrl);
+            }
+
+            return { restored, uploaded };
+        }
+
         return {
             ensureIdentity,
             generateRoomKey,
             wrapRoomKeyFor,
             unwrapRoomKey,
+            cacheRoomKey,
+            loadCachedRoomKey,
+            clearCachedRoomKey,
+            wrapPrivateKeyWithPassword,
+            unwrapPrivateKeyWithPassword,
+            restoreFromAccountBackup,
+            uploadAccountBackup,
+            syncAccountIdentity,
             encryptText,
             decryptText,
             encryptBytes,
             decryptBytes,
             isEncrypted,
+            publicFingerprint,
+            storageKey,
             b64encode,
             b64decode,
         };

@@ -2,31 +2,41 @@
 <template x-if="message.attachments && message.attachments.length">
     <div class="mb-2 flex flex-wrap gap-2">
         <template x-for="(attachment, ai) in message.attachments" :key="'att-' + (attachment.id || ai)">
-            <div class="relative group/att overflow-hidden rounded-xl border border-white/10 bg-black/20 shrink-0"
-                :class="(attachment.is_image || attachment.is_video) ? 'w-36 h-36 sm:w-40 sm:h-40' : 'w-36 sm:w-40 min-h-28'">
+            <div class="relative group/att overflow-hidden rounded-xl border border-white/10 shrink-0 bg-black"
+                :class="(attachment.is_image || attachment.is_video) ? 'w-36 h-36 sm:w-40 sm:h-40' : 'w-36 sm:w-40 min-h-28 bg-black/40'">
                 <button type="button" @click.stop="downloadAttachment(attachment)"
-                    class="absolute top-1 right-1 z-10 w-6 h-6 rounded-full bg-black/70 text-white opacity-0 group-hover/att:opacity-100 transition flex items-center justify-center hover:bg-black/90"
+                    class="absolute top-1 right-1 z-20 w-6 h-6 rounded-full bg-black/70 text-white opacity-0 group-hover/att:opacity-100 transition flex items-center justify-center hover:bg-black/90 pointer-events-none group-hover/att:pointer-events-auto"
                     title="Download">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
                 </button>
-                <a x-show="attachment.is_image" :href="attachment.local_url || attachment.url" target="_blank" rel="noopener" class="block h-full w-full">
-                    <img :src="attachment.local_url || attachment.preview_url || attachment.url" :alt="attachment.name"
-                        class="h-full w-full min-h-24 min-w-24 max-h-40 max-w-40 object-cover"
-                        x-on:error="$el.style.opacity='0.3'">
+
+                {{-- Image: only bind src once we have a displayable URL (never raw ciphertext) --}}
+                <a x-show="attachment.is_image && attachmentDisplayUrl(attachment)" x-cloak
+                    :href="attachmentDisplayUrl(attachment)" target="_blank" rel="noopener"
+                    class="relative z-10 block h-full w-full bg-black">
+                    <img :src="attachmentDisplayUrl(attachment)" :alt="attachment.name"
+                        class="h-full w-full object-cover opacity-100">
                 </a>
-                <div x-show="attachment.is_video" class="relative h-full w-full bg-black">
-                    <video :src="attachment.local_url || attachment.preview_url || attachment.url" class="h-full w-full object-cover" muted playsinline preload="metadata"></video>
-                    <a :href="attachment.local_url || attachment.url" target="_blank" rel="noopener"
+                <div x-show="attachment.is_image && !attachmentDisplayUrl(attachment)" x-cloak
+                    class="h-full w-full flex items-center justify-center bg-black text-[10px] text-slate-500">
+                    Decrypting…
+                </div>
+
+                <div x-show="attachment.is_video && attachmentDisplayUrl(attachment)" x-cloak class="relative z-10 h-full w-full bg-black">
+                    <video :src="attachmentDisplayUrl(attachment)" class="h-full w-full object-cover" muted playsinline preload="metadata"></video>
+                    <a :href="attachmentDisplayUrl(attachment)" target="_blank" rel="noopener"
                         class="absolute inset-0 flex items-center justify-center bg-black/35 hover:bg-black/45 transition">
                         <span class="w-10 h-10 rounded-full bg-white/90 text-surface-400 flex items-center justify-center text-sm font-bold">▶</span>
                     </a>
-                    <span x-show="attachment.size_label" class="absolute bottom-1 right-1 text-[10px] px-1.5 py-0.5 rounded bg-black/70 text-white"
+                    <span x-show="attachment.size_label" class="absolute bottom-1 left-1 text-[10px] px-1.5 py-0.5 rounded bg-black/70 text-white"
                         x-text="attachment.size_label"></span>
                 </div>
-                <a x-show="!attachment.is_image && !attachment.is_video" :href="attachment.local_url || attachment.url" target="_blank" rel="noopener"
+
+                <a x-show="!attachment.is_image && !attachment.is_video" x-cloak
+                    :href="attachmentDisplayUrl(attachment) || attachment.url" target="_blank" rel="noopener"
                     class="flex flex-col items-center justify-center gap-1.5 px-3 py-4 text-center min-h-28 h-full hover:bg-black/30 transition">
                     <span class="inline-flex items-center justify-center w-10 h-10 rounded-lg text-[10px] font-bold uppercase tracking-wide"
                         :class="{

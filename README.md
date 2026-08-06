@@ -75,7 +75,7 @@ php artisan test
 - Blade + Tailwind (CDN) + Alpine.js
 - Session authentication (`web` guard)
 - Laravel Reverb WebSockets for chat, workspace sync, and WebRTC call signaling
-- Client-side E2EE for chat text and attachments (Web Crypto; private keys stay in the browser; export/import recovery in sidebar)
+- Client-side E2EE for chat text and attachments (Web Crypto; private keys stay in the browser; password-wrapped account backup restores keys automatically on login)
 - WebRTC voice/video calls in chat and threads (STUN + optional TURN; mesh peers)
 - Header chat search (local encrypted IndexedDB index; per-chat or all my chats) and files-by-thread browse
 
@@ -96,5 +96,4 @@ Feature work uses `feature/*` branches merged into `main`. See `references/branc
 See `references/todo.md` and `references/known-limitations.md` (docs branch). Remaining highlights:
 
 - SFU for large group calls (mesh + TURN covers small calls today)
-- Passphrase-wrapped E2EE recovery (file export/import works now)
 - Further modal conversions beyond group create/rename

@@ -69,9 +69,10 @@
                 <div class="relative rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center">
                     <video x-show="callType === 'video'" :id="'remote-video-' + peer.userId" autoplay playsinline
                         class="absolute inset-0 h-full w-full object-cover"
-                        x-effect="if ($el && peer.stream) $el.srcObject = peer.stream"></video>
-                    <audio x-show="callType === 'voice'" :id="'remote-audio-' + peer.userId" autoplay
-                        x-effect="if ($el && peer.stream) $el.srcObject = peer.stream"></audio>
+                        x-effect="if ($el && peer.stream) { $el.srcObject = peer.stream; $el.play?.().catch(() => {}); }"></video>
+                    {{-- Keep audio in DOM (not display:none) or browsers mute it --}}
+                    <audio :id="'remote-audio-' + peer.userId" autoplay playsinline class="sr-only"
+                        x-effect="if ($el && peer.stream) { $el.srcObject = peer.stream; $el.muted = callType === 'video'; if (callType !== 'video') $el.play?.().catch(() => {}); }"></audio>
                     <div x-show="callType !== 'video' || !peer.stream" class="relative z-10 text-center p-4">
                         <div class="w-14 h-14 mx-auto rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center text-lg font-bold"
                             x-text="(peer.name || '?').slice(0, 1).toUpperCase()"></div>

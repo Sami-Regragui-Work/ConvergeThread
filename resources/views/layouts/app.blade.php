@@ -100,11 +100,17 @@
         stamps: {},
         ownerSearch: '',
         realtimeReady: false,
+        soundsMuted: false,
         init() {
             @auth
+            try { this.soundsMuted = localStorage.getItem('ct_sounds_muted') === '1'; } catch (e) {}
             this.setupRealtime();
             this.pollWorkspace();
-            setInterval(() => this.pollWorkspace(), this.realtimeReady ? 20000 : 8000);
+            setInterval(() => this.pollWorkspace(true), 4000);
+            setInterval(() => this.pollWorkspace(false), 20000);
+            window.addEventListener('ct-unread', (e) => {
+                if (typeof e.detail?.count === 'number') this.applyUnread(e.detail.count);
+            });
             @endauth
         },
         ownerMatch(haystack) {
@@ -112,12 +118,54 @@
             if (!q) return true;
             return String(haystack || '').toLowerCase().includes(q);
         },
+        toggleSoundsMuted() {
+            this.soundsMuted = !this.soundsMuted;
+            try { localStorage.setItem('ct_sounds_muted', this.soundsMuted ? '1' : '0'); } catch (e) {}
+        },
+        playNotifSound() {
+            if (this.soundsMuted) return;
+            try {
+                const Ctx = window.AudioContext || window.webkitAudioContext;
+                if (!Ctx) return;
+                const ctx = new Ctx();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.value = 740;
+                gain.gain.value = 0.0001;
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                const now = ctx.currentTime;
+                gain.gain.linearRampToValueAtTime(0.06, now + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+                osc.start(now);
+                osc.stop(now + 0.4);
+                setTimeout(() => ctx.close().catch(() => {}), 500);
+            } catch (e) {}
+        },
+        applyUnread(count) {
+            const prev = this.unreadNotifs;
+            this.unreadNotifs = count;
+            const badge = document.querySelector('[data-notif-badge]');
+            if (badge) {
+                badge.classList.toggle('hidden', !count);
+                badge.textContent = count > 9 ? '9+' : String(count);
+            }
+            if (count > prev) this.playNotifSound();
+        },
         setupRealtime() {
             if (!window.Echo) return;
             const tenantId = {{ (int) (auth()->user()->tenant_id ?? 0) }};
+            const userId = {{ (int) (auth()->id() ?? 0) }};
             if (tenantId) {
                 window.Echo.private('workspace.' + tenantId)
                     .listen('.workspace.updated', (e) => this.onSyncEvent(e?.scopes || ['workspace']));
+            }
+            if (userId) {
+                window.Echo.private('user.' + userId)
+                    .listen('.notifications.unread', (e) => {
+                        if (typeof e?.count === 'number') this.applyUnread(e.count);
+                    });
             }
             @if(auth()->check() && auth()->user()->isOwner())
             window.Echo.private('owner')
@@ -126,10 +174,13 @@
             this.realtimeReady = true;
         },
         onSyncEvent(scopes) {
+            if ((scopes || []).includes('notifications') || (scopes || []).includes('workspace')) {
+                this.pollWorkspace(true);
+            }
             this.reloadIfNeeded(scopes);
-            this.pollWorkspace(true);
         },
         reloadIfNeeded(scopes) {
+            if ((scopes || []).length === 1 && scopes[0] === 'notifications') return;
             const el = document.querySelector('[data-sync]');
             if (!el) return;
             const needed = (el.dataset.sync || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -142,13 +193,8 @@
                 const r = await fetch(@js(route('workspace.sync')), { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
                 if (!r.ok) return;
                 const d = await r.json();
-                if (this.unreadNotifs !== d.unread_notifications) {
-                    this.unreadNotifs = d.unread_notifications;
-                    const badge = document.querySelector('[data-notif-badge]');
-                    if (badge) {
-                        badge.classList.toggle('hidden', !d.unread_notifications);
-                        badge.textContent = d.unread_notifications > 9 ? '9+' : d.unread_notifications;
-                    }
+                if (typeof d.unread_notifications === 'number') {
+                    this.applyUnread(d.unread_notifications);
                 }
                 if (notificationsOnly) return;
 
@@ -249,14 +295,6 @@
                             @endif
                         </div>
                     </div>
-                    <button type="button" onclick="window.__openE2eeRecovery && window.__openE2eeRecovery()"
-                        class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:bg-white/5 hover:text-white text-sm transition mb-1">
-                        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                        </svg>
-                        E2EE recovery
-                    </button>
                     <form method="POST" action="{{ route('auth.logout') }}">
                         @csrf
                         <button type="submit"
@@ -315,11 +353,7 @@
                 <div class="ml-auto flex items-center gap-3">
                     @auth
                         @php
-                            $showChatBrowse = !auth()->user()->isOwner() && (
-                                request()->routeIs('messages.*')
-                                || request()->routeIs('groups.*')
-                                || request()->routeIs('merge-sessions.*')
-                            );
+                            $showChatBrowse = !auth()->user()->isOwner();
                         @endphp
                         @if(auth()->user()->isOwner())
                             <div class="hidden md:block">
@@ -328,7 +362,7 @@
                                     @keydown.enter.prevent>
                             </div>
                         @elseif($showChatBrowse)
-                            <button type="button" onclick="window.__openChatSearch && window.__openChatSearch()"
+                            <button type="button" @click="window.__openChatSearch && window.__openChatSearch()"
                                 class="inline-flex items-center gap-1.5 p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition"
                                 title="Search chats">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -337,7 +371,7 @@
                                 </svg>
                                 <span class="hidden sm:inline text-xs">Search</span>
                             </button>
-                            <button type="button" onclick="window.__openChatMedia && window.__openChatMedia()"
+                            <button type="button" @click="window.__openChatMedia && window.__openChatMedia()"
                                 class="inline-flex items-center gap-1.5 p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition"
                                 title="Files by thread">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -347,6 +381,19 @@
                                 <span class="hidden sm:inline text-xs">Files</span>
                             </button>
                         @endif
+                        <button type="button" @click="toggleSoundsMuted()"
+                            class="inline-flex items-center justify-center p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition"
+                            :title="soundsMuted ? 'Unmute notification sounds' : 'Mute notification sounds'"
+                            :class="soundsMuted ? 'text-amber-400' : ''">
+                            <svg x-show="!soundsMuted" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15.536 8.464a5 5 0 010 7.072M17.95 6.05a8 8 0 010 11.9M6 10v4h3l4 4V6l-4 4H6z" />
+                            </svg>
+                            <svg x-show="soundsMuted" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                            </svg>
+                        </button>
                         <a href="{{ route('notifications.index') }}"
                             class="relative inline-flex items-center justify-center p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition"
                             title="Notifications">
@@ -395,19 +442,10 @@
         @unless(auth()->user()->isOwner())
             @include('partials.chat-crypto')
             @include('partials.group-name-modal')
-            @include('partials.e2ee-recovery')
-        @endunless
-        @php
-            $loadChatBrowse = !auth()->user()->isOwner() && (
-                request()->routeIs('messages.*')
-                || request()->routeIs('groups.*')
-                || request()->routeIs('merge-sessions.*')
-            );
-        @endphp
-        @if($loadChatBrowse)
+            @include('partials.global-call-ring')
             @include('partials.chat-search-index')
             @include('partials.chat-browse-ui')
-        @endif
+        @endunless
     @endauth
 
     @stack('scripts')

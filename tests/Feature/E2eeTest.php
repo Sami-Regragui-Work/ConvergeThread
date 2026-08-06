@@ -135,4 +135,29 @@ class E2eeTest extends TestCase
             'user_id' => $target->id,
         ]);
     }
+
+    public function test_user_can_store_and_fetch_e2ee_account_backup(): void
+    {
+        $tenant = Tenant::create(['slug' => 'acme_corp', 'admin_email' => 'admin@acme.com']);
+        $adminRoleId = TenantRole::where('is_system', true)->where('name', 'Admin')->value('id');
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'tenant_role_id' => $adminRoleId,
+        ]);
+
+        $backup = json_encode([
+            'version' => 1,
+            'salt' => 'abc',
+            'iv' => 'def',
+            'ciphertext' => 'ghi',
+        ]);
+
+        $this->actingAs($user)
+            ->postJson(route('messages.crypto.backup.store'), ['backup' => $backup])
+            ->assertOk();
+
+        $this->getJson(route('messages.crypto.backup.show'))
+            ->assertOk()
+            ->assertJsonPath('backup', $backup);
+    }
 }

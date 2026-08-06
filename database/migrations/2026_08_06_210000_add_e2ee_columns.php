@@ -9,6 +9,7 @@ return new class extends Migration {
     {
         Schema::table('users', function (Blueprint $table) {
             $table->text('e2ee_public_key')->nullable()->after('banned_by_id');
+            $table->text('e2ee_private_backup')->nullable()->after('e2ee_public_key');
         });
 
         Schema::create('chat_key_shares', function (Blueprint $table) {
@@ -46,7 +47,7 @@ return new class extends Migration {
         Schema::dropIfExists('chat_key_shares');
 
         Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn('e2ee_public_key');
+            $table->dropColumn(['e2ee_public_key', 'e2ee_private_backup']);
         });
     }
 };

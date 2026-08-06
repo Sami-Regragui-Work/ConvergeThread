@@ -13,6 +13,7 @@
             markMentionUrlTemplate: @js(preg_replace('/\/\d+\//', '/__ID__/', route('messages.mentions.read', 0))),
             storeUrl: @js(route('messages.store', [$chatType, $chatId])),
             updateUrlTemplate: @js(preg_replace('/\/\d+$/', '/__ID__', route('messages.update', 0))),
+            destroyUrlTemplate: @js(preg_replace('/\/\d+$/', '/__ID__', route('messages.destroy', 0))),
             threadUrlTemplate: @js(preg_replace('/\/0(\/thread)$/', '/__ID__$1', route('messages.thread', 0))),
             currentUserId: @js(auth()->id()),
             canSend: @js(auth()->user()->can('create', [App\Models\Message::class, $chatable])),
@@ -46,7 +47,10 @@
                 <span x-show="e2eeReady" x-cloak
                     class="hidden sm:inline-flex items-center px-2 py-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-[10px] uppercase tracking-wide text-emerald-300"
                     title="Messages and attachments are end-to-end encrypted in this chat">E2EE</span>
-                <span x-show="e2eeError" x-cloak class="hidden sm:inline text-[10px] text-amber-400" x-text="e2eeError"></span>
+                <span x-show="e2eeError" x-cloak
+                    class="hidden sm:inline-flex max-w-[14rem] items-center px-2 py-1 rounded-lg border border-amber-500/30 bg-amber-500/10 text-[10px] text-amber-300 truncate"
+                    :title="e2eeError"
+                    x-text="e2eeError"></span>
                 <form method="POST" action="{{ route('messages.mute', [$chatType, $chatId]) }}">
                     @csrf
                     <button type="submit"
@@ -72,12 +76,13 @@
             </div>
         </div>
 
-        <div x-show="activeCall && callState === 'idle' && Number(activeCall.from_user_id) !== Number(currentUserId)" x-cloak
+        <div x-show="activeCall && callState === 'idle'" x-cloak
             class="mb-3 shrink-0 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
             <div class="min-w-0">
                 <p class="text-sm text-emerald-200 font-medium"
                     x-text="(activeCall?.from_user_name || 'Someone') + ' started a ' + (activeCall?.call_type === 'video' ? 'video' : 'voice') + ' call'"></p>
-                <p class="text-xs text-emerald-300/70">Join to connect with people already in the call.</p>
+                <p class="text-xs text-emerald-300/70"
+                    x-text="(activeCall?.participant_count ? (activeCall.participant_count + ' in call · ') : '') + 'Join to connect with people already in the call.'"></p>
             </div>
             <button type="button" @click="joinActiveCall()"
                 class="shrink-0 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold">
@@ -133,10 +138,14 @@
                                         <span x-text="message.content"></span>
                                     </template>
                                 </div>
-                                <button type="button" x-show="message.can_edit && editingId !== message.id" x-cloak
-                                    @click="startEdit(message)"
-                                    class="absolute -top-2 opacity-0 group-hover/msg:opacity-100 transition text-[10px] px-1.5 py-0.5 rounded bg-surface-300 border border-white/10 text-slate-400 hover:text-white"
-                                    :class="message.user_id === currentUserId ? '-left-2' : '-right-2'">Edit</button>
+                                <div class="absolute -top-2 flex gap-1 opacity-0 group-hover/msg:opacity-100 transition"
+                                    :class="message.user_id === currentUserId ? '-left-2' : '-right-2'"
+                                    x-show="editingId !== message.id && (message.can_edit || message.can_delete)" x-cloak>
+                                    <button type="button" x-show="message.can_edit" @click="startEdit(message)"
+                                        class="text-[10px] px-1.5 py-0.5 rounded bg-surface-300 border border-white/10 text-slate-400 hover:text-white">Edit</button>
+                                    <button type="button" x-show="message.can_delete" @click="askDelete(message)"
+                                        class="text-[10px] px-1.5 py-0.5 rounded bg-surface-300 border border-white/10 text-red-400 hover:text-red-300">Delete</button>
+                                </div>
                                 <template x-if="showThreadLink">
                                     <a :href="threadUrl(message.id)"
                                         class="text-xs text-brand-400 hover:text-brand-300 mt-0.5 block">

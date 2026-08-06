@@ -41,19 +41,66 @@
                 if (this.ready) return;
                 this.ready = true;
                 await this.loadChats();
-                if (this.selectedChatKey) await this.loadParticipants();
+                if (this.selectedChatKey && this.selectedChatKey !== '__all__') {
+                    await this.loadParticipants();
+                }
             },
 
             async loadChats() {
+                const preset = this.selectedChatKey;
                 try {
                     const res = await fetch(this.chatsUrl, {
                         headers: { 'Accept': 'application/json' },
                         credentials: 'same-origin',
                     });
-                    if (!res.ok) return;
-                    const data = await res.json();
-                    this.chats = data.chats || [];
-                } catch (e) {}
+                    if (res.ok) {
+                        const data = await res.json();
+                        this.chats = data.chats || [];
+                    }
+                } catch (e) {
+                    this.chats = [];
+                }
+                // Native <select> + Alpine x-for options often miss the preset value until rebound.
+                await this.rebindSelectedChat(preset);
+            },
+
+            async rebindSelectedChat(preset) {
+                const key = preset === undefined ? this.selectedChatKey : preset;
+                this.selectedChatKey = key || '';
+                await Promise.resolve();
+                this.paintChatSelects();
+            },
+
+            paintChatSelects() {
+                const key = this.selectedChatKey || '';
+                const options = ['<option value="">Select a chat…</option>'];
+                if (this.showSearch) {
+                    options.push('<option value="__all__">All my chats</option>');
+                }
+                for (const chat of this.chats || []) {
+                    const value = chat.type + ':' + chat.id;
+                    const label = this.escapeHtml(chat.name + ' (' + chat.kind + ')');
+                    options.push('<option value="' + value + '"' + (value === key ? ' selected' : '') + '>' + label + '</option>');
+                }
+                const html = options.join('');
+                document.querySelectorAll('[data-chat-browse-select]').forEach((el) => {
+                    if (!(el instanceof HTMLSelectElement)) return;
+                    const keepAll = el.dataset.allowAll === '1';
+                    if (keepAll) {
+                        el.innerHTML = html;
+                    } else {
+                        el.innerHTML = options.filter((o) => !o.includes('value="__all__"')).join('');
+                    }
+                    el.value = key;
+                });
+            },
+
+            escapeHtml(str) {
+                return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;');
             },
 
             parseChatKey() {
@@ -68,9 +115,10 @@
             },
 
             async openSearch() {
-                await this.boot();
                 this.showSearch = true;
                 this.showMedia = false;
+                await this.boot();
+                await this.rebindSelectedChat();
                 if (this.isAllChats()) {
                     await this.onChatPicked();
                 } else if (this.selectedChatKey) {
@@ -80,10 +128,24 @@
             },
 
             async openMedia() {
-                await this.boot();
                 this.showMedia = true;
                 this.showSearch = false;
-                if (this.selectedChatKey && !this.isAllChats()) await this.loadMedia();
+                this.mediaStatus = '';
+                try {
+                    await this.boot();
+                    await this.rebindSelectedChat();
+                    // Ensure selects are painted after the modal is shown.
+                    await Promise.resolve();
+                    this.paintChatSelects();
+                    if (this.selectedChatKey && !this.isAllChats()) {
+                        await this.loadMedia();
+                    } else {
+                        this.mediaStatus = 'Select a chat to browse files.';
+                    }
+                } catch (e) {
+                    console.error(e);
+                    this.mediaStatus = 'Could not open files browser.';
+                }
             },
 
             async onChatPicked() {
@@ -335,20 +397,58 @@
         });
     });
 
+    function getChatBrowseStore() {
+        try {
+            if (typeof Alpine === 'undefined') return null;
+            return Alpine.store('chatBrowse');
+        } catch (e) {
+            return null;
+        }
+    }
+
     window.__openChatSearch = function () {
-        const store = window.Alpine?.store?.('chatBrowse');
-        if (store) store.openSearch();
+        window.dispatchEvent(new CustomEvent('ct-open-search'));
+        const store = getChatBrowseStore();
+        if (store?.openSearch) store.openSearch();
     };
     window.__openChatMedia = function () {
-        const store = window.Alpine?.store?.('chatBrowse');
-        if (store) store.openMedia();
+        window.dispatchEvent(new CustomEvent('ct-open-media'));
+        const store = getChatBrowseStore();
+        if (store?.openMedia) {
+            store.openMedia();
+            return;
+        }
+        // Alpine may not have booted yet — retry briefly.
+        let tries = 0;
+        const timer = setInterval(() => {
+            const s = getChatBrowseStore();
+            if (s?.openMedia) {
+                clearInterval(timer);
+                s.openMedia();
+            } else if (++tries > 20) {
+                clearInterval(timer);
+                console.warn('Chat files browser is not ready yet.');
+            }
+        }, 50);
     };
 </script>
 
-<div x-data x-cloak>
+<div
+    x-data="{
+        init() {
+            window.addEventListener('ct-open-search', () => Alpine.store('chatBrowse')?.openSearch?.());
+            window.addEventListener('ct-open-media', () => Alpine.store('chatBrowse')?.openMedia?.());
+        }
+    }"
+    class="contents"
+>
+    {{-- Alpine x-teleport only mounts firstElementChild — both modals must share one root. --}}
     <template x-teleport="body">
-        <div x-show="$store.chatBrowse.showSearch" x-cloak class="fixed inset-0 z-200 flex items-start justify-center p-4 sm:p-8"
-            @keydown.escape.window="$store.chatBrowse.showSearch = false">
+        <div>
+        <div x-show="$store.chatBrowse.showSearch" x-cloak
+            x-transition.opacity
+            class="fixed inset-0 z-[200] flex items-start justify-center p-4 sm:p-8"
+            @keydown.escape.window="if ($store.chatBrowse.showSearch) $store.chatBrowse.showSearch = false">
             <div class="absolute inset-0 bg-black/70" @click="$store.chatBrowse.showSearch = false"></div>
             <div class="relative w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl border border-white/10 bg-surface-300 shadow-2xl overflow-hidden"
                 @click.outside="$store.chatBrowse.showAuthorMenu = false">
@@ -362,13 +462,11 @@
                 <div class="p-4 space-y-3 border-b border-white/5">
                     <div>
                         <label class="block text-[11px] text-slate-500 mb-1">Chat</label>
-                        <select x-model="$store.chatBrowse.selectedChatKey" @change="$store.chatBrowse.onChatPicked()"
+                        <select data-chat-browse-select data-allow-all="1"
+                            @change="$store.chatBrowse.selectedChatKey = $event.target.value; $store.chatBrowse.onChatPicked()"
                             class="w-full bg-surface-200 border border-white/10 text-white text-sm rounded-lg px-3 py-2">
                             <option value="">Select a chat…</option>
                             <option value="__all__">All my chats</option>
-                            <template x-for="chat in $store.chatBrowse.chats" :key="chat.type + ':' + chat.id">
-                                <option :value="chat.type + ':' + chat.id" x-text="chat.name + ' (' + chat.kind + ')'"></option>
-                            </template>
                         </select>
                         <p class="text-[10px] text-slate-500 mt-1">All chats only searches chats you belong to (indexed locally).</p>
                     </div>
@@ -465,8 +563,10 @@
             </div>
         </div>
 
-        <div x-show="$store.chatBrowse.showMedia" x-cloak class="fixed inset-0 z-200 flex items-start justify-center p-4 sm:p-8"
-            @keydown.escape.window="$store.chatBrowse.showMedia = false">
+        <div x-show="$store.chatBrowse.showMedia" x-cloak
+            x-transition.opacity
+            class="fixed inset-0 z-[200] flex items-start justify-center p-4 sm:p-8"
+            @keydown.escape.window="if ($store.chatBrowse.showMedia) $store.chatBrowse.showMedia = false">
             <div class="absolute inset-0 bg-black/70" @click="$store.chatBrowse.showMedia = false"></div>
             <div class="relative w-full max-w-3xl max-h-[85vh] flex flex-col rounded-2xl border border-white/10 bg-surface-300 shadow-2xl overflow-hidden">
                 <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/5">
@@ -479,12 +579,10 @@
                 <div class="p-4 border-b border-white/5 space-y-2">
                     <label class="block text-[11px] text-slate-500">Chat</label>
                     <div class="flex flex-col sm:flex-row gap-2">
-                        <select x-model="$store.chatBrowse.selectedChatKey" @change="$store.chatBrowse.loadMedia()"
+                        <select data-chat-browse-select
+                            @change="$store.chatBrowse.selectedChatKey = $event.target.value; $store.chatBrowse.loadMedia()"
                             class="flex-1 bg-surface-200 border border-white/10 text-white text-sm rounded-lg px-3 py-2">
                             <option value="">Select a chat…</option>
-                            <template x-for="chat in $store.chatBrowse.chats" :key="'m-' + chat.type + ':' + chat.id">
-                                <option :value="chat.type + ':' + chat.id" x-text="chat.name + ' (' + chat.kind + ')'"></option>
-                            </template>
                         </select>
                         <button type="button" @click="$store.chatBrowse.loadMedia()"
                             :disabled="$store.chatBrowse.busy || !$store.chatBrowse.selectedChatKey"
@@ -515,13 +613,12 @@
                             <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                 <template x-for="file in section.files" :key="(file.id || file.url) + '-' + file.message_id">
                                     <div class="rounded-xl border border-white/10 bg-surface-200/40 overflow-hidden flex flex-col">
-                                        <div class="aspect-video bg-black/40 flex items-center justify-center relative">
-                                            <template x-if="file.local_preview && file.is_image">
-                                                <img :src="file.local_preview" class="absolute inset-0 w-full h-full object-cover" alt="">
-                                            </template>
-                                            <template x-if="file.local_preview && file.is_video">
-                                                <video :src="file.local_preview" class="absolute inset-0 w-full h-full object-cover" muted></video>
-                                            </template>
+                                        <div class="aspect-video bg-black flex items-center justify-center relative">
+                                            {{-- x-show only: nested x-if inside x-for breaks Alpine and killed the Files modal --}}
+                                            <img x-show="file.local_preview && file.is_image" x-cloak
+                                                :src="file.local_preview" class="absolute inset-0 w-full h-full object-cover" alt="">
+                                            <video x-show="file.local_preview && file.is_video" x-cloak
+                                                :src="file.local_preview" class="absolute inset-0 w-full h-full object-cover" muted></video>
                                             <span x-show="!file.local_preview" class="text-[10px] text-slate-400 uppercase" x-text="file.ext || file.kind || 'file'"></span>
                                         </div>
                                         <div class="p-2 space-y-1.5">
@@ -542,6 +639,7 @@
                     </template>
                 </div>
             </div>
+        </div>
         </div>
     </template>
 </div>

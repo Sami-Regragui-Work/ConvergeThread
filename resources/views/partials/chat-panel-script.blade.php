@@ -10,6 +10,7 @@
             markMentionUrlTemplate: config.markMentionUrlTemplate,
             storeUrl: config.storeUrl,
             updateUrlTemplate: config.updateUrlTemplate ?? '',
+            destroyUrlTemplate: config.destroyUrlTemplate ?? '',
             threadUrlTemplate: config.threadUrlTemplate,
             currentUserId: config.currentUserId,
             canSend: config.canSend ?? config.canReply ?? false,
@@ -58,7 +59,11 @@
             localVideoOff: false,
             peers: [],
             peerConnections: {},
+            peerDisconnectTimers: {},
             callPollTimer: null,
+            callHeartbeatTimer: null,
+            ringtoneCtx: null,
+            ringtoneNodes: null,
             iceServers: config.iceServers ?? [{ urls: 'stun:stun.l.google.com:19302' }],
             focusMessageId: null,
 
@@ -66,6 +71,14 @@
                 const params = new URLSearchParams(window.location.search);
                 const focus = params.get('message');
                 if (focus) this.focusMessageId = Number(focus);
+
+                window.__ctSuppressGlobalCall = (payload) => {
+                    if (!payload) return false;
+                    if (this.callState !== 'idle') return true;
+                    if (this.incomingCall) return true;
+                    return String(payload.chat_type) === String(this.chatType)
+                        && Number(payload.chat_id) === Number(this.chatId);
+                };
 
                 this.scrollToBottom();
                 this.$nextTick(() => this.focusDraft());
@@ -87,10 +100,33 @@
             },
 
             destroy() {
+                if (window.__ctSuppressGlobalCall) window.__ctSuppressGlobalCall = null;
                 if (this.pollTimer) clearInterval(this.pollTimer);
                 if (this.callPollTimer) clearInterval(this.callPollTimer);
+                if (this.callHeartbeatTimer) clearInterval(this.callHeartbeatTimer);
+                this.stopRingtone();
                 if (this.echoBound && window.Echo && this.chatType && this.chatId) {
                     window.Echo.leave('chat.' + this.chatType + '.' + this.chatId);
+                }
+                if (this.callId) {
+                    const body = JSON.stringify({
+                        action: 'leave',
+                        call_id: this.callId,
+                        call_type: this.callType || 'voice',
+                    });
+                    try {
+                        fetch(this.callSignalUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                            },
+                            credentials: 'same-origin',
+                            body,
+                            keepalive: true,
+                        });
+                    } catch (e) {}
                 }
                 this.teardownCall();
                 this.revokeFilePreviews();
@@ -104,6 +140,20 @@
                 if (!window.ChatCrypto || !this.cryptoShowUrl || !this.cryptoPublicKeyUrl) return;
 
                 try {
+                    // Survive browser restart: restore room key from local cache first.
+                    if (this.chatType && this.chatId) {
+                        const cached = await window.ChatCrypto.loadCachedRoomKey(
+                            this.currentUserId,
+                            this.chatType,
+                            this.chatId,
+                        );
+                        if (cached) {
+                            this.roomKey = cached;
+                            this.e2eeReady = true;
+                            this.e2eeError = '';
+                        }
+                    }
+
                     this.identity = await window.ChatCrypto.ensureIdentity(this.currentUserId, this.cryptoPublicKeyUrl);
                     const stateRes = await fetch(this.cryptoShowUrl, {
                         headers: { 'Accept': 'application/json' },
@@ -112,40 +162,87 @@
                     if (!stateRes.ok) throw new Error('Could not load chat keys');
                     const state = await stateRes.json();
 
-                    if (state.my_share) {
-                        this.roomKey = await window.ChatCrypto.unwrapRoomKey(
-                            this.identity.privateKey,
-                            state.my_share.wrapped_key,
-                            state.my_share.ephemeral_public_key,
-                        );
-                    } else if (state.has_room_key) {
-                        this.e2eeReady = false;
-                        this.e2eeError = 'Waiting for an existing member to share the chat key…';
+                    if (!this.roomKey && state.my_share) {
                         try {
-                            await fetch(this.cryptoShowUrl.replace(/\/crypto$/, '/crypto/request-key'), {
-                                method: 'POST',
-                                headers: {
-                                    'Accept': 'application/json',
-                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                                },
-                                credentials: 'same-origin',
-                            });
-                        } catch (e) {}
-                        setTimeout(() => this.setupE2ee().then(() => {
-                            if (this.e2eeReady) this.decryptMessages(this.messages);
-                        }), 3000);
+                            this.roomKey = await window.ChatCrypto.unwrapRoomKey(
+                                this.identity.privateKey,
+                                state.my_share.wrapped_key,
+                                state.my_share.ephemeral_public_key,
+                            );
+                        } catch (unwrapErr) {
+                            console.warn('E2EE unwrap failed (stale share or new identity)', unwrapErr);
+                            // Identity rotated (e.g. new Firefox container) — ask peers to re-wrap.
+                            this.roomKey = null;
+                            if (this.chatType && this.chatId) {
+                                window.ChatCrypto.clearCachedRoomKey(this.currentUserId, this.chatType, this.chatId);
+                            }
+                            await this.requestChatKeyShare();
+                            this.e2eeReady = false;
+                            this.e2eeError = 'Unlocking chat keys… another online member may need to be present briefly.';
+                            this.scheduleE2eeRetry();
+                            return;
+                        }
+                    } else if (!this.roomKey && state.has_room_key) {
+                        this.e2eeReady = false;
+                        this.e2eeError = 'Unlocking chat keys…';
+                        await this.requestChatKeyShare();
+                        this.scheduleE2eeRetry();
                         return;
-                    } else {
+                    } else if (!this.roomKey) {
                         this.roomKey = await window.ChatCrypto.generateRoomKey();
                     }
 
-                    await this.distributeMissingShares(state.participants || []);
-                    this.e2eeReady = true;
-                    this.e2eeError = '';
+                    if (this.identity?.minted && state.has_room_key) {
+                        await this.requestChatKeyShare();
+                    }
+
+                    try {
+                        await this.distributeMissingShares(state.participants || []);
+                    } catch (shareErr) {
+                        console.warn('E2EE share distribute failed', shareErr);
+                    }
+
+                    if (this.roomKey && this.chatType && this.chatId) {
+                        await window.ChatCrypto.cacheRoomKey(
+                            this.currentUserId,
+                            this.chatType,
+                            this.chatId,
+                            this.roomKey,
+                        );
+                    }
+
+                    this.e2eeReady = !!this.roomKey;
+                    this.e2eeError = this.e2eeReady ? '' : (this.e2eeError || 'Unlocking chat keys…');
                 } catch (e) {
-                    this.e2eeReady = false;
-                    this.e2eeError = 'E2EE unavailable in this browser session.';
+                    console.error('E2EE setup failed', e);
+                    this.e2eeReady = !!this.roomKey;
+                    this.e2eeError = this.roomKey
+                        ? ''
+                        : 'Unlocking chat keys…';
+                    if (!this.roomKey) this.scheduleE2eeRetry();
                 }
+            },
+
+            scheduleE2eeRetry() {
+                if (this._e2eeRetryTimer) clearTimeout(this._e2eeRetryTimer);
+                this._e2eeRetryTimer = setTimeout(() => {
+                    this.setupE2ee().then(() => {
+                        if (this.e2eeReady) this.decryptMessages(this.messages);
+                    });
+                }, 3000);
+            },
+
+            async requestChatKeyShare() {
+                try {
+                    await fetch(this.cryptoShowUrl.replace(/\/crypto$/, '/crypto/request-key'), {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        },
+                        credentials: 'same-origin',
+                    });
+                } catch (e) {}
             },
 
             async distributeMissingShares(participants) {
@@ -206,7 +303,7 @@
 
             downloadAttachment(attachment) {
                 if (!attachment) return;
-                const url = attachment.local_url || attachment.url;
+                const url = this.attachmentDisplayUrl(attachment) || attachment.url;
                 if (!url) return;
                 const a = document.createElement('a');
                 a.href = url;
@@ -215,6 +312,13 @@
                 document.body.appendChild(a);
                 a.click();
                 a.remove();
+            },
+
+            attachmentDisplayUrl(attachment) {
+                if (!attachment) return null;
+                if (attachment.local_url) return attachment.local_url;
+                if (attachment.is_encrypted) return null;
+                return attachment.preview_url || attachment.url || null;
             },
 
             scrollToFocusedMessage() {
@@ -245,6 +349,8 @@
                     for (const attachment of message.attachments) {
                         if (!attachment.is_encrypted || !attachment.encryption_iv || !attachment.url) continue;
                         if (attachment.local_url) continue;
+                        // Never paint ciphertext as an image/video src (was causing a tinted broken preview).
+                        attachment.preview_url = null;
                         try {
                             const res = await fetch(attachment.url, { credentials: 'same-origin' });
                             if (!res.ok) continue;
@@ -342,6 +448,87 @@
                 const url = new URL(window.location.href);
                 url.searchParams.delete('join_call');
                 window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+            },
+
+            soundsMuted() {
+                try {
+                    return localStorage.getItem('ct_sounds_muted') === '1';
+                } catch (e) {
+                    return false;
+                }
+            },
+
+            startRingtone() {
+                this.stopRingtone();
+                if (this.soundsMuted()) return;
+                try {
+                    const Ctx = window.AudioContext || window.webkitAudioContext;
+                    if (!Ctx) return;
+                    const ctx = new Ctx();
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.value = 880;
+                    gain.gain.value = 0.0001;
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start();
+                    const pulse = () => {
+                        if (!this.ringtoneNodes) return;
+                        const now = ctx.currentTime;
+                        gain.gain.cancelScheduledValues(now);
+                        gain.gain.setValueAtTime(0.0001, now);
+                        gain.gain.linearRampToValueAtTime(0.08, now + 0.05);
+                        gain.gain.linearRampToValueAtTime(0.0001, now + 0.35);
+                    };
+                    pulse();
+                    const timer = setInterval(pulse, 900);
+                    this.ringtoneCtx = ctx;
+                    this.ringtoneNodes = { osc, gain, timer };
+                } catch (e) {}
+            },
+
+            stopRingtone() {
+                if (this.ringtoneNodes?.timer) clearInterval(this.ringtoneNodes.timer);
+                try { this.ringtoneNodes?.osc?.stop(); } catch (e) {}
+                try { this.ringtoneCtx?.close(); } catch (e) {}
+                this.ringtoneNodes = null;
+                this.ringtoneCtx = null;
+            },
+
+            startCallHeartbeat() {
+                if (this.callHeartbeatTimer) clearInterval(this.callHeartbeatTimer);
+                this.callHeartbeatTimer = setInterval(() => {
+                    if (!this.callId || this.callState === 'idle') return;
+                    this.signalCall({
+                        action: 'heartbeat',
+                        call_id: this.callId,
+                        call_type: this.callType || 'voice',
+                    });
+                }, 20000);
+            },
+
+            stopCallHeartbeat() {
+                if (this.callHeartbeatTimer) {
+                    clearInterval(this.callHeartbeatTimer);
+                    this.callHeartbeatTimer = null;
+                }
+            },
+
+            attachRemoteMedia(userId, stream) {
+                this.$nextTick(() => {
+                    const video = document.getElementById('remote-video-' + userId);
+                    const audio = document.getElementById('remote-audio-' + userId);
+                    if (video && stream) {
+                        video.srcObject = stream;
+                        video.play?.().catch(() => {});
+                    }
+                    if (audio && stream) {
+                        audio.srcObject = stream;
+                        audio.muted = this.callType === 'video';
+                        if (this.callType !== 'video') audio.play?.().catch(() => {});
+                    }
+                });
             },
 
             mentionCount() {
@@ -508,6 +695,10 @@
 
             updateUrl(messageId) {
                 return this.updateUrlTemplate.replace('__ID__', messageId);
+            },
+
+            destroyUrl(messageId) {
+                return this.destroyUrlTemplate.replace('__ID__', messageId);
             },
 
             scrollToBottom() {
@@ -686,6 +877,45 @@
                 this.editDraft = '';
             },
 
+            askDelete(message) {
+                if (!message?.can_delete) return;
+                const hasReplies = (message.reply_count || 0) > 0
+                    || (this.parentMessage && this.parentMessage.id === message.id && this.messages.length > 0);
+                const text = hasReplies
+                    ? 'Delete this message and all its replies? This cannot be undone.'
+                    : 'Delete this message? This cannot be undone.';
+                this.$dispatch('confirm-action', {
+                    message: text,
+                    onConfirm: () => this.deleteMessage(message),
+                });
+            },
+
+            async deleteMessage(message) {
+                if (!message?.id || !this.destroyUrlTemplate) return;
+                try {
+                    const response = await fetch(this.destroyUrl(message.id), {
+                        method: 'DELETE',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        },
+                        credentials: 'same-origin',
+                    });
+                    if (!response.ok) return;
+                    const data = await response.json().catch(() => ({}));
+
+                    if (this.parentMessage && this.parentMessage.id === message.id) {
+                        window.location.href = data.redirect
+                            || ('/messages/' + this.chatType + '/' + this.chatId);
+                        return;
+                    }
+
+                    this.messages = this.messages.filter((m) => m.id !== message.id);
+                    if (this.editingId === message.id) this.cancelEdit();
+                    this.mentionQueue = this.mentionQueue.filter((id) => id !== message.id);
+                } catch (e) {}
+            },
+
             async saveEdit(messageId) {
                 if (!this.editDraft.trim()) return;
 
@@ -722,17 +952,28 @@
             },
 
             async signalCall(payload) {
-                if (!this.callSignalUrl) return;
-                await fetch(this.callSignalUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                    },
-                    credentials: 'same-origin',
-                    body: JSON.stringify(payload),
-                });
+                if (!this.callSignalUrl) return null;
+                try {
+                    const res = await fetch(this.callSignalUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        },
+                        credentials: 'same-origin',
+                        body: JSON.stringify(payload),
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                        const msg = data?.errors?.call?.[0] || data?.message || 'Call signal failed.';
+                        this.callError = msg;
+                        return { ok: false, ...data };
+                    }
+                    return data;
+                } catch (e) {
+                    return null;
+                }
             },
 
             async ensureLocalMedia(type) {
@@ -742,7 +983,12 @@
                 }
 
                 this.localStream = await navigator.mediaDevices.getUserMedia({
-                    audio: true,
+                    // Disable AEC: same-machine Firefox containers otherwise silence each other.
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                    },
                     video: type === 'video',
                 });
                 this.localMuted = false;
@@ -755,6 +1001,11 @@
             async startCall(type) {
                 if (this.callState !== 'idle' || !this.callSignalUrl) {
                     this.callError = this.callSignalUrl ? 'Already in a call.' : 'Calling requires realtime (Reverb).';
+                    this.showCallModal = true;
+                    return;
+                }
+                if (window.__ctInCall) {
+                    this.callError = 'You are already in another call.';
                     this.showCallModal = true;
                     return;
                 }
@@ -776,20 +1027,31 @@
                     this.peers = [];
                     this.peerConnections = {};
                     await this.ensureLocalMedia(type);
-                    await this.signalCall({
+                    this.startCallHeartbeat();
+                    window.__ctSetInCall?.(true);
+                    const res = await this.signalCall({
                         action: 'invite',
                         call_id: this.callId,
                         call_type: type,
                     });
+                    if (res && res.ok === false) {
+                        this.teardownCall();
+                        this.showCallModal = true;
+                    }
                 } catch (e) {
                     this.callError = 'Microphone/camera permission denied or unavailable.';
-                    this.callState = 'idle';
+                    this.teardownCall();
                     this.showCallModal = true;
                 }
             },
 
             async acceptIncoming() {
                 if (!this.incomingCall) return;
+                if (window.__ctInCall && this.callState === 'idle') {
+                    this.callError = 'You are already in another call.';
+                    return;
+                }
+                this.stopRingtone();
                 try {
                     this.callId = this.incomingCall.call_id;
                     this.callType = this.incomingCall.call_type;
@@ -799,24 +1061,28 @@
                     this.peers = [];
                     this.peerConnections = {};
                     await this.ensureLocalMedia(this.callType);
-                    const fromId = this.incomingCall.from_user_id;
-                    const fromName = this.incomingCall.from_user_name;
                     this.incomingCall = null;
-                    await this.signalCall({
+                    this.startCallHeartbeat();
+                    window.__ctSetInCall?.(true);
+                    const res = await this.signalCall({
                         action: 'join',
                         call_id: this.callId,
                         call_type: this.callType,
                     });
-                    await this.createOfferFor(fromId, fromName);
+                    if (res && res.ok === false) {
+                        this.teardownCall();
+                        this.showCallModal = true;
+                    }
                 } catch (e) {
                     this.callError = 'Could not access microphone/camera.';
                     this.incomingCall = null;
-                    this.callState = 'idle';
+                    this.teardownCall();
                 }
             },
 
             async rejectIncoming() {
                 if (!this.incomingCall) return;
+                this.stopRingtone();
                 await this.signalCall({
                     action: 'reject',
                     call_id: this.incomingCall.call_id,
@@ -829,15 +1095,23 @@
             async endCall() {
                 const id = this.callId;
                 const type = this.callType;
+                this.stopRingtone();
+                this.stopCallHeartbeat();
                 if (id) {
                     try {
-                        await this.signalCall({ action: 'leave', call_id: id, call_type: type || 'voice' });
+                        const res = await this.signalCall({ action: 'leave', call_id: id, call_type: type || 'voice' });
+                        if (res?.session_ended) this.activeCall = null;
                     } catch (e) {}
                 }
                 this.teardownCall();
             },
 
             teardownCall() {
+                this.stopRingtone();
+                this.stopCallHeartbeat();
+                window.__ctSetInCall?.(false);
+                Object.values(this.peerDisconnectTimers || {}).forEach((t) => clearTimeout(t));
+                this.peerDisconnectTimers = {};
                 Object.values(this.peerConnections).forEach((pc) => {
                     try { pc.close(); } catch (e) {}
                 });
@@ -867,6 +1141,10 @@
             },
 
             upsertPeer(userId, name, stream = null) {
+                if (this.peerDisconnectTimers[userId]) {
+                    clearTimeout(this.peerDisconnectTimers[userId]);
+                    delete this.peerDisconnectTimers[userId];
+                }
                 const idx = this.peers.findIndex((p) => Number(p.userId) === Number(userId));
                 if (idx >= 0) {
                     this.peers[idx] = {
@@ -878,18 +1156,15 @@
                     this.peers.push({ userId: Number(userId), name: name || ('User #' + userId), stream });
                 }
                 this.peers = [...this.peers];
-                this.$nextTick(() => {
-                    const video = document.getElementById('remote-video-' + userId);
-                    const audio = document.getElementById('remote-audio-' + userId);
-                    const peer = this.peers.find((p) => Number(p.userId) === Number(userId));
-                    if (peer?.stream) {
-                        if (video) video.srcObject = peer.stream;
-                        if (audio) audio.srcObject = peer.stream;
-                    }
-                });
+                const peer = this.peers.find((p) => Number(p.userId) === Number(userId));
+                if (peer?.stream) this.attachRemoteMedia(userId, peer.stream);
             },
 
             removePeer(userId) {
+                if (this.peerDisconnectTimers[userId]) {
+                    clearTimeout(this.peerDisconnectTimers[userId]);
+                    delete this.peerDisconnectTimers[userId];
+                }
                 const pc = this.peerConnections[userId];
                 if (pc) {
                     try { pc.close(); } catch (e) {}
@@ -925,11 +1200,27 @@
                 };
 
                 pc.onconnectionstatechange = () => {
-                    if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) {
-                        this.removePeer(userId);
-                        if (!this.peers.length && this.callState === 'active') {
-                            // keep local UI until hangup
+                    const state = pc.connectionState;
+                    if (state === 'connected' || state === 'connecting') {
+                        if (this.peerDisconnectTimers[userId]) {
+                            clearTimeout(this.peerDisconnectTimers[userId]);
+                            delete this.peerDisconnectTimers[userId];
                         }
+                        return;
+                    }
+                    if (state === 'failed' || state === 'closed') {
+                        this.removePeer(userId);
+                        return;
+                    }
+                    if (state === 'disconnected') {
+                        // Firefox containers / same-host ICE often flaps — wait before dropping.
+                        if (this.peerDisconnectTimers[userId]) clearTimeout(this.peerDisconnectTimers[userId]);
+                        this.peerDisconnectTimers[userId] = setTimeout(() => {
+                            const current = this.peerConnections[userId];
+                            if (current && ['disconnected', 'failed', 'closed'].includes(current.connectionState)) {
+                                this.removePeer(userId);
+                            }
+                        }, 5000);
                     }
                 };
 
@@ -938,7 +1229,9 @@
             },
 
             async createOfferFor(userId, name) {
+                if (this.peerConnections[userId]?.localDescription?.type === 'offer') return;
                 const pc = this.createPeerConnection(userId, name);
+                if (pc.signalingState !== 'stable') return;
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
                 await this.signalCall({
@@ -970,6 +1263,7 @@
                         from_user_id: payload.from_user_id,
                         from_user_name: payload.from_user_name,
                     };
+                    this.startRingtone();
                     return;
                 }
 
@@ -980,8 +1274,13 @@
                             this.callError = 'Everyone else left the call.';
                         }
                     }
-                    if (this.activeCall && payload.call_id === this.activeCall.call_id) {
+                    // Only clear the join banner when the whole session ended.
+                    if (payload.session_ended && this.activeCall && payload.call_id === this.activeCall.call_id) {
                         this.activeCall = null;
+                        this.stopRingtone();
+                        if (this.incomingCall?.call_id === payload.call_id) {
+                            this.incomingCall = null;
+                        }
                     }
                     return;
                 }
@@ -1005,16 +1304,24 @@
                     if (!this.callId || payload.call_id !== this.callId || !payload.sdp) return;
                     if (this.callState === 'outgoing') this.callState = 'active';
                     const pc = this.createPeerConnection(payload.from_user_id, payload.from_user_name);
-                    await pc.setRemoteDescription(payload.sdp);
-                    const answer = await pc.createAnswer();
-                    await pc.setLocalDescription(answer);
-                    await this.signalCall({
-                        action: 'answer',
-                        call_id: this.callId,
-                        call_type: this.callType,
-                        to_user_id: Number(payload.from_user_id),
-                        sdp: answer,
-                    });
+                    try {
+                        if (pc.signalingState !== 'stable' && pc.localDescription) {
+                            // Glare: roll back our uncommitted offer if any, then accept theirs.
+                            await pc.setLocalDescription({ type: 'rollback' });
+                        }
+                        await pc.setRemoteDescription(payload.sdp);
+                        const answer = await pc.createAnswer();
+                        await pc.setLocalDescription(answer);
+                        await this.signalCall({
+                            action: 'answer',
+                            call_id: this.callId,
+                            call_type: this.callType,
+                            to_user_id: Number(payload.from_user_id),
+                            sdp: answer,
+                        });
+                    } catch (e) {
+                        this.callError = 'Could not connect media to peer.';
+                    }
                     return;
                 }
 
@@ -1022,7 +1329,11 @@
                     if (!this.callId || payload.call_id !== this.callId || !payload.sdp) return;
                     const pc = this.peerConnections[payload.from_user_id];
                     if (!pc) return;
-                    await pc.setRemoteDescription(payload.sdp);
+                    try {
+                        if (pc.signalingState === 'have-local-offer') {
+                            await pc.setRemoteDescription(payload.sdp);
+                        }
+                    } catch (e) {}
                     if (this.callState === 'outgoing') this.callState = 'active';
                     return;
                 }
