@@ -88,4 +88,3 @@ Feature work uses `feature/*` branches merged into `main`. See `references/branc
 
 - **E2EE (end-to-end encryption)** for messages and attachments
 - Voice and video call UI exists in chat; **WebRTC media calls are not working yet**
-- Full hierarchy UI polish and cross-hierarchy rules
