@@ -20,6 +20,9 @@
             showThreadLink: false,
             chatType: @js($chatType),
             chatId: @js((int) $message->chatable_id),
+            cryptoShowUrl: @js(route('messages.crypto.show', [$chatType, $message->chatable_id])),
+            cryptoSharesUrl: @js(route('messages.crypto.shares', [$chatType, $message->chatable_id])),
+            cryptoPublicKeyUrl: @js(route('messages.crypto.public-key')),
         })"
         x-init="init()">
 
@@ -224,6 +227,7 @@
     </div>
 
     @push('scripts')
+        @include('partials.chat-crypto')
         @include('partials.chat-panel-script')
     @endpush
 @endsection

@@ -15,6 +15,7 @@ use App\Services\ChatParticipantService;
 use App\Services\MentionService;
 use App\Services\MessageService;
 use App\Services\NotificationStackService;
+use App\Support\MessageEncryption;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -44,7 +45,7 @@ class MessageController extends Controller
         $payload = $message->toChatPayload($viewerId);
         $ctx = $renderContext ?? ['roleColors' => [], 'usernameLabels' => [], 'mergeUserLabels' => []];
 
-        if ($payload['content']) {
+        if ($payload['content'] && !($payload['is_encrypted'] ?? false) && !MessageEncryption::isEncrypted($payload['content'])) {
             $payload['content_html'] = $this->mentionService->renderContentHtml(
                 $payload['content'],
                 $ctx['roleColors'],
@@ -254,6 +255,7 @@ class MessageController extends Controller
         }
 
         $mentionUserIds = $credentials['mention_user_ids'] ?? null;
+        $attachmentMeta = $credentials['attachment_meta'] ?? null;
 
         $message = $this->messageService->create(
             $chatable,
@@ -263,6 +265,7 @@ class MessageController extends Controller
             $parent,
             $chatType,
             $mentionUserIds,
+            $attachmentMeta,
         );
 
         $renderContext = $this->renderContextFor($chatable, $chatType, $user->tenant_id);

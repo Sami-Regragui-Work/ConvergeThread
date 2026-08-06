@@ -16,6 +16,7 @@ class Message extends Model
         'chatable_type',
         'user_id',
         'content',
+        'is_encrypted',
         'is_file',
         'file_path',
         'parent_id',
@@ -25,6 +26,7 @@ class Message extends Model
     {
         return [
             'is_file' => 'boolean',
+            'is_encrypted' => 'boolean',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
         ];
@@ -115,6 +117,7 @@ class Message extends Model
             'user_role_color' => $this->user->tenantRole?->color,
             'user_initial' => strtoupper(substr($this->user->display_name ?? $this->user->email, 0, 1)),
             'content' => $this->content,
+            'is_encrypted' => (bool) $this->is_encrypted,
             'is_file' => $this->is_file || count($attachmentPayload) > 0,
             'file_url' => $firstAttachment['url'] ?? $legacyFileUrl,
             'file_preview_url' => $firstAttachment['preview_url'] ?? ($legacyIsImage ? $legacyFileUrl : null),

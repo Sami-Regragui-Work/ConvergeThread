@@ -9,6 +9,7 @@ use App\Models\MergeSession;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\User;
+use App\Support\MessageEncryption;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -24,6 +25,7 @@ class MessageService
 
     /**
      * @param  \Illuminate\Http\UploadedFile|list<\Illuminate\Http\UploadedFile>|null  $file
+     * @param  list<array{name?:string,mime?:string,iv?:string}>|null  $attachmentMeta
      */
     public function create(
         Group|Duo|MergeSession $chatable,
@@ -33,6 +35,7 @@ class MessageService
         ?Message $parent = null,
         string $chatType = 'group',
         ?array $mentionUserIds = null,
+        ?array $attachmentMeta = null,
     ): Message {
         $files = match (true) {
             $file instanceof UploadedFile => [$file],
@@ -40,11 +43,14 @@ class MessageService
             default => [],
         };
 
+        $encrypted = MessageEncryption::isEncrypted($content);
+
         $data = [
             'chatable_id' => $chatable->id,
             'chatable_type' => $chatable->getMorphClass(),
             'user_id' => $user->id,
             'content' => $content,
+            'is_encrypted' => $encrypted,
             'parent_id' => $parent?->id,
             'is_file' => count($files) > 0,
         ];
@@ -56,15 +62,27 @@ class MessageService
         $message = Message::create($data);
 
         foreach ($files as $index => $uploaded) {
+            $meta = is_array($attachmentMeta[$index] ?? null) ? $attachmentMeta[$index] : [];
+            $iv = $meta['iv'] ?? null;
+            $isFileEncrypted = is_string($iv) && $iv !== '';
+
             MessageAttachment::create([
                 'message_id' => $message->id,
                 'file_path' => $uploaded->store('messages', 'public'),
-                'original_name' => $uploaded->getClientOriginalName(),
+                'original_name' => $meta['name'] ?? $uploaded->getClientOriginalName(),
+                'is_encrypted' => $isFileEncrypted,
+                'encryption_iv' => $isFileEncrypted ? $iv : null,
+                'mime_type' => $meta['mime'] ?? $uploaded->getMimeType(),
                 'sort' => $index,
             ]);
         }
 
         $message->load(['user.tenantRole', 'attachments']);
+
+        if (!$encrypted && $message->attachments->contains(fn ($a) => $a->is_encrypted)) {
+            $message->update(['is_encrypted' => true]);
+            $message->is_encrypted = true;
+        }
 
         $mentionedIds = $this->mentionService->syncForMessage($message, $chatable, $chatType, $mentionUserIds);
 
@@ -140,6 +158,7 @@ class MessageService
             $data['content'] = null;
         } elseif ($content !== null) {
             $data['content'] = $content;
+            $data['is_encrypted'] = MessageEncryption::isEncrypted($content);
         }
 
         if ($removeFile) {

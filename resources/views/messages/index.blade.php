@@ -20,6 +20,9 @@
             showThreadLink: true,
             chatType: @js($chatType),
             chatId: @js((int) $chatId),
+            cryptoShowUrl: @js(route('messages.crypto.show', [$chatType, $chatId])),
+            cryptoSharesUrl: @js(route('messages.crypto.shares', [$chatType, $chatId])),
+            cryptoPublicKeyUrl: @js(route('messages.crypto.public-key')),
         })"
         x-init="init()">
 
@@ -35,6 +38,10 @@
                 </div>
             </div>
             <div class="flex items-center gap-2 shrink-0">
+                <span x-show="e2eeReady" x-cloak
+                    class="hidden sm:inline-flex items-center px-2 py-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-[10px] uppercase tracking-wide text-emerald-300"
+                    title="Messages and attachments are end-to-end encrypted in this chat">E2EE</span>
+                <span x-show="e2eeError" x-cloak class="hidden sm:inline text-[10px] text-amber-400" x-text="e2eeError"></span>
                 <form method="POST" action="{{ route('messages.mute', [$chatType, $chatId]) }}">
                     @csrf
                     <button type="submit"
@@ -268,6 +275,7 @@
     </div>
 
     @push('scripts')
+        @include('partials.chat-crypto')
         @include('partials.chat-panel-script')
     @endpush
 @endsection

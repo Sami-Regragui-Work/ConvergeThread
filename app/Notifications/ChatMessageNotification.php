@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\Message;
+use App\Support\MessageEncryption;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
 
@@ -27,6 +28,10 @@ class ChatMessageNotification extends Notification
     {
         $this->message->loadMissing('user');
 
+        $preview = ($this->message->is_encrypted || MessageEncryption::isEncrypted($this->message->content))
+            ? 'Encrypted message'
+            : str($this->message->content)->limit(80)->toString();
+
         return [
             'type' => 'chat_message',
             'message_id' => $this->message->id,
@@ -35,7 +40,7 @@ class ChatMessageNotification extends Notification
             'chat_label' => $this->chatLabel,
             'stack_count' => $this->stackCount,
             'author_name' => $this->message->user->display_name ?? $this->message->user->username,
-            'preview' => str($this->message->content)->limit(80)->toString(),
+            'preview' => $preview,
             'url' => route('messages.index', [$this->chatType, $this->message->chatable_id]),
         ];
     }

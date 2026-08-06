@@ -13,8 +13,18 @@ class MessageAttachment extends Model
         'message_id',
         'file_path',
         'original_name',
+        'is_encrypted',
+        'encryption_iv',
+        'mime_type',
         'sort',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'is_encrypted' => 'boolean',
+        ];
+    }
 
     public function message(): BelongsTo
     {
@@ -43,6 +53,18 @@ class MessageAttachment extends Model
 
     public function kind(): string
     {
+        if ($this->mime_type) {
+            if (str_starts_with($this->mime_type, 'image/')) {
+                return 'image';
+            }
+            if (str_starts_with($this->mime_type, 'video/')) {
+                return 'video';
+            }
+            if ($this->mime_type === 'application/pdf') {
+                return 'pdf';
+            }
+        }
+
         $ext = strtolower(pathinfo($this->displayName(), PATHINFO_EXTENSION)
             ?: pathinfo($this->file_path, PATHINFO_EXTENSION));
 
@@ -101,6 +123,9 @@ class MessageAttachment extends Model
             'name' => $this->displayName(),
             'is_image' => $isImage,
             'is_video' => $isVideo,
+            'is_encrypted' => (bool) $this->is_encrypted,
+            'encryption_iv' => $this->encryption_iv,
+            'mime_type' => $this->mime_type,
             'kind' => $kind,
             'ext' => Str::limit($this->extension(), 5, ''),
             'size' => $size,

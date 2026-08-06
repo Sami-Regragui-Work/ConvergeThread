@@ -10,6 +10,7 @@ use App\Models\MessageMention;
 use App\Models\TenantRole;
 use App\Models\User;
 use App\Notifications\MentionedInChatNotification;
+use App\Support\MessageEncryption;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
@@ -26,14 +27,43 @@ class MentionService
         string $chatType,
         ?array $selectedUserIds = null,
     ): array {
+        $audience = $this->participantService->participants($chatable);
+        $authorId = $message->user_id;
+
+        if ($message->is_encrypted || MessageEncryption::isEncrypted($message->content)) {
+            $ids = collect($selectedUserIds ?? [])
+                ->map(fn ($id) => (int) $id)
+                ->filter(fn ($id) => $id !== (int) $authorId)
+                ->filter(fn ($id) => $audience->contains('id', $id))
+                ->unique()
+                ->values();
+
+            foreach ($ids as $userId) {
+                $mention = MessageMention::firstOrCreate(
+                    [
+                        'message_id' => $message->id,
+                        'user_id' => $userId,
+                    ],
+                    ['mention_type' => 'user'],
+                );
+
+                if ($mention->wasRecentlyCreated) {
+                    $user = $audience->firstWhere('id', $userId) ?? User::find($userId);
+                    if ($user) {
+                        $user->notify(new MentionedInChatNotification($message, $chatType, 'user'));
+                    }
+                }
+            }
+
+            return $ids->all();
+        }
+
         if (blank($message->content)) {
             return [];
         }
 
-        $audience = $this->participantService->participants($chatable);
         $resolved = $this->resolveMentions($message->content, $chatable, $chatType, $audience, $selectedUserIds);
 
-        $authorId = $message->user_id;
         $mentionedUserIds = [];
 
         foreach ($resolved as $entry) {

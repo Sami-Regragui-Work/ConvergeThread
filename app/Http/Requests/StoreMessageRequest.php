@@ -23,13 +23,17 @@ class StoreMessageRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'content' => 'required_without_all:file,files|nullable|string|max:5000',
+            'content' => 'required_without_all:file,files|nullable|string|max:20000',
             'file' => 'nullable|file|max:51200',
             'files' => 'nullable|array|max:20',
             'files.*' => 'file|max:51200',
             'parent_id' => 'nullable|exists:messages,id',
             'mention_user_ids' => 'nullable|array',
             'mention_user_ids.*' => 'integer|exists:users,id',
+            'attachment_meta' => 'nullable|array',
+            'attachment_meta.*.name' => 'nullable|string|max:255',
+            'attachment_meta.*.mime' => 'nullable|string|max:127',
+            'attachment_meta.*.iv' => 'nullable|string|max:64',
         ];
     }
 

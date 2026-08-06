@@ -7,6 +7,7 @@ use App\Models\Message;
 use App\Models\ThreadMute;
 use App\Models\User;
 use App\Notifications\ChatMessageNotification;
+use App\Support\MessageEncryption;
 use Illuminate\Support\Facades\DB;
 
 class NotificationStackService
@@ -36,7 +37,9 @@ class NotificationStackService
             $data = $existing->data;
             $data['stack_count'] = ($data['stack_count'] ?? 1) + 1;
             $data['message_id'] = $message->id;
-            $data['preview'] = str($message->content)->limit(80)->toString();
+            $data['preview'] = ($message->is_encrypted || MessageEncryption::isEncrypted($message->content))
+                ? 'Encrypted message'
+                : str($message->content)->limit(80)->toString();
             $data['author_name'] = $message->user->display_name ?? $message->user->username;
             $existing->update(['data' => $data, 'created_at' => now()]);
 

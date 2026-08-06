@@ -73,6 +73,7 @@ php artisan test
 - Blade + Tailwind (CDN) + Alpine.js
 - Session authentication (`web` guard)
 - Laravel Reverb WebSockets for chat and workspace sync (HTTP poll fallback)
+- Client-side E2EE for chat text and attachments (Web Crypto; private keys stay in the browser)
 
 ## Documentation
 
@@ -86,5 +87,4 @@ Feature work uses `feature/*` branches merged into `main`. See `references/branc
 
 ## Roadmap / Todo
 
-- **E2EE (end-to-end encryption)** for messages and attachments
 - Voice and video call UI exists in chat; **WebRTC media calls are not working yet**
