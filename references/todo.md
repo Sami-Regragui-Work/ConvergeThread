@@ -17,51 +17,46 @@
 - List and access merge sessions only within the current workspace
 - Chat access limited to active members of the two merged groups
 
+### Notifications & mutes
+- In-app notification center + unread badge
+- Mentions (`@all`, `@selected`, `@role:`, `@username`, merge `@group:` / `@group.user`)
+- Chat / thread mute toggles
+- Stacked non-mention chat notifications
+
+### Workspace members & hierarchies
+- Workspace members page (view for all; role manage for permitted users)
+- Role hierarchy chains with level membership sync
+- Tenant role colors (picker / hex) used in chat names and mentions
+
+### Chat UX polish
+- Full-height chat layout (`fill-height`)
+- Multi-file attachments in one message (compose append across picks)
+- Typed file cards (PDF/PPT/docs) with size labels; image + video previews
+- Inline message edit for own messages
+- Confirm popups (replace browser `confirm`)
+- Mention pills: `@display name` with rounded highlight
+
+### Thread reply attachments
+- File uploads on thread replies (same compose path as main chat)
+
+### Invitation management UI
+- Pending invitations list + revoke
+
 ---
 
 ## Todo
 
 ### Video call
+WebRTC video calls (header button currently opens a placeholder modal).
 
 ### Voice / normal call
-
-### Workspace members (Admin & Moderator)
-
-Sidebar section to list all workspace members outside any group — assign roles (e.g. Moderator) without group membership.
+WebRTC voice calls (header button currently opens a placeholder modal).
 
 ### Sidebar UX
-
-Toggleable sidebar on desktop; closed by default on small screens (mobile overlay exists, desktop toggle pending).
-
-### Thread reply attachments
-
-Allow file uploads on thread replies.
-
-### Multi-file message upload
-
-Send several files in one message.
-
-### File preview in chat
-
-WhatsApp-style previews (or a ConvergeThread-specific treatment) for images, video, documents.
-
-### @selected mentions
-
-Dropup picker when typing `@selected`:
-
-- Header: search (live, per keystroke), **Select all**, **Unselect all**
-- Per row: checkbox + member name
-- Header also: **Select filtered** / **Unselect filtered** for current search results (clear labels or icons)
-- Mention resolves to the chosen subset (with exclusions supported)
-
-### Tagging (SOW #7)
-
-General `@user` mentions and notification hooks — deferred from MVP.
+Further polish for desktop toggle defaults on very small screens if needed.
 
 ### WebSocket upgrade
-
 Replace polling client with Laravel Reverb or similar.
 
-### Invitation management UI
-
-List pending invitations, revoke / expire from dashboard.
+### E2EE
+End-to-end encryption for messages and attachments.

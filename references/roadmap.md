@@ -39,23 +39,18 @@
 | 2 | Member add/assign with policies | ✅ |
 | 3 | Real-time messages | ✅ (poll-based; WebSocket-ready) |
 | 4 | Duos (two-user, group-scoped) | ✅ |
-| 5 | Files / threads UI | ✅ |
+| 5 | Files / threads UI | ✅ (multi-file, typed previews, thread uploads) |
 | 6 | Two-group merge sessions | ✅ |
-| 7 | Tagging | Deferred |
+| 7 | Tagging | ✅ (`@all` / `@selected` / `@role` / `@user` / merge tags) |
 | 8 | No private messaging outside structures | ✅ |
 | 9 | Responsive pass | ✅ (core layouts) |
 | 10 | Clean layered architecture | ✅ |
 
 ## Post-MVP (see [todo.md](./todo.md))
 
-- Video call & voice call
-- Workspace members directory (Admin/Moderator sidebar)
-- Toggleable sidebar (closed by default on mobile)
-- Thread reply attachments & multi-file uploads
-- Rich file previews in chat
-- `@selected` mention picker with search and bulk select/unselect
-- Invitation list / revoke UI
+- Video call & voice call (WebRTC; header opens placeholder modal today)
 - Laravel Reverb or Ratchet/Pawl WebSocket server (replace polling client)
+- E2EE for messages and attachments
 - Expanded feature test coverage
 - Replay commits onto individual `feature/*` branches
 
