@@ -47,13 +47,13 @@ class GroupController extends Controller
      */
     public function store(StoreGroupRequest $request)
     {
-        $cridentials = $request->validated();
+        $credentials = $request->validated();
         Gate::authorize('create', Group::class);
 
         $user = Auth::user();
 
         $group = $this->groupService->create(
-            $cridentials['name'],
+            $credentials['name'],
             $user
         );
 
@@ -72,7 +72,8 @@ class GroupController extends Controller
         $group->load([
             'creator:id,display_name',
             'activeMembers:id,display_name,username',
-            'tenant:id,slug'
+            'tenant:id,slug',
+            'duos:id,group_id,name,user1_id,user2_id',
         ]);
 
         return view('groups.show', compact('group'));
@@ -93,10 +94,10 @@ class GroupController extends Controller
      */
     public function update(UpdateGroupRequest $request, Group $group)
     {
-        $cridentials = $request->validated();
+        $credentials = $request->validated();
         Gate::authorize('update', $group);
 
-        $group = $this->groupService->updateName($group, $cridentials['name']);
+        $group = $this->groupService->updateName($group, $credentials['name']);
 
         return redirect()
             ->back()
@@ -105,14 +106,14 @@ class GroupController extends Controller
 
     public function join(Group $group)
     {
-        Gate::authorize('create', Group::class);
+        Gate::authorize('join', $group);
 
         $user = Auth::user();
 
         $this->groupService->joinGroup($group, $user);
 
         return redirect()
-            ->route('groups.index')
+            ->route('groups.show', $group)
             ->with('success', "You have joined {$group->name}.");
     }
 

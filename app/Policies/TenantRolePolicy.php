@@ -35,6 +35,10 @@ class TenantRolePolicy
      */
     public function update(User $editor, TenantRole $tenantRole): bool
     {
+        if ($tenantRole->is_system) {
+            return false;
+        }
+
         if ($editor->tenant_id !== $tenantRole->tenant_id) {
             return false;
         }
@@ -42,11 +46,12 @@ class TenantRolePolicy
         return $this->tenantPermissionService->hasPermission($editor, Permissions::TENANT_ROLES_UPDATE);
     }
 
-    /**
-     * Determine whether the user can delete the model.
-     */
     public function delete(User $deleter, TenantRole $tenantRole): bool
     {
+        if ($tenantRole->is_system) {
+            return false;
+        }
+
         if ($deleter->tenant_id !== $tenantRole->tenant_id) {
             return false;
         }

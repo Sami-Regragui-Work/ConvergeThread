@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Events\MessageSent;
 use App\Models\Duo;
 use App\Models\Group;
 use App\Models\MergeSession;
@@ -33,7 +34,12 @@ class MessageService
             $data['file_path'] = $file->store('messages', 'public');
         }
 
-        return Message::create($data);
+        $message = Message::create($data);
+        $message->load('user');
+
+        MessageSent::dispatch($message);
+
+        return $message;
     }
 
     public function getThread(Message $message): array

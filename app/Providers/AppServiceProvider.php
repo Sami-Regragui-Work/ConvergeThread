@@ -6,6 +6,8 @@ use App\Models\Duo;
 use App\Models\Group;
 use App\Models\MergeSession;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -28,5 +30,15 @@ class AppServiceProvider extends ServiceProvider
             'duo' => Duo::class,
             'merge' => MergeSession::class,
         ]);
+
+        Route::bind('mergeSession', function (string $value) {
+            $user = Auth::user();
+
+            abort_unless($user, 403);
+
+            return MergeSession::query()
+                ->forTenant($user->tenant_id)
+                ->findOrFail($value);
+        });
     }
 }

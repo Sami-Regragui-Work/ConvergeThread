@@ -23,7 +23,7 @@ class AssignGroupMemberRoleRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'group_role_override_id' => 'required|exists:group_role_overrides,id',
+            'group_role_override_id' => 'nullable|exists:group_role_overrides,id',
             'user_id' => 'required|exists:users,id',
         ];
     }

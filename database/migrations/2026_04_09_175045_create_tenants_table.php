@@ -13,6 +13,7 @@ return new class extends Migration {
             $table->id();
             $table->string('slug')->unique();
             $table->string('admin_email');
+            $table->unsignedBigInteger('closed_by_id')->nullable();
             $table->timestamps();
         });
     }

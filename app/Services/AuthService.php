@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\TenantRole;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -24,12 +25,19 @@ class AuthService
             $tenant
         );
 
+        if ($tenant->isClosed()) {
+            throw new \Exception('This workspace is closed.', 403);
+        }
+
+        $memberRoleId = TenantRole::where('is_system', true)->where('name', 'Member')->value('id');
+
         $user = User::create([
             'email' => $email,
             'password' => Hash::make($password),
             'username' => $username,
             'display_name' => $displayName,
             'tenant_id' => $tenant->id,
+            'tenant_role_id' => $memberRoleId,
         ]);
 
         Auth::login($user);
@@ -47,9 +55,21 @@ class AuthService
 
         $user = Auth::user();
 
+        if (!$user instanceof User) {
+            Auth::logout();
+            throw new \Exception('Invalid credentials', 401);
+        }
+
         if ($user->banned_by_id !== null) {
             Auth::logout();
             throw new \Exception('Banned account', 403);
+        }
+
+        $user->load('tenant');
+
+        if ($user->tenant && $user->tenant->isClosed()) {
+            Auth::logout();
+            throw new \Exception('This workspace is closed.', 403);
         }
 
         session()->regenerate();

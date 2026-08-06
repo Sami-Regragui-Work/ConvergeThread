@@ -5,12 +5,14 @@ namespace App\Policies;
 use App\Models\MergeSession;
 use App\Models\User;
 use App\Services\ChatablePermissionService;
+use App\Services\TenantPermissionService;
 use App\Support\Permissions;
 
 class MergeSessionPolicy
 {
     public function __construct(
-        private readonly ChatablePermissionService $chatablePermissionService
+        private readonly ChatablePermissionService $chatablePermissionService,
+        private readonly TenantPermissionService $tenantPermissionService,
     ) {
     }
 
@@ -19,7 +21,7 @@ class MergeSessionPolicy
      */
     public function viewAny(User $viewer): bool
     {
-        return $viewer->banned_by_id === null && !$viewer->isOwner();
+        return $this->tenantPermissionService->hasPermission($viewer, Permissions::MERGE_SESSIONS_VIEW);
     }
 
     /**
@@ -35,7 +37,7 @@ class MergeSessionPolicy
      */
     public function create(User $creator): bool
     {
-        return $creator->banned_by_id === null && !$creator->isOwner();
+        return $this->tenantPermissionService->hasPermission($creator, Permissions::MERGE_SESSIONS_CREATE);
     }
 
     /**

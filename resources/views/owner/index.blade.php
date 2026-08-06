@@ -13,33 +13,6 @@
                     </p>
                 </div>
             </div>
-
-            @if (session('success'))
-                <div class="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-                    <p>{{ session('success') }}</p>
-
-                    @if (session('accept_url'))
-                        <div class="mt-3 rounded-xl border border-emerald-500/10 bg-black/20 px-3 py-2">
-                            <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-400">Invitation Link</p>
-                            <a href="{{ session('accept_url') }}" target="_blank" rel="noopener noreferrer"
-                                class="mt-1 block break-all font-mono text-xs text-emerald-200 underline underline-offset-2 transition hover:text-white">
-                                {{ session('accept_url') }}
-                            </a>
-                        </div>
-                    @endif
-                </div>
-            @endif
-
-            {{-- @if ($errors->any())
-                <div class="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-                    <p class="mb-2 font-semibold text-red-200">Please fix the following errors:</p>
-                    <ul class="space-y-1">
-                        @foreach ($errors->all() as $error)
-                            <li>{{ $error }}</li>
-                        @endforeach
-                    </ul>
-                </div>
-            @endif --}}
         </section>
 
         <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
@@ -74,9 +47,8 @@
             </div>
         </section>
 
-        <section class="grid gap-8 xl:grid-cols-3">
-            <div class="xl:col-span-1">
-                <div class="rounded-2xl border border-white/5 bg-surface-200 p-6 shadow-xl shadow-black/10">
+        <section class="space-y-6">
+            <div class="rounded-2xl border border-white/5 bg-surface-200 p-6 shadow-xl shadow-black/10">
                     <div class="mb-5">
                         <h2 class="text-lg font-semibold text-white">Invite Tenant Admin</h2>
                         <p class="mt-1 text-sm text-slate-400">This uses the existing owner invitation flow.</p>
@@ -105,21 +77,19 @@
                             Send owner invitation
                         </button>
                     </form>
-                </div>
             </div>
 
-            <div class="xl:col-span-2">
-                <div class="rounded-2xl border border-white/5 bg-surface-200 shadow-xl shadow-black/10 overflow-hidden">
-                    <div class="flex items-center justify-between gap-3 border-b border-white/5 px-6 py-4">
-                        <div>
-                            <h2 class="text-lg font-semibold text-white">Tenants</h2>
-                            <p class="text-sm text-slate-400">Public info overview.</p>
-                        </div>
+            <div class="min-w-0 rounded-2xl border border-white/5 bg-surface-200 shadow-xl shadow-black/10 overflow-hidden">
+                <div class="flex items-center justify-between gap-3 border-b border-white/5 px-6 py-4">
+                    <div>
+                        <h2 class="text-lg font-semibold text-white">Tenants</h2>
+                        <p class="text-sm text-slate-400">Public info overview.</p>
                     </div>
+                </div>
 
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full text-sm">
-                            <thead class="bg-white/[0.03] text-slate-400">
+                <div class="overflow-x-auto">
+                    <table class="w-full min-w-0 text-sm">
+                            <thead class="bg-white/3 text-slate-400">
                                 <tr>
                                     <th class="px-4 py-3 text-left font-medium">#</th>
                                     <th class="px-4 py-3 text-left font-medium">Name</th>
@@ -127,6 +97,7 @@
                                     <th class="px-4 py-3 text-left font-medium">Users</th>
                                     <th class="px-4 py-3 text-left font-medium">Groups</th>
                                     <th class="px-4 py-3 text-left font-medium">Status</th>
+                                    <th class="px-4 py-3 text-left font-medium">Actions</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-white/5">
@@ -148,17 +119,31 @@
                                                 </span>
                                             @endif
                                         </td>
+                                        <td class="px-4 py-3">
+                                            @if ($tenant->id === 1)
+                                                <span class="text-xs text-slate-600">—</span>
+                                            @elseif ($tenant->closed_by_id)
+                                                <form method="POST" action="{{ route('owner.tenants.reopen', $tenant) }}">
+                                                    @csrf @method('DELETE')
+                                                    <button type="submit" class="text-xs text-emerald-400 hover:text-emerald-300">Reopen</button>
+                                                </form>
+                                            @else
+                                                <form method="POST" action="{{ route('owner.tenants.close', $tenant) }}">
+                                                    @csrf
+                                                    <button type="submit" class="text-xs text-red-400 hover:text-red-300">Close</button>
+                                                </form>
+                                            @endif
+                                        </td>
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="6" class="px-4 py-6 text-center text-slate-500">No tenants found.</td>
+                                        <td colspan="7" class="px-4 py-6 text-center text-slate-500">No tenants found.</td>
                                     </tr>
                                 @endforelse
                             </tbody>
                         </table>
                     </div>
                 </div>
-            </div>
         </section>
 
         <section class="rounded-2xl border border-white/5 bg-surface-200 shadow-xl shadow-black/10 overflow-hidden">
@@ -169,7 +154,7 @@
 
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
-                    <thead class="bg-white/[0.03] text-slate-400">
+                    <thead class="bg-white/3 text-slate-400">
                         <tr>
                             <th class="px-4 py-3 text-left font-medium">#</th>
                             <th class="px-4 py-3 text-left font-medium">Display Name</th>
@@ -178,6 +163,7 @@
                             <th class="px-4 py-3 text-left font-medium">Tenant</th>
                             <th class="px-4 py-3 text-left font-medium">Role</th>
                             <th class="px-4 py-3 text-left font-medium">Status</th>
+                            <th class="px-4 py-3 text-left font-medium">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/5">
@@ -202,10 +188,27 @@
                                         </span>
                                     @endif
                                 </td>
+                                <td class="px-4 py-3">
+                                    @if(!$user->isOwner())
+                                        @if($user->banned_by_id)
+                                            <form method="POST" action="{{ route('owner.users.unban', $user) }}">
+                                                @csrf @method('DELETE')
+                                                <button type="submit" class="text-xs text-emerald-400 hover:text-emerald-300">Unban</button>
+                                            </form>
+                                        @else
+                                            <form method="POST" action="{{ route('owner.users.ban', $user) }}">
+                                                @csrf
+                                                <button type="submit" class="text-xs text-red-400 hover:text-red-300">Ban</button>
+                                            </form>
+                                        @endif
+                                    @else
+                                        <span class="text-xs text-slate-600">—</span>
+                                    @endif
+                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="px-4 py-6 text-center text-slate-500">No users found.</td>
+                                <td colspan="8" class="px-4 py-6 text-center text-slate-500">No users found.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -234,7 +237,7 @@
 
                             <div class="mt-3 flex flex-wrap gap-2">
                                 @forelse ($group->members as $member)
-                                    <span class="rounded-full border border-white/5 bg-white/[0.03] px-3 py-1 text-xs text-slate-300">
+                                    <span class="rounded-full border border-white/5 bg-white/3 px-3 py-1 text-xs text-slate-300">
                                         {{ $member->display_name ?? $member->username }}
                                     </span>
                                 @empty
@@ -261,10 +264,10 @@
                             <p class="mt-1 text-sm text-slate-400">Group: {{ $duo->group?->name ?? '—' }}</p>
 
                             <div class="mt-3 flex flex-wrap gap-2">
-                                <span class="rounded-full border border-white/5 bg-white/[0.03] px-3 py-1 text-xs text-slate-300">
+                                <span class="rounded-full border border-white/5 bg-white/3 px-3 py-1 text-xs text-slate-300">
                                     {{ $duo->user1?->display_name ?? $duo->user1?->username ?? 'Unknown user' }}
                                 </span>
-                                <span class="rounded-full border border-white/5 bg-white/[0.03] px-3 py-1 text-xs text-slate-300">
+                                <span class="rounded-full border border-white/5 bg-white/3 px-3 py-1 text-xs text-slate-300">
                                     {{ $duo->user2?->display_name ?? $duo->user2?->username ?? 'Unknown user' }}
                                 </span>
                             </div>

@@ -20,8 +20,8 @@
                 </div>
             </div>
             <div class="flex items-center gap-2">
-                @can('join', [App\Models\GroupMember::class, $group])
-                    <form method="POST" action="{{ route('groups.members.join', $group) }}">
+                @can('join', $group)
+                    <form method="POST" action="{{ route('groups.join', $group) }}">
                         @csrf
                         <button type="submit"
                             class="inline-flex items-center gap-2 bg-brand-500/10 hover:bg-brand-500/20 text-brand-400 text-sm px-4 py-2 rounded-xl transition">
@@ -82,7 +82,7 @@
                 </div>
                 <div class="divide-y divide-white/5">
                     @forelse($group->duos ?? [] as $duo)
-                        <a href="{{ route('groups.duos.index', $group) }}" class="block px-5 py-3 hover:bg-white/5 transition">
+                        <a href="{{ route('messages.index', ['duo', $duo->id]) }}" class="block px-5 py-3 hover:bg-white/5 transition">
                             <p class="text-sm text-slate-300">{{ $duo->name }}</p>
                         </a>
                     @empty
@@ -91,6 +91,17 @@
                 </div>
             </div>
         </div>
+
+        @can('create', [App\Models\GroupRoleOverride::class, $group])
+            <div class="bg-surface-200 border border-white/5 rounded-2xl overflow-hidden">
+                <div class="px-5 py-4 border-b border-white/5 flex items-center justify-between">
+                    <h2 class="text-sm font-semibold text-white">Role Overrides</h2>
+                    <a href="{{ route('groups.role-overrides.index', $group) }}"
+                        class="text-xs text-brand-400 hover:text-brand-300 transition">Manage</a>
+                </div>
+                <p class="px-5 py-4 text-sm text-slate-500">Customize permissions per role for this group.</p>
+            </div>
+        @endcan
 
         {{-- Group Chat --}}
         @can('viewAny', [App\Models\Message::class, $group])

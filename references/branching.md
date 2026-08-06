@@ -11,7 +11,7 @@ Each coherent change belongs on the branch that matches its domain. `main` is th
 | `feature/*` | New capability for that domain (one primary concern) |
 | `fix` | Cross-cutting bug fixes |
 | `refactor` | Structural changes spanning layers |
-| `docs/*` | Documentation only |
+| `docs/*` | Documentation only (local files in `references/`, not committed) |
 
 ## Workflow
 

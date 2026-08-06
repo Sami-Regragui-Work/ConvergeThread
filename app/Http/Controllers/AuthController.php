@@ -22,14 +22,14 @@ class AuthController extends Controller
 
     public function register(RegisterRequest $request)
     {
-        $cridentials = $request->validated();
+        $credentials = $request->validated();
 
         try {
             $this->authService->register(
-                $cridentials['email'],
-                $cridentials['password'],
-                $cridentials['display_name'] ?? null,
-                $cridentials['tenant_slug']
+                $credentials['email'],
+                $credentials['password'],
+                $credentials['display_name'] ?? null,
+                $credentials['tenant_slug']
             );
         } catch (\Exception $e) {
             return back()->withErrors(['email' => $e->getMessage()])->withInput();
@@ -45,12 +45,12 @@ class AuthController extends Controller
 
     public function login(LoginRequest $request)
     {
-        $cridentials = $request->validated();
+        $credentials = $request->validated();
 
         try {
             $this->authService->login(
-                $cridentials['email'],
-                $cridentials['password']
+                $credentials['email'],
+                $credentials['password']
             );
         } catch (\Exception $e) {
             return back()->withErrors(['email' => $e->getMessage()])->withInput();

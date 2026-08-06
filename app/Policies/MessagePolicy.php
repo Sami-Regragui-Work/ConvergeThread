@@ -19,6 +19,13 @@ class MessagePolicy
         return $this->chatablePermissionService->hasPermission($chatable, $viewer, Permissions::MESSAGES_VIEW);
     }
 
+    public function view(User $viewer, Message $message): bool
+    {
+        $message->loadMissing('chatable');
+
+        return $this->viewAny($viewer, $message->chatable);
+    }
+
     public function create(User $creator, mixed $chatable): bool
     {
         return $this->chatablePermissionService->hasPermission($chatable, $creator, Permissions::MESSAGES_CREATE);
@@ -40,5 +47,10 @@ class MessagePolicy
         }
 
         return $this->chatablePermissionService->hasPermission($message->chatable, $deleter, Permissions::MESSAGES_DELETE_ANY);
+    }
+
+    public function thread(User $viewer, Message $message): bool
+    {
+        return $this->viewAny($viewer, $message->chatable);
     }
 }

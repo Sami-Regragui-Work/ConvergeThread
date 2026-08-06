@@ -13,6 +13,7 @@ return new class extends Migration {
             $table->foreignId('merge_session_id')->constrained()->cascadeOnDelete();
             $table->foreignId('group_id')->constrained()->cascadeOnDelete();
             $table->primary(['merge_session_id', 'group_id']);
+            $table->timestamps();
         });
     }
 

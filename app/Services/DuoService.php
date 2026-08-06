@@ -29,13 +29,13 @@ class DuoService
 
     public function getGroupDuos(Group $group): Collection
     {
-        return $group->duos()->with(['userA', 'userB'])->get();
+        return $group->duos()->with(['user1', 'user2'])->get();
     }
 
     public function getUserDuos(Group $group, User $user): Collection
     {
         return $group->duos()
-            ->with(['userA', 'userB'])
+            ->with(['user1', 'user2'])
             ->where(
                 fn($q) => $q
                     ->where('user1_id', $user->id)

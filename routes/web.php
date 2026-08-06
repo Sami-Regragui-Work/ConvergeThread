@@ -9,6 +9,8 @@ use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\MergeSessionController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\Owner\OwnerController;
+use App\Http\Controllers\Owner\OwnerTenantController;
+use App\Http\Controllers\Owner\OwnerUserController;
 use App\Http\Controllers\TenantRoleController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -42,6 +44,10 @@ Route::prefix('invitations')->name('invitations.')->group(function () {
 
 Route::middleware(['auth', 'is.owner'])->prefix('owner')->name('owner.')->group(function () {
     Route::get('', [OwnerController::class, 'index'])->name('index');
+    Route::post('users/{user}/ban', [OwnerUserController::class, 'ban'])->name('users.ban');
+    Route::delete('users/{user}/ban', [OwnerUserController::class, 'unban'])->name('users.unban');
+    Route::post('tenants/{tenant}/close', [OwnerTenantController::class, 'close'])->name('tenants.close');
+    Route::delete('tenants/{tenant}/close', [OwnerTenantController::class, 'reopen'])->name('tenants.reopen');
 });
 
 Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
@@ -68,6 +74,7 @@ Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
                     Route::get('', [GroupMemberController::class, 'index'])->name('index');
                     Route::post('', [GroupMemberController::class, 'store'])->name('store');
                     Route::patch('assign-role', [GroupMemberController::class, 'assignRole'])->name('assign-role');
+                    Route::patch('assign-tenant-role', [GroupMemberController::class, 'assignTenantRole'])->name('assign-tenant-role');
                     Route::delete('', [GroupMemberController::class, 'destroy'])->name('destroy');
                 });
 
@@ -93,6 +100,8 @@ Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
         Route::get('', [TenantRoleController::class, 'index'])->name('index');
         Route::get('create', [TenantRoleController::class, 'create'])->name('create');
         Route::post('', [TenantRoleController::class, 'store'])->name('store');
+        Route::get('{tenantRole}/edit', [TenantRoleController::class, 'edit'])->name('edit');
+        Route::patch('{tenantRole}', [TenantRoleController::class, 'update'])->name('update');
         Route::delete('{tenantRole}', [TenantRoleController::class, 'destroy'])->name('destroy');
     });
 
@@ -107,6 +116,8 @@ Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
 
     // Messages
     Route::prefix('messages')->name('messages.')->group(function () {
+        Route::get('{message}/attachment', [MessageController::class, 'attachment'])->name('attachment');
+        Route::get('{chatType}/{chatId}/poll', [MessageController::class, 'poll'])->name('poll');
         Route::get('{message}/thread', [MessageController::class, 'thread'])->name('thread');
         Route::get('{chatType}/{chatId}', [MessageController::class, 'index'])->name('index');
         Route::post('{chatType}/{chatId}', [MessageController::class, 'store'])->name('store');

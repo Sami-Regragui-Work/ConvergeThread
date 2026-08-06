@@ -64,7 +64,7 @@ class InvitationService
             ]);
         }
 
-        if ($tenantRole && $tenantRole->tenant_id !== $tenant->id) {
+        if ($tenantRole && !$tenantRole->isUsableByTenant($tenant->id)) {
             throw ValidationException::withMessages([
                 'email' => 'Selected tenant role does not belong to this tenant.',
             ]);
@@ -78,11 +78,13 @@ class InvitationService
 
         $this->expireOld($email);
 
+        $resolvedRoleId = $tenantRole?->id ?? $this->defaultTenantRoleId($group);
+
         return Invitation::create([
             'tenant_id' => $tenant->id,
             'group_id' => $group?->id,
             'invited_by_id' => $invitedBy->id,
-            'tenant_role_id' => $tenantRole?->id,
+            'tenant_role_id' => $resolvedRoleId,
             'email' => $email,
             'token' => Str::random(60),
             'expires_at' => now()->addDays(7),
@@ -174,7 +176,8 @@ class InvitationService
                 'username' => $username,
                 'display_name' => $displayName,
                 'tenant_id' => $invitation->tenant_id,
-                'tenant_role_id' => $invitation->tenant_role_id,
+                'tenant_role_id' => $invitation->tenant_role_id
+                    ?? $this->defaultTenantRoleId($invitation->group),
             ]);
 
             if ($invitation->group_id) {
@@ -240,7 +243,7 @@ class InvitationService
             ]);
         }
 
-        if ($invitation->tenantRole && $invitation->tenantRole->tenant_id !== $invitation->tenant_id) {
+        if ($invitation->tenantRole && !$invitation->tenantRole->isUsableByTenant($invitation->tenant_id)) {
             throw ValidationException::withMessages([
                 'token' => 'Invitation role does not belong to the invitation tenant.',
             ]);
@@ -266,5 +269,14 @@ class InvitationService
         }
 
         return $invitation;
+    }
+
+    private function defaultTenantRoleId(?Group $group): int
+    {
+        $roleName = $group ? 'Member' : 'Moderator';
+
+        return TenantRole::where('is_system', true)
+            ->where('name', $roleName)
+            ->value('id');
     }
 }

@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreTenantRoleRequest;
+use App\Http\Requests\UpdateTenantRoleRequest;
 use App\Models\TenantRole;
 use App\Services\RoleService;
+use App\Support\Permissions;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 
@@ -14,43 +16,39 @@ class TenantRoleController extends Controller
     {
     }
 
-    /**
-     * Display a listing of the resource.
-     */
     public function index()
     {
         $tenantId = Auth::user()->tenant_id;
         Gate::authorize('viewAny', TenantRole::class);
 
-        $roles = TenantRole::where('tenant_id', $tenantId)->get();
+        $roles = TenantRole::where('tenant_id', $tenantId)
+            ->orWhere('is_system', true)
+            ->orderBy('name')
+            ->get();
 
-        return view('tenant_roles.index', compact('roles'));
+        return view('tenant-roles.index', compact('roles'));
     }
 
-    /**
-     * Show the form for creating a newly created resource.
-     */
     public function create()
     {
         Gate::authorize('create', TenantRole::class);
 
-        return view('tenant_roles.create');
+        return view('tenant-roles.create', [
+            'permissions' => Permissions::all(),
+        ]);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(StoreTenantRoleRequest $request)
     {
-        $cridentials = $request->validated();
+        $credentials = $request->validated();
         Gate::authorize('create', TenantRole::class);
 
         $tenant = Auth::user()->tenant;
 
         $this->roleService->createTenantRole(
             $tenant,
-            $cridentials['name'],
-            $cridentials['permissions']
+            $credentials['name'],
+            $credentials['permissions']
         );
 
         return redirect()
@@ -58,9 +56,32 @@ class TenantRoleController extends Controller
             ->with('success', 'Tenant role created successfully.');
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
+    public function edit(TenantRole $tenantRole)
+    {
+        Gate::authorize('update', $tenantRole);
+
+        return view('tenant-roles.edit', [
+            'role' => $tenantRole,
+            'permissions' => Permissions::all(),
+        ]);
+    }
+
+    public function update(UpdateTenantRoleRequest $request, TenantRole $tenantRole)
+    {
+        $credentials = $request->validated();
+        Gate::authorize('update', $tenantRole);
+
+        $this->roleService->updateTenantRole(
+            $tenantRole,
+            $credentials['name'],
+            $credentials['permissions']
+        );
+
+        return redirect()
+            ->route('tenant-roles.index')
+            ->with('success', 'Tenant role updated successfully.');
+    }
+
     public function destroy(TenantRole $tenantRole)
     {
         Gate::authorize('delete', $tenantRole);

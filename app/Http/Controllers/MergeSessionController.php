@@ -6,6 +6,7 @@ use App\Http\Requests\StoreMergeSessionRequest;
 use App\Models\Group;
 use App\Models\MergeSession;
 use App\Services\MergeSessionService;
+use App\Support\Flash;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 
@@ -22,7 +23,7 @@ class MergeSessionController extends Controller
     {
         Gate::authorize('viewAny', MergeSession::class);
 
-        $sessions = $this->mergeService->getActive()->load('groups');
+        $sessions = $this->mergeService->getActiveForTenant(Auth::user()->tenant_id);
 
         return view('merge-sessions.index', compact('sessions'));
     }
@@ -34,7 +35,11 @@ class MergeSessionController extends Controller
     {
         Gate::authorize('create', MergeSession::class);
 
-        return view('merge-sessions.create');
+        $groups = Group::where('tenant_id', Auth::user()->tenant_id)
+            ->orderBy('name')
+            ->get();
+
+        return view('merge-sessions.create', compact('groups'));
     }
 
     /**
@@ -42,22 +47,28 @@ class MergeSessionController extends Controller
      */
     public function store(StoreMergeSessionRequest $request)
     {
-        $cridentials = $request->validated();
+        $credentials = $request->validated();
         Gate::authorize('create', MergeSession::class);
 
         $user = Auth::user();
 
         $group1 = Group::where('tenant_id', $user->tenant_id)
-            ->findOrFail($cridentials['group1_id']);
+            ->findOrFail($credentials['group1_id']);
 
         $group2 = Group::where('tenant_id', $user->tenant_id)
-            ->findOrFail($cridentials['group2_id']);
+            ->findOrFail($credentials['group2_id']);
 
         $session = $this->mergeService->start($group1, $group2);
 
-        return redirect()
-            ->route('merge-sessions.show', $session)
-            ->with('success', 'Merge session created successfully.');
+        return Flash::to(
+            'merge-sessions.show',
+            'Merge session created. Share the chat link with members of both groups.',
+            [[
+                'label' => 'Merged chat link',
+                'url' => route('messages.index', ['merge', $session->id]),
+            ]],
+            $session,
+        );
     }
 
     /**

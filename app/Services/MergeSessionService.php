@@ -31,9 +31,12 @@ class MergeSessionService
         return $session->fresh();
     }
 
-    public function getActive(): Collection
+    public function getActiveForTenant(int $tenantId): Collection
     {
-        return MergeSession::whereNull('ended_at')
+        return MergeSession::query()
+            ->forTenant($tenantId)
+            ->whereNull('ended_at')
+            ->with('groups')
             ->get();
     }
 }

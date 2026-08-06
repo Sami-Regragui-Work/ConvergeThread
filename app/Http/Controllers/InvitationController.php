@@ -10,6 +10,7 @@ use App\Models\Invitation;
 use App\Models\Tenant;
 use App\Models\TenantRole;
 use App\Services\InvitationService;
+use App\Support\Flash;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 
@@ -22,51 +23,61 @@ class InvitationController extends Controller
 
     public function createAdminInvitation(CreateAdminInvitationRequest $request)
     {
-        $cridentials = $request->validated();
+        $credentials = $request->validated();
         Gate::authorize('createAdmin', Invitation::class);
 
         $owner = Auth::user();
 
         $invitation = $this->invitationService->createAdminInvitation(
-            $cridentials['email'],
+            $credentials['email'],
             $owner
         );
 
-        return redirect()
-            ->back()
-            ->with('success', 'Admin invitation created successfully.')
-            ->with('accept_url', route('invitations.accept', $invitation->token));
+        return Flash::back(
+            'Admin invitation created. Share the link below with the new tenant admin.',
+            [[
+                'label' => 'Admin invitation link',
+                'url' => route('invitations.accept', $invitation->token),
+            ]],
+        );
     }
 
     public function createMemberInvitation(CreateMemberInvitationRequest $request)
     {
-        $cridentials = $request->validated();
+        $credentials = $request->validated();
         Gate::authorize('createMember', Invitation::class);
 
         $invitedBy = Auth::user();
 
-        $tenant = Tenant::findOrFail($cridentials['tenant_id']);
+        $tenant = Tenant::findOrFail($credentials['tenant_id']);
 
-        $group = isset($cridentials['group_id'])
-            ? Group::where('tenant_id', $tenant->id)->findOrFail($cridentials['group_id'])
+        $group = isset($credentials['group_id'])
+            ? Group::where('tenant_id', $tenant->id)->findOrFail($credentials['group_id'])
             : null;
 
-        $tenantRole = isset($cridentials['tenant_role_id'])
-            ? TenantRole::where('tenant_id', $tenant->id)->findOrFail($cridentials['tenant_role_id'])
+        $tenantRole = isset($credentials['tenant_role_id'])
+            ? TenantRole::query()->forTenant($tenant->id)->findOrFail($credentials['tenant_role_id'])
             : null;
 
         $invitation = $this->invitationService->createMemberInvitation(
-            $cridentials['email'],
+            $credentials['email'],
             $invitedBy,
             $tenant,
             $group,
             $tenantRole
         );
 
-        return redirect()
-            ->back()
-            ->with('success', 'Member invitation created successfully.')
-            ->with('accept_url', route('invitations.accept', $invitation->token));
+        $label = $group
+            ? 'Group invitation link'
+            : 'Workspace invitation link';
+
+        return Flash::back(
+            'Member invitation created. Share the link below with the invitee.',
+            [[
+                'label' => $label,
+                'url' => route('invitations.accept', $invitation->token),
+            ]],
+        );
     }
 
     public function show(string $token)
@@ -88,22 +99,22 @@ class InvitationController extends Controller
 
     public function accept(AcceptInvitationRequest $request, string $token)
     {
-        $cridentials = $request->validated();
+        $credentials = $request->validated();
 
-        $isAdminInvite = (bool) ($cridentials['is_admin_invite'] ?? false);
+        $isAdminInvite = (bool) ($credentials['is_admin_invite'] ?? false);
 
         if ($isAdminInvite) {
             $this->invitationService->acceptAdminInvitation(
                 $token,
-                $cridentials['password'],
-                $cridentials['tenant_name'],
-                $cridentials['display_name'] ?? null,
+                $credentials['password'],
+                $credentials['tenant_name'],
+                $credentials['display_name'] ?? null,
             );
         } else {
             $result = $this->invitationService->acceptInvitation(
                 $token,
-                $cridentials['password'],
-                $cridentials['display_name'] ?? null
+                $credentials['password'],
+                $credentials['display_name'] ?? null
             );
 
             $result['user']->load(['tenant', 'tenantRole']);

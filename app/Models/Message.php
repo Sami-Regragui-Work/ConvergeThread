@@ -47,4 +47,24 @@ class Message extends Model
     {
         return $this->hasMany(Message::class, 'parent_id');
     }
+
+    public function toChatPayload(): array
+    {
+        $this->loadMissing('user');
+
+        return [
+            'id' => $this->id,
+            'user_id' => $this->user_id,
+            'user_name' => $this->user->display_name ?? $this->user->email,
+            'user_initial' => strtoupper(substr($this->user->display_name ?? $this->user->email, 0, 1)),
+            'content' => $this->content,
+            'is_file' => $this->is_file,
+            'file_url' => $this->is_file && $this->file_path
+                ? route('messages.attachment', $this)
+                : null,
+            'parent_id' => $this->parent_id,
+            'created_at' => $this->created_at?->diffForHumans(),
+            'reply_count' => $this->relationLoaded('replies') ? $this->replies->count() : 0,
+        ];
+    }
 }
