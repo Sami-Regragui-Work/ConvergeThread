@@ -82,11 +82,13 @@ Until then: one browser profile per account for demos; warn users that clearing 
 
 ---
 
-## 8. Notification / search previews stay opaque
+## 8. Notification previews stay opaque (search does not)
 
-**Today:** Push/in-app previews for encrypted messages are generic (“Encrypted message”). Server-side search cannot read ciphertext.
+**Today:** In-app notifications still show generic “Encrypted message” text — the server never sees plaintext. **Chat search is different:** header Search syncs a ciphertext feed (`messages.search-feed`), decrypts with the room key in the browser, and stores searchable plaintext in IndexedDB (`ChatSearchIndex`) — Proton-style body keywords without server-side decrypt.
 
-**Fix:** Accept as E2EE tradeoff, or add **client-side** search index (encrypted local DB). Do not decrypt on the server if the goal is true E2EE.
+**Fix (notifications):** Accept as E2EE tradeoff, or add client-only notification preview cache after decrypt. Do not decrypt on the server.
+
+**Harden (search index):** Wrap IndexedDB rows with AES-GCM using a key derived from the identity private key (or a user passphrase) so a stolen disk dump of IndexedDB is not readable plaintext. A new browser must re-sync/decrypt the feed (same as multi-device E2EE).
 
 ---
 
@@ -106,6 +108,22 @@ Until then: one browser profile per account for demos; warn users that clearing 
 
 ---
 
+## 11. Simple edits still use full pages
+
+**Today:** Live `workspace.updated` sync exists, but flows like rename group still navigate to dedicated pages.
+
+**Fix:** Convert low-density forms to Alpine modals that PATCH via fetch and rely on Reverb/poll sync to refresh lists — keep full pages for dense editors (roles, hierarchies).
+
+---
+
+## 12. Search is per-chat
+
+**Today:** Header search picks one chat, indexes it, then queries locally.
+
+**Fix:** On open, sync all chats from `messages.chats` in the background (rate-limited), then query across `chatKey`s; show chat name on each hit.
+
+---
+
 ## Quick reference
 
 | Caveat | Code touchpoints |
@@ -117,6 +135,9 @@ Until then: one browser profile per account for demos; warn users that clearing 
 | Thread calls | `messages/thread.blade.php` + shared partial |
 | Multi-device E2EE | `chat-crypto.blade.php` `localStorage`; new recovery/share APIs |
 | Late key share | `ChatCryptoController` + membership hooks + broadcast |
-| Opaque previews | Notification classes; intentional |
+| Opaque notif previews | Notification classes; intentional |
+| Body search | `ChatSearchIndex`, `ChatBrowseController`, `chat-browse-ui` |
+| Encrypt search IDB | `chat-search-index.blade.php` |
 | Call E2EE | Insertable Streams if SFU |
 | Sidebar | `layouts/app.blade.php` |
+| Edit modals | group/edit views → shared modal + `WorkspaceSync` |

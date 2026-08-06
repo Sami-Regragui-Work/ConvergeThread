@@ -65,6 +65,13 @@
 - WebRTC voice/video in chat (invite / join / offer / answer / ICE via Reverb)
 - Mesh between joined peers; mute / camera toggles; Google public STUN
 
+### Chat search & media browse
+- Header Search + Files (non-owner)
+- Proton-style body keyword search: server serves ciphertext feed; client decrypts into IndexedDB and queries locally
+- Filters: author id, has-file, date range
+- Files panel grouped by root thread (root + reply attachments); Go to chat deep-link (`?message=`)
+- Deep-link scroll/highlight; replies redirect to thread view
+
 ---
 
 ## Todo
@@ -87,13 +94,22 @@ Full-mesh peer connections; fine for small chats, not for large group calls — 
 Voice/video controls exist on main chat only; thread view has no call entry point.
 
 ### Multi-device E2EE / recovery
-Identity private key lives in `localStorage` only — second device or cleared site data cannot decrypt history without recovery or device linking.
+Identity private key lives in `localStorage` only — second device or cleared site data cannot decrypt history without recovery or device linking. Local search index is per-browser too.
 
 ### Late joiner room-key share
 New members wait until an existing member with the room key opens the chat (or shares keys); no proactive share-on-invite yet.
 
-### Opaque encrypted previews
-Notifications/search cannot show plaintext message bodies (E2EE tradeoff unless client-side index).
+### Opaque notification previews
+In-app notifications still cannot show plaintext bodies (server never sees them). Chat search uses a local decrypted index instead.
+
+### Encrypt local search index at rest
+IndexedDB currently stores decrypted plaintext for speed (Proton encrypts the local index). Harden by wrapping index rows with a key derived from the identity private key / passphrase.
+
+### Cross-chat search in one query
+Search UI is per selected chat today; extend to fan-out sync + query across all indexed chats.
+
+### Convert simple edit pages to modals
+With live workspace sync, group rename and similar flows can be header/sidebar modals instead of full pages.
 
 ### App-level call E2EE (if SFU)
 DTLS-SRTP protects peer-to-peer media today; an SFU path would need Insertable Streams / SFrame for true E2EE calls.
