@@ -54,6 +54,25 @@ class ChatBrowseController extends Controller
         ]);
     }
 
+    public function participants(string $chatType, int $chatId)
+    {
+        $user = Auth::user();
+        $chatable = $this->resolveChatable($user, $chatType, $chatId);
+        $this->browseService->assertCanBrowse($user, $chatable);
+
+        $people = app(\App\Services\ChatParticipantService::class)
+            ->participants($chatable)
+            ->map(fn ($u) => [
+                'id' => $u->id,
+                'username' => $u->username,
+                'display_name' => $u->display_name ?? $u->username,
+                'label' => $u->displayLabel(),
+            ])
+            ->values();
+
+        return response()->json(['participants' => $people]);
+    }
+
     public function locate(Message $message)
     {
         $user = Auth::user();

@@ -2,11 +2,20 @@
 <template x-if="message.attachments && message.attachments.length">
     <div class="mb-2 flex flex-wrap gap-2">
         <template x-for="(attachment, ai) in message.attachments" :key="'att-' + (attachment.id || ai)">
-            <div class="overflow-hidden rounded-xl border border-white/10 bg-black/20 shrink-0"
+            <div class="relative group/att overflow-hidden rounded-xl border border-white/10 bg-black/20 shrink-0"
                 :class="(attachment.is_image || attachment.is_video) ? 'w-36 h-36 sm:w-40 sm:h-40' : 'w-36 sm:w-40 min-h-28'">
+                <button type="button" @click.stop="downloadAttachment(attachment)"
+                    class="absolute top-1 right-1 z-10 w-6 h-6 rounded-full bg-black/70 text-white opacity-0 group-hover/att:opacity-100 transition flex items-center justify-center hover:bg-black/90"
+                    title="Download">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                </button>
                 <a x-show="attachment.is_image" :href="attachment.local_url || attachment.url" target="_blank" rel="noopener" class="block h-full w-full">
                     <img :src="attachment.local_url || attachment.preview_url || attachment.url" :alt="attachment.name"
-                        class="h-full w-full min-h-24 min-w-24 max-h-40 max-w-40 object-cover">
+                        class="h-full w-full min-h-24 min-w-24 max-h-40 max-w-40 object-cover"
+                        x-on:error="$el.style.opacity='0.3'">
                 </a>
                 <div x-show="attachment.is_video" class="relative h-full w-full bg-black">
                     <video :src="attachment.local_url || attachment.preview_url || attachment.url" class="h-full w-full object-cover" muted playsinline preload="metadata"></video>

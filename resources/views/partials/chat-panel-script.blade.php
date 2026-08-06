@@ -21,7 +21,10 @@
             cryptoSharesUrl: config.cryptoSharesUrl ?? null,
             cryptoPublicKeyUrl: config.cryptoPublicKeyUrl ?? null,
             callSignalUrl: config.callSignalUrl ?? null,
+            callActiveUrl: config.callActiveUrl ?? null,
             currentUserName: config.currentUserName ?? 'You',
+            parentMessage: config.parentMessage ?? null,
+            activeCall: config.activeCall ?? null,
             draft: '',
             files: [],
             filePreviews: [],
@@ -55,6 +58,7 @@
             localVideoOff: false,
             peers: [],
             peerConnections: {},
+            callPollTimer: null,
             iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }],
             focusMessageId: null,
 
@@ -67,14 +71,24 @@
                 this.$nextTick(() => this.focusDraft());
                 this.setupRealtime();
                 this.pollTimer = setInterval(() => this.poll(), this.echoBound ? 15000 : 3000);
+                this.callPollTimer = setInterval(() => this.refreshActiveCall(), 8000);
                 await this.setupE2ee();
+                if (this.parentMessage) {
+                    await this.decryptMessageInPlace(this.parentMessage);
+                    this.parentMessage = { ...this.parentMessage };
+                }
                 await this.decryptMessages(this.messages);
                 await this.indexMessagesForSearch(this.messages);
+                await this.refreshActiveCall();
+                if (params.get('join_call') === '1' && this.activeCall) {
+                    await this.joinActiveCall();
+                }
                 this.$nextTick(() => this.scrollToFocusedMessage());
             },
 
             destroy() {
                 if (this.pollTimer) clearInterval(this.pollTimer);
+                if (this.callPollTimer) clearInterval(this.callPollTimer);
                 if (this.echoBound && window.Echo && this.chatType && this.chatId) {
                     window.Echo.leave('chat.' + this.chatType + '.' + this.chatId);
                 }
@@ -175,6 +189,19 @@
                 }
             },
 
+            downloadAttachment(attachment) {
+                if (!attachment) return;
+                const url = attachment.local_url || attachment.url;
+                if (!url) return;
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = attachment.name || 'download';
+                a.rel = 'noopener';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            },
+
             scrollToFocusedMessage() {
                 if (!this.focusMessageId) return;
                 this.scrollToMessage(this.focusMessageId);
@@ -268,6 +295,33 @@
                 channel.listen('.call.signal', (payload) => this.onCallSignal(payload));
 
                 this.echoBound = true;
+            },
+
+            async refreshActiveCall() {
+                if (!this.callActiveUrl) return;
+                try {
+                    const res = await fetch(this.callActiveUrl, {
+                        headers: { 'Accept': 'application/json' },
+                        credentials: 'same-origin',
+                    });
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    this.activeCall = data.active || null;
+                } catch (e) {}
+            },
+
+            async joinActiveCall() {
+                if (!this.activeCall || this.callState !== 'idle') return;
+                this.incomingCall = {
+                    call_id: this.activeCall.call_id,
+                    call_type: this.activeCall.call_type,
+                    from_user_id: this.activeCall.from_user_id,
+                    from_user_name: this.activeCall.from_user_name,
+                };
+                await this.acceptIncoming();
+                const url = new URL(window.location.href);
+                url.searchParams.delete('join_call');
+                window.history.replaceState({}, '', url.pathname + url.search + url.hash);
             },
 
             mentionCount() {
@@ -882,13 +936,12 @@
                         from_user_id: payload.from_user_id,
                         from_user_name: payload.from_user_name,
                     };
-                    return;
-                }
-
-                if (action === 'reject') {
-                    if (this.callId && payload.call_id === this.callId && this.callState === 'outgoing') {
-                        this.callError = (payload.from_user_name || 'Someone') + ' declined the call.';
-                    }
+                    this.activeCall = {
+                        call_id: payload.call_id,
+                        call_type: payload.call_type,
+                        from_user_id: payload.from_user_id,
+                        from_user_name: payload.from_user_name,
+                    };
                     return;
                 }
 
@@ -898,6 +951,16 @@
                         if (!this.peers.length && this.callState === 'active') {
                             this.callError = 'Everyone else left the call.';
                         }
+                    }
+                    if (this.activeCall && payload.call_id === this.activeCall.call_id) {
+                        this.activeCall = null;
+                    }
+                    return;
+                }
+
+                if (action === 'reject') {
+                    if (this.callId && payload.call_id === this.callId && this.callState === 'outgoing') {
+                        this.callError = (payload.from_user_name || 'Someone') + ' declined the call.';
                     }
                     return;
                 }

@@ -145,11 +145,13 @@ Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
         Route::get('chats', [ChatBrowseController::class, 'chats'])->name('chats');
         Route::get('{message}/locate', [ChatBrowseController::class, 'locate'])->name('locate');
         Route::post('{chatType}/{chatId}/call/signal', [CallController::class, 'signal'])->name('call.signal');
+        Route::get('{chatType}/{chatId}/call/active', [CallController::class, 'active'])->name('call.active');
         Route::post('crypto/public-key', [ChatCryptoController::class, 'storePublicKey'])->name('crypto.public-key');
         Route::get('{chatType}/{chatId}/crypto', [ChatCryptoController::class, 'show'])->name('crypto.show');
         Route::post('{chatType}/{chatId}/crypto/shares', [ChatCryptoController::class, 'storeShares'])->name('crypto.shares');
         Route::get('{chatType}/{chatId}/search-feed', [ChatBrowseController::class, 'searchFeed'])->name('search-feed');
         Route::get('{chatType}/{chatId}/media', [ChatBrowseController::class, 'media'])->name('media');
+        Route::get('{chatType}/{chatId}/participants', [ChatBrowseController::class, 'participants'])->name('participants');
         Route::get('{message}/attachment', [MessageController::class, 'attachment'])->name('attachment');
         Route::get('{message}/attachments/{attachment}', [MessageController::class, 'downloadAttachment'])->name('attachments.download');
         Route::get('{chatType}/{chatId}/mentions', [MessageController::class, 'mentions'])->name('mentions');

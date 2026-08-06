@@ -3,9 +3,11 @@
 namespace Tests\Feature;
 
 use App\Events\CallSignal;
+use App\Models\GroupMember;
 use App\Models\Tenant;
 use App\Models\TenantRole;
 use App\Models\User;
+use App\Notifications\IncomingCallNotification;
 use App\Services\GroupService;
 use Database\Seeders\Permanents\OwnerSeeder;
 use Database\Seeders\Permanents\SystemTenantRoleSeeder;
@@ -39,9 +41,18 @@ class CallSignalTest extends TestCase
             'tenant_id' => $tenant->id,
             'tenant_role_id' => $adminRoleId,
         ]);
+        $peer = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'tenant_role_id' => $adminRoleId,
+        ]);
 
         $this->actingAs($user);
         $group = app(GroupService::class)->create('Calls', $user);
+        \App\Models\GroupMember::create([
+            'group_id' => $group->id,
+            'user_id' => $peer->id,
+            'joined_at' => now(),
+        ]);
 
         $this->postJson(route('messages.call.signal', ['chatType' => 'group', 'chatId' => $group->id]), [
             'action' => 'invite',
@@ -56,5 +67,24 @@ class CallSignalTest extends TestCase
                 && $event->payload['from_user_id'] === $user->id
                 && $event->payload['call_type'] === 'voice';
         });
+
+        $this->getJson(route('messages.call.active', ['chatType' => 'group', 'chatId' => $group->id]))
+            ->assertOk()
+            ->assertJsonPath('active.call_id', 'call_1')
+            ->assertJsonPath('active.call_type', 'voice');
+
+        $this->assertTrue(
+            $peer->fresh()->notifications()->where('type', IncomingCallNotification::class)->exists()
+        );
+
+        $this->postJson(route('messages.call.signal', ['chatType' => 'group', 'chatId' => $group->id]), [
+            'action' => 'leave',
+            'call_id' => 'call_1',
+            'call_type' => 'voice',
+        ])->assertOk();
+
+        $this->getJson(route('messages.call.active', ['chatType' => 'group', 'chatId' => $group->id]))
+            ->assertOk()
+            ->assertJsonPath('active', null);
     }
 }

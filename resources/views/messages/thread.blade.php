@@ -23,6 +23,9 @@
             cryptoShowUrl: @js(route('messages.crypto.show', [$chatType, $message->chatable_id])),
             cryptoSharesUrl: @js(route('messages.crypto.shares', [$chatType, $message->chatable_id])),
             cryptoPublicKeyUrl: @js(route('messages.crypto.public-key')),
+            callSignalUrl: @js(route('messages.call.signal', [$chatType, $message->chatable_id])),
+            callActiveUrl: @js(route('messages.call.active', [$chatType, $message->chatable_id])),
+            parentMessage: @js($parentPayload),
         })"
         x-init="init()">
 
@@ -41,22 +44,53 @@
             </form>
         </div>
 
-        <div class="bg-surface-200 border border-white/5 rounded-2xl p-5 mb-4 shrink-0">
+        <div class="bg-surface-200 border border-white/5 rounded-2xl p-5 mb-4 shrink-0" x-show="parentMessage">
             <div class="flex items-center gap-2 mb-3">
-                <div class="w-7 h-7 rounded-full bg-brand-500/10 text-brand-400 flex items-center justify-center text-xs font-semibold">
-                    {{ $parentPayload['user_initial'] }}
-                </div>
-                <span class="text-sm text-slate-300">{{ $parentPayload['user_name'] }}</span>
-                <span class="text-xs text-slate-600">{{ $message->created_at->diffForHumans() }}</span>
+                <div class="w-7 h-7 rounded-full bg-brand-500/10 text-brand-400 flex items-center justify-center text-xs font-semibold"
+                    x-text="parentMessage?.user_initial"></div>
+                <span class="text-sm text-slate-300" x-text="parentMessage?.user_name"></span>
+                <span class="text-xs text-slate-600" x-text="parentMessage?.created_at"></span>
             </div>
 
-            @include('partials.message-attachments', ['attachments' => $parentPayload['attachments'] ?? []])
-
-            @if($parentPayload['content_html'])
-                <div class="text-sm text-slate-200 whitespace-pre-wrap">{!! $parentPayload['content_html'] !!}</div>
-            @elseif($parentPayload['content'])
-                <p class="text-sm text-slate-200 whitespace-pre-wrap">{{ $parentPayload['content'] }}</p>
-            @endif
+            <template x-if="parentMessage">
+                <div>
+                    <template x-if="parentMessage.attachments && parentMessage.attachments.length">
+                        <div class="mb-3 flex flex-wrap gap-2">
+                            <template x-for="(attachment, ai) in parentMessage.attachments" :key="'parent-att-' + (attachment.id || ai)">
+                                <div class="relative group/att overflow-hidden rounded-xl border border-white/10 bg-black/20 shrink-0"
+                                    :class="(attachment.is_image || attachment.is_video) ? 'w-36 h-36 sm:w-40 sm:h-40' : 'w-36 sm:w-40 min-h-28'">
+                                    <button type="button" @click.stop="downloadAttachment(attachment)"
+                                        class="absolute top-1 right-1 z-10 w-6 h-6 rounded-full bg-black/70 text-white opacity-0 group-hover/att:opacity-100 transition flex items-center justify-center hover:bg-black/90"
+                                        title="Download">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                        </svg>
+                                    </button>
+                                    <a x-show="attachment.is_image" :href="attachment.local_url || attachment.url" target="_blank" rel="noopener" class="block h-full w-full">
+                                        <img :src="attachment.local_url || attachment.preview_url || attachment.url" :alt="attachment.name"
+                                            class="h-full w-full object-cover">
+                                    </a>
+                                    <div x-show="attachment.is_video" class="relative h-full w-full bg-black">
+                                        <video :src="attachment.local_url || attachment.preview_url || attachment.url" class="h-full w-full object-cover" muted playsinline preload="metadata"></video>
+                                    </div>
+                                    <a x-show="!attachment.is_image && !attachment.is_video" :href="attachment.local_url || attachment.url" target="_blank" rel="noopener"
+                                        class="flex flex-col items-center justify-center gap-1.5 px-3 py-4 text-center min-h-28 h-full">
+                                        <span class="text-[10px] font-bold uppercase text-slate-300" x-text="attachment.ext || 'FILE'"></span>
+                                        <span class="text-[11px] truncate w-full text-slate-300" x-text="attachment.name"></span>
+                                    </a>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                    <template x-if="parentMessage.content_html">
+                        <div class="text-sm text-slate-200 whitespace-pre-wrap" x-html="parentMessage.content_html"></div>
+                    </template>
+                    <template x-if="parentMessage.content && !parentMessage.content_html">
+                        <p class="text-sm text-slate-200 whitespace-pre-wrap" x-text="parentMessage.content"></p>
+                    </template>
+                </div>
+            </template>
         </div>
 
         <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pr-1" x-ref="messagesContainer">

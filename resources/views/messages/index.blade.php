@@ -24,7 +24,9 @@
             cryptoSharesUrl: @js(route('messages.crypto.shares', [$chatType, $chatId])),
             cryptoPublicKeyUrl: @js(route('messages.crypto.public-key')),
             callSignalUrl: @js(route('messages.call.signal', [$chatType, $chatId])),
+            callActiveUrl: @js(route('messages.call.active', [$chatType, $chatId])),
             currentUserName: @js(auth()->user()->displayLabel()),
+            activeCall: @js($activeCall),
         })"
         x-init="init()">
 
@@ -67,6 +69,19 @@
                     </svg>
                 </button>
             </div>
+        </div>
+
+        <div x-show="activeCall && callState === 'idle' && Number(activeCall.from_user_id) !== Number(currentUserId)" x-cloak
+            class="mb-3 shrink-0 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+            <div class="min-w-0">
+                <p class="text-sm text-emerald-200 font-medium"
+                    x-text="(activeCall?.from_user_name || 'Someone') + ' started a ' + (activeCall?.call_type === 'video' ? 'video' : 'voice') + ' call'"></p>
+                <p class="text-xs text-emerald-300/70">Join to connect with people already in the call.</p>
+            </div>
+            <button type="button" @click="joinActiveCall()"
+                class="shrink-0 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold">
+                Join call
+            </button>
         </div>
 
         <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pr-1" x-ref="messagesContainer">

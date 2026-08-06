@@ -306,13 +306,20 @@
 
                 <div class="ml-auto flex items-center gap-3">
                     @auth
+                        @php
+                            $showChatBrowse = !auth()->user()->isOwner() && (
+                                request()->routeIs('messages.*')
+                                || request()->routeIs('groups.*')
+                                || request()->routeIs('merge-sessions.*')
+                            );
+                        @endphp
                         @if(auth()->user()->isOwner())
                             <div class="hidden md:block">
                                 <input type="search" x-model="ownerSearch" placeholder="Search tenants, users…"
                                     class="bg-surface-200 border border-white/10 text-white text-xs rounded-lg px-3 py-1.5 w-48 focus:outline-none focus:ring-1 focus:ring-brand-500/50"
                                     @keydown.enter.prevent>
                             </div>
-                        @else
+                        @elseif($showChatBrowse)
                             <button type="button" onclick="window.__openChatSearch && window.__openChatSearch()"
                                 class="inline-flex items-center gap-1.5 p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition"
                                 title="Search chats">
@@ -377,11 +384,18 @@
 
     @include('partials.confirm-dialog')
     @auth
-        @unless(auth()->user()->isOwner())
+        @php
+            $loadChatBrowse = !auth()->user()->isOwner() && (
+                request()->routeIs('messages.*')
+                || request()->routeIs('groups.*')
+                || request()->routeIs('merge-sessions.*')
+            );
+        @endphp
+        @if($loadChatBrowse)
             @include('partials.chat-crypto')
             @include('partials.chat-search-index')
             @include('partials.chat-browse-ui')
-        @endunless
+        @endif
     @endauth
 
     @stack('scripts')

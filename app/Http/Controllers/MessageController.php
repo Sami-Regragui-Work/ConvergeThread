@@ -207,6 +207,7 @@ class MessageController extends Controller
             $chatable->getMorphClass(),
             $chatable->id,
         );
+        $activeCall = app(\App\Services\CallSessionService::class)->active($chatType, (int) $chatId);
 
         return view('messages.index', compact(
             'chatable',
@@ -217,6 +218,7 @@ class MessageController extends Controller
             'mentionIds',
             'mentionSuggestions',
             'chatMuted',
+            'activeCall',
         ));
     }
 

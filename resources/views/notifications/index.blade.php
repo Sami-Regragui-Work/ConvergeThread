@@ -38,6 +38,13 @@
                         <p class="text-sm text-white">{{ $data['summary'] ?? 'New permissions' }}</p>
                     @elseif(($data['type'] ?? '') === 'merge_session')
                         <p class="text-sm text-white">Merge session started for <span class="font-semibold">{{ $data['group_name'] ?? '' }}</span></p>
+                    @elseif(($data['type'] ?? '') === 'incoming_call')
+                        <p class="text-sm text-white">
+                            <span class="font-semibold">{{ $data['author_name'] ?? 'Someone' }}</span>
+                            started a {{ ($data['call_type'] ?? '') === 'video' ? 'video' : 'voice' }} call
+                            in <span class="font-semibold">{{ $data['chat_label'] ?? 'chat' }}</span>
+                        </p>
+                        <p class="text-xs text-slate-500 mt-1">{{ $data['preview'] ?? 'Tap to join' }}</p>
                     @else
                         <p class="text-sm text-white">
                             <span class="font-semibold">{{ $data['author_name'] ?? 'Someone' }}</span> mentioned you
