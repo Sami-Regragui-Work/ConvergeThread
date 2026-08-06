@@ -56,6 +56,12 @@
 - Duo create/delete bumps owner/workspace live sync
 - `composer run serve` starts HTTP + Reverb together
 
+
+### E2EE chat
+- Client-side Web Crypto E2EE for message text and attachments
+- Per-user ECDH identity keys (private key in browser) + per-chat AES room keys
+- Server stores ciphertext only; notifications show generic encrypted previews
+
 ---
 
 ## Todo
