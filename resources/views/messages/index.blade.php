@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title', 'Messages')
-@section('fill-height')
+@section('fill-height', true)
 
 @section('content')
     <div class="flex flex-1 min-h-0 flex-col px-4 py-3 sm:px-6"
@@ -215,18 +215,24 @@
                         </div>
                     </div>
                     <div x-show="filePreviews.length" x-cloak class="flex flex-wrap gap-2">
-                        <template x-for="(preview, index) in filePreviews" :key="index">
+                        <template x-for="(preview, index) in filePreviews" :key="preview.key || index">
                             <div class="relative group/file rounded-xl border border-white/10 bg-surface-200 overflow-hidden w-20 h-20 shrink-0">
                                 <img x-show="preview.isImage" :src="preview.url" :alt="preview.name" class="h-full w-full object-cover min-w-16 min-h-16 max-w-20 max-h-20">
-                                <div x-show="!preview.isImage" class="h-full w-full flex flex-col items-center justify-center px-1.5 text-center gap-0.5">
-                                    <span class="text-[9px] font-bold uppercase text-slate-400" x-text="(preview.name.split('.').pop() || 'file').slice(0,5)"></span>
+                                <div x-show="preview.isVideo" class="relative h-full w-full bg-black">
+                                    <video :src="preview.url" class="h-full w-full object-cover" muted playsinline></video>
+                                    <span class="absolute inset-0 flex items-center justify-center text-white text-xs">▶</span>
+                                </div>
+                                <div x-show="!preview.isImage && !preview.isVideo" class="h-full w-full flex flex-col items-center justify-center px-1.5 text-center gap-0.5">
+                                    <span class="text-[9px] font-bold uppercase text-slate-400" x-text="preview.ext"></span>
                                     <span class="text-[9px] text-slate-500 truncate w-full" x-text="preview.name"></span>
+                                    <span class="text-[9px] text-slate-600" x-text="preview.sizeLabel"></span>
                                 </div>
                                 <button type="button" @click="removeFile(index)"
                                     class="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white text-xs opacity-0 group-hover/file:opacity-100 transition">×</button>
                             </div>
                         </template>
                     </div>
+                    <p x-show="sendError" x-cloak class="text-xs text-red-400" x-text="sendError"></p>
                 </form>
             </template>
             <template x-if="!canSend">

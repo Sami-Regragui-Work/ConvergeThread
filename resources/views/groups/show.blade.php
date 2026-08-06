@@ -37,7 +37,7 @@
                 @can('delete', $group)
                     <form method="POST" action="{{ route('groups.destroy', $group) }}">
                         @csrf @method('DELETE')
-                        <button type="submit" onclick="return confirm('Delete this group?')"
+                        <button type="button" @click="$dispatch('confirm-action', { message: 'Delete this group?', form: $el.closest('form') })"
                             class="inline-flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm px-4 py-2 rounded-xl transition">
                             Delete
                         </button>

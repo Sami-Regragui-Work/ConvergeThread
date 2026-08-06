@@ -11,7 +11,7 @@
             @can('delete', $mergeSession)
                 <form method="POST" action="{{ route('merge-sessions.destroy', $mergeSession) }}">
                     @csrf @method('DELETE')
-                    <button type="submit" onclick="return confirm('End this merge session?')"
+                    <button type="button" @click="$dispatch('confirm-action', { message: 'End this merge session?', form: $el.closest('form') })"
                         class="text-xs text-red-400 hover:text-red-300 transition px-3 py-1.5 rounded-lg hover:bg-red-500/10">
                         End Session
                     </button>

@@ -42,7 +42,7 @@
                                 @can('delete', $role)
                                     <form method="POST" action="{{ route('tenant-roles.destroy', $role) }}">
                                         @csrf @method('DELETE')
-                                        <button type="submit" onclick="return confirm('Delete role?')"
+                                        <button type="button" @click="$dispatch('confirm-action', { message: 'Delete this role?', form: $el.closest('form') })"
                                             class="p-2 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"

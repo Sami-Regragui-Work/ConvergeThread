@@ -75,7 +75,7 @@
                             <form method="POST" action="{{ route('groups.duos.destroy', [$group, $duo]) }}"
                                 class="opacity-0 group-hover:opacity-100 transition">
                                 @csrf @method('DELETE')
-                                <button type="submit" onclick="return confirm('Delete this duo?')"
+                                <button type="button" @click="$dispatch('confirm-action', { message: 'Delete this duo?', form: $el.closest('form') })"
                                     class="p-2 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"

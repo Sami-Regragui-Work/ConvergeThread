@@ -391,7 +391,7 @@ class MessageController extends Controller
         return $this->streamPublicFile(
             $attachment->file_path,
             $attachment->original_name ?? basename($attachment->file_path),
-            $attachment->isImage(),
+            $attachment->isImage() || $attachment->isVideo(),
         );
     }
 

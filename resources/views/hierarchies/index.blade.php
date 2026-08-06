@@ -55,7 +55,7 @@
                                         </p>
                                         @if($level->level > 0)
                                             <form method="POST" action="{{ route('hierarchies.levels.destroy', $level) }}"
-                                                onsubmit="return confirm('Remove this level?')">
+                                                @submit.prevent="$dispatch('confirm-action', { message: 'Remove this level?', form: $event.target })">
                                                 @csrf @method('DELETE')
                                                 <button type="submit" class="text-xs text-red-400 hover:text-red-300">Remove level</button>
                                             </form>

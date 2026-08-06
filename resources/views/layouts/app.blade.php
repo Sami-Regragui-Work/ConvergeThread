@@ -44,6 +44,17 @@
             color: #e2e8f0;
             font-family: 'Inter', system-ui, sans-serif;
         }
+
+        .mention-pill {
+            display: inline;
+            padding: 0.05rem 0.35rem;
+            margin: 0 0.05rem;
+            border-radius: 0.375rem;
+            font-weight: 600;
+            background-color: rgba(99, 102, 241, 0.18);
+            box-decoration-break: clone;
+            -webkit-box-decoration-break: clone;
+        }
     </style>
 </head>
 
@@ -245,7 +256,10 @@
 
             {{-- Main content --}}
             <main class="flex flex-1 flex-col min-h-0 @hasSection('fill-height') overflow-hidden @else overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 @endif">
-                <div class="@hasSection('fill-height') flex flex-1 min-h-0 flex-col w-full @else w-full max-w-7xl mx-auto @endif">
+                <div @class([
+                    'flex flex-1 min-h-0 flex-col w-full' => View::hasSection('fill-height'),
+                    'w-full max-w-7xl mx-auto' => ! View::hasSection('fill-height'),
+                ])>
                     @unless(View::hasSection('fill-height'))
                         @include('partials.breadcrumbs')
                         @include('partials.validation-errors')
@@ -255,6 +269,8 @@
             </main>
         </div>
     </div>
+
+    @include('partials.confirm-dialog')
 
     @stack('scripts')
 </body>

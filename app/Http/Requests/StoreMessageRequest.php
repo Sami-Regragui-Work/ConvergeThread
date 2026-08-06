@@ -24,12 +24,21 @@ class StoreMessageRequest extends FormRequest
     {
         return [
             'content' => 'required_without_all:file,files|nullable|string|max:5000',
-            'file' => 'nullable|file|max:10240',
-            'files' => 'nullable|array',
-            'files.*' => 'file|max:10240',
+            'file' => 'nullable|file|max:51200',
+            'files' => 'nullable|array|max:20',
+            'files.*' => 'file|max:51200',
             'parent_id' => 'nullable|exists:messages,id',
             'mention_user_ids' => 'nullable|array',
             'mention_user_ids.*' => 'integer|exists:users,id',
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'files.*.max' => 'Each file must be 50 MB or smaller.',
+            'file.max' => 'Each file must be 50 MB or smaller.',
+            'files.max' => 'You can attach at most 20 files per message.',
         ];
     }
 }

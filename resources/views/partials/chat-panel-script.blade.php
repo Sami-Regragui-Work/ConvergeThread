@@ -19,6 +19,8 @@
             files: [],
             filePreviews: [],
             sending: false,
+            sendError: '',
+            maxFileBytes: 50 * 1024 * 1024,
             pollTimer: null,
             mentionQueue: [...(config.mentionIds ?? [])],
             mentionIndex: 0,
@@ -214,14 +216,63 @@
                 this.filePreviews = [];
             },
 
-            onFilesChange(event) {
-                this.revokeFilePreviews();
-                this.files = [...(event.target.files || [])];
-                this.filePreviews = this.files.map(file => ({
+            formatBytes(bytes) {
+                if (!bytes && bytes !== 0) return '';
+                const units = ['B', 'KB', 'MB', 'GB'];
+                let size = bytes;
+                let unit = 0;
+                while (size >= 1024 && unit < units.length - 1) {
+                    size /= 1024;
+                    unit++;
+                }
+                return `${unit === 0 ? size : size.toFixed(1)} ${units[unit]}`;
+            },
+
+            fileKey(file) {
+                return [file.name, file.size, file.lastModified].join('::');
+            },
+
+            buildPreview(file) {
+                const isImage = file.type.startsWith('image/');
+                const isVideo = file.type.startsWith('video/');
+                return {
+                    key: this.fileKey(file),
                     name: file.name,
-                    url: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
-                    isImage: file.type.startsWith('image/'),
-                }));
+                    url: (isImage || isVideo) ? URL.createObjectURL(file) : null,
+                    isImage,
+                    isVideo,
+                    sizeLabel: this.formatBytes(file.size),
+                    ext: (file.name.split('.').pop() || 'file').slice(0, 5).toUpperCase(),
+                };
+            },
+
+            onFilesChange(event) {
+                const incoming = [...(event.target.files || [])];
+                if (!incoming.length) return;
+
+                this.sendError = '';
+                const existing = new Set(this.files.map(f => this.fileKey(f)));
+                const accepted = [];
+
+                for (const file of incoming) {
+                    if (file.size > this.maxFileBytes) {
+                        this.sendError = `"${file.name}" is larger than 50 MB.`;
+                        continue;
+                    }
+                    const key = this.fileKey(file);
+                    if (existing.has(key)) continue;
+                    existing.add(key);
+                    accepted.push(file);
+                }
+
+                for (const file of accepted) {
+                    this.files.push(file);
+                    this.filePreviews.push(this.buildPreview(file));
+                }
+
+                // Reset input so the same files can be re-picked later if needed,
+                // without re-injecting already staged files on the next change.
+                if (this.$refs.fileInput) this.$refs.fileInput.value = '';
             },
 
             removeFile(index) {
@@ -230,9 +281,7 @@
                 }
                 this.files.splice(index, 1);
                 this.filePreviews.splice(index, 1);
-                if (!this.files.length && this.$refs.fileInput) {
-                    this.$refs.fileInput.value = '';
-                }
+                if (this.$refs.fileInput) this.$refs.fileInput.value = '';
             },
 
             startEdit(message) {
@@ -281,6 +330,7 @@
                 if (!this.draft.trim() && !this.files.length) return;
 
                 this.sending = true;
+                this.sendError = '';
                 const formData = new FormData();
 
                 if (this.draft.trim()) {
@@ -310,7 +360,17 @@
                         body: formData,
                     });
 
-                    if (!response.ok) return;
+                    if (!response.ok) {
+                        let message = 'Could not send message.';
+                        try {
+                            const err = await response.json();
+                            const first = err.message
+                                || Object.values(err.errors || {}).flat()[0];
+                            if (first) message = first;
+                        } catch (e) {}
+                        this.sendError = message;
+                        return;
+                    }
 
                     const data = await response.json();
                     if (data.message) {
@@ -322,6 +382,7 @@
                     this.selectedUserIds = [];
                     if (this.$refs.fileInput) this.$refs.fileInput.value = '';
                 } catch (error) {
+                    this.sendError = 'Network error while sending. Try again.';
                 } finally {
                     this.sending = false;
                 }

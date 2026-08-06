@@ -235,7 +235,7 @@ class MentionService
 
         $escaped = preg_replace(
             '/@(all|selected)\b/i',
-            '<span class="text-brand-300 font-semibold">@$1</span>',
+            '<span class="mention-pill text-brand-300">@$1</span>',
             $escaped,
         ) ?? $escaped;
 
@@ -244,30 +244,27 @@ class MentionService
             function (array $matches) use ($roleColors) {
                 $roleName = $matches[1];
                 $color = $roleColors[$roleName] ?? null;
-                $style = $color ? ' style="color: '.e($color).'"' : ' class="text-brand-300"';
+                $style = $color ? ' style="color: '.e($color).'"' : '';
 
-                return '<span class="font-semibold"'.$style.'>@role:'.e($roleName).'</span>';
+                return '<span class="mention-pill'.($color ? '' : ' text-brand-300').'"'.$style.'>@role:'.e($roleName).'</span>';
             },
             $escaped,
         ) ?? $escaped;
 
         $escaped = preg_replace(
             '/@group[:.]([A-Za-z0-9 _-]+)/',
-            '<span class="text-violet-300 font-semibold">@group:$1</span>',
+            '<span class="mention-pill text-violet-300">@group:$1</span>',
             $escaped,
         ) ?? $escaped;
 
         $escaped = preg_replace_callback(
             '/@([A-Za-z0-9_-]+)\.([A-Za-z0-9_]+)/',
-            function (array $matches) use ($mergeUserLabels, $roleColors, $usernameLabels) {
+            function (array $matches) use ($mergeUserLabels) {
                 $key = strtolower($matches[1].'.'.$matches[2]);
                 $label = $mergeUserLabels[$key] ?? null;
+                $text = $label ? '@'.$label : '@'.$matches[1].'.'.$matches[2];
 
-                if ($label) {
-                    return '<span class="text-brand-300 font-semibold">'.e($label).'</span>';
-                }
-
-                return '<span class="text-brand-300 font-semibold">@'.e($matches[1]).'.'.e($matches[2]).'</span>';
+                return '<span class="mention-pill text-brand-300">'.e($text).'</span>';
             },
             $escaped,
         ) ?? $escaped;
@@ -277,11 +274,11 @@ class MentionService
             function (array $matches) use ($usernameLabels, $roleColors) {
                 $token = $matches[1];
                 $label = $usernameLabels[strtolower($token)] ?? null;
-                $display = $label ?? '@'.$token;
+                $text = $label ? '@'.$label : '@'.$token;
                 $color = $label ? ($roleColors['_user_'.strtolower($token)] ?? null) : null;
-                $style = $color ? ' style="color: '.e($color).'"' : ' class="text-brand-300"';
+                $style = $color ? ' style="color: '.e($color).'"' : '';
 
-                return '<span class="font-semibold"'.$style.'>'.e($display).'</span>';
+                return '<span class="mention-pill'.($color ? '' : ' text-brand-300').'"'.$style.'>'.e($text).'</span>';
             },
             $escaped,
         ) ?? $escaped;

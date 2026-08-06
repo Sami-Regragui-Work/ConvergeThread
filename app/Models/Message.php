@@ -78,6 +78,7 @@ class Message extends Model
             in_array(strtolower($legacyExt), ['ppt', 'pptx', 'odp'], true) => 'ppt',
             in_array(strtolower($legacyExt), ['doc', 'docx', 'odt', 'rtf'], true) => 'doc',
             in_array(strtolower($legacyExt), ['xls', 'xlsx', 'ods', 'csv'], true) => 'sheet',
+            in_array(strtolower($legacyExt), ['mp4', 'mov', 'webm', 'mkv'], true) => 'video',
             default => 'file',
         };
 
@@ -87,14 +88,21 @@ class Message extends Model
             ->all();
 
         if ($attachmentPayload === [] && $legacyFileUrl) {
+            $legacySize = $this->file_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($this->file_path)
+                ? \Illuminate\Support\Facades\Storage::disk('public')->size($this->file_path)
+                : null;
+
             $attachmentPayload = [[
                 'id' => null,
                 'url' => $legacyFileUrl,
-                'preview_url' => $legacyIsImage ? $legacyFileUrl : null,
+                'preview_url' => ($legacyIsImage || $legacyKind === 'video') ? $legacyFileUrl : null,
                 'name' => $legacyName,
                 'is_image' => (bool) $legacyIsImage,
+                'is_video' => $legacyKind === 'video',
                 'kind' => $legacyKind,
                 'ext' => $legacyExt,
+                'size' => $legacySize,
+                'size_label' => MessageAttachment::formatBytes($legacySize),
             ]];
         }
 

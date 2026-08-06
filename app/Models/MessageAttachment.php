@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class MessageAttachment extends Model
@@ -32,8 +33,12 @@ class MessageAttachment extends Model
 
     public function isImage(): bool
     {
-        return (bool) preg_match('/\.(jpe?g|png|gif|webp)$/i', $this->displayName())
-            || (bool) preg_match('/\.(jpe?g|png|gif|webp)$/i', $this->file_path);
+        return $this->kind() === 'image';
+    }
+
+    public function isVideo(): bool
+    {
+        return $this->kind() === 'video';
     }
 
     public function kind(): string
@@ -54,19 +59,52 @@ class MessageAttachment extends Model
         };
     }
 
+    public function sizeBytes(): ?int
+    {
+        if (!$this->file_path || !Storage::disk('public')->exists($this->file_path)) {
+            return null;
+        }
+
+        return Storage::disk('public')->size($this->file_path);
+    }
+
+    public static function formatBytes(?int $bytes): ?string
+    {
+        if ($bytes === null) {
+            return null;
+        }
+
+        $units = ['B', 'KB', 'MB', 'GB'];
+        $size = (float) $bytes;
+        $unit = 0;
+
+        while ($size >= 1024 && $unit < count($units) - 1) {
+            $size /= 1024;
+            $unit++;
+        }
+
+        return round($size, $unit === 0 ? 0 : 1).' '.$units[$unit];
+    }
+
     public function toPayload(Message $message): array
     {
-        $isImage = $this->isImage();
+        $kind = $this->kind();
+        $isImage = $kind === 'image';
+        $isVideo = $kind === 'video';
         $url = route('messages.attachments.download', [$message, $this]);
+        $size = $this->sizeBytes();
 
         return [
             'id' => $this->id,
             'url' => $url,
-            'preview_url' => $isImage ? $url : null,
+            'preview_url' => ($isImage || $isVideo) ? $url : null,
             'name' => $this->displayName(),
             'is_image' => $isImage,
-            'kind' => $this->kind(),
+            'is_video' => $isVideo,
+            'kind' => $kind,
             'ext' => Str::limit($this->extension(), 5, ''),
+            'size' => $size,
+            'size_label' => self::formatBytes($size),
         ];
     }
 }
