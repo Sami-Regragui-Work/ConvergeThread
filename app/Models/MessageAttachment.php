@@ -80,6 +80,8 @@ class MessageAttachment extends Model
             in_array($ext, ['zip', 'rar', '7z', 'tar', 'gz'], true) => 'archive',
             in_array($ext, ['mp3', 'wav', 'ogg', 'm4a', 'aac'], true) => 'audio',
             in_array($ext, ['mp4', 'mov', 'webm', 'mkv'], true) => 'video',
+            in_array($ext, ['html', 'htm', 'css', 'scss', 'sass', 'less', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'vue', 'svelte', 'php', 'py', 'rb', 'go', 'rs', 'java', 'c', 'cpp', 'h', 'hpp', 'cs', 'sh', 'bash', 'zsh', 'sql', 'ini', 'conf', 'env', 'yaml', 'yml', 'toml', 'json', 'xml'], true) => 'code',
+            in_array($ext, ['txt', 'md', 'markdown', 'log', 'rst'], true) => 'text',
             default => 'file',
         };
     }

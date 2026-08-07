@@ -137,6 +137,9 @@ class Message extends Model
             in_array(strtolower($legacyExt), ['doc', 'docx', 'odt', 'rtf'], true) => 'doc',
             in_array(strtolower($legacyExt), ['xls', 'xlsx', 'ods', 'csv'], true) => 'sheet',
             in_array(strtolower($legacyExt), ['mp4', 'mov', 'webm', 'mkv'], true) => 'video',
+            in_array(strtolower($legacyExt), ['zip', 'rar', '7z', 'tar', 'gz'], true) => 'archive',
+            in_array(strtolower($legacyExt), ['html', 'htm', 'css', 'js', 'ts', 'php', 'py', 'rb', 'go', 'rs', 'java', 'c', 'cpp', 'sh', 'sql', 'json', 'xml', 'yaml', 'yml', 'toml'], true) => 'code',
+            in_array(strtolower($legacyExt), ['txt', 'md', 'markdown', 'log', 'rst'], true) => 'text',
             default => 'file',
         };
 

@@ -73,7 +73,10 @@
                             'bg-orange-950/40': attachment.kind === 'ppt',
                             'bg-blue-950/40': attachment.kind === 'doc',
                             'bg-emerald-950/40': attachment.kind === 'sheet',
-                            'bg-slate-900': !['pdf','ppt','doc','sheet'].includes(attachment.kind)
+                            'bg-amber-950/40': attachment.kind === 'archive',
+                            'bg-cyan-950/40': attachment.kind === 'code',
+                            'bg-fuchsia-950/40': attachment.kind === 'text',
+                            'bg-slate-900': !['pdf','ppt','doc','sheet','archive','code','text'].includes(attachment.kind)
                         }">
                         <img x-show="attachment.thumb_url" x-cloak :src="attachment.thumb_url" alt=""
                             class="absolute inset-0 w-full h-full object-cover object-top">
@@ -83,7 +86,10 @@
                                 'text-orange-300': attachment.kind === 'ppt',
                                 'text-blue-300': attachment.kind === 'doc',
                                 'text-emerald-300': attachment.kind === 'sheet',
-                                'text-slate-300': !['pdf','ppt','doc','sheet'].includes(attachment.kind)
+                                'text-amber-300': attachment.kind === 'archive',
+                                'text-cyan-300': attachment.kind === 'code',
+                                'text-fuchsia-300': attachment.kind === 'text',
+                                'text-slate-300': !['pdf','ppt','doc','sheet','archive','code','text'].includes(attachment.kind)
                             }"
                             x-text="attachment.ext || 'FILE'"></span>
                     </div>
@@ -94,7 +100,10 @@
                                 'bg-orange-500 text-white': attachment.kind === 'ppt',
                                 'bg-blue-500 text-white': attachment.kind === 'doc',
                                 'bg-emerald-500 text-white': attachment.kind === 'sheet',
-                                'bg-white/15 text-slate-200': !['pdf','ppt','doc','sheet'].includes(attachment.kind)
+                                'bg-amber-500 text-white': attachment.kind === 'archive',
+                                'bg-cyan-500 text-white': attachment.kind === 'code',
+                                'bg-fuchsia-500 text-white': attachment.kind === 'text',
+                                'bg-white/15 text-slate-200': !['pdf','ppt','doc','sheet','archive','code','text'].includes(attachment.kind)
                             }"
                             x-text="(attachment.ext || 'FILE').slice(0, 4)"></span>
                         <div class="min-w-0 flex-1">

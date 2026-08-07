@@ -37,6 +37,9 @@
                                 'ppt' => 'bg-orange-500/20 text-orange-300',
                                 'doc' => 'bg-blue-500/20 text-blue-300',
                                 'sheet' => 'bg-emerald-500/20 text-emerald-300',
+                                'archive' => 'bg-amber-500/20 text-amber-300',
+                                'code' => 'bg-cyan-500/20 text-cyan-300',
+                                'text' => 'bg-fuchsia-500/20 text-fuchsia-300',
                                 default => 'bg-white/10 text-slate-300',
                             } }}">
                             {{ $attachment['ext'] ?? 'FILE' }}
