@@ -106,6 +106,7 @@
         .ct-md-body h3.ct-md-h { font-size: 1em; }
         .ct-md-body .ct-md-list { margin: 0.35em 0; padding-left: 1.25em; list-style: disc; }
         .ct-md-body ol.ct-md-list { list-style: decimal; }
+        .ct-md-body .ct-md-list .ct-md-list { margin: 0.2em 0; }
         .ct-md-body .ct-md-code {
             font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
             font-size: 0.85em;

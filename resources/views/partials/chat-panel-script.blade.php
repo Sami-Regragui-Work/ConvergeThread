@@ -999,6 +999,10 @@
                     }
                 }
 
+                if (event.key === 'Tab' && this.draftFormat === 'markdown') {
+                    if (this.handleMarkdownTab(event)) return;
+                }
+
                 if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
                     event.preventDefault();
                     if (!this.sending && !this.recording && (this.draft.trim() || this.files.length)) {
@@ -1023,6 +1027,110 @@
                 }
             },
 
+            markdownFenceOpen(before) {
+                return ((before.match(/```/g) || []).length % 2) === 1;
+            },
+
+            countTableCols(line) {
+                let t = line.trim();
+                if (t.startsWith('|')) t = t.slice(1);
+                if (t.endsWith('|')) t = t.slice(0, -1);
+                return Math.max(1, t.split('|').length);
+            },
+
+            isTableSepLine(line) {
+                return /^\s*\|?[\s:|-]+\|[\s:|-]*\|?\s*$/.test(line)
+                    && /-/.test(line)
+                    && line.includes('|');
+            },
+
+            isTableRowLine(line) {
+                const t = line.trim();
+                if (!t.includes('|')) return false;
+                if (this.isTableSepLine(t)) return false;
+                return /^\|?.+\|.+\|?$/.test(t) || /^\|(\s*\|)+\s*$/.test(t);
+            },
+
+            isEmptyTableRow(line) {
+                if (!this.isTableRowLine(line) && !/^\s*\|[\s|]*\|\s*$/.test(line)) return false;
+                let t = line.trim();
+                if (t.startsWith('|')) t = t.slice(1);
+                if (t.endsWith('|')) t = t.slice(0, -1);
+                return t.split('|').every((c) => c.trim() === '');
+            },
+
+            tableSepRow(cols) {
+                return '|' + Array.from({ length: cols }, () => '-').join('|') + '|';
+            },
+
+            tableEmptyRow(cols) {
+                // "|  |  |" — two spaces between pipes
+                return '|' + Array.from({ length: cols }, () => '  ').join('|') + '|';
+            },
+
+            applyDraftEdit(el, next, caret) {
+                this.draft = next;
+                this.$nextTick(() => {
+                    el.selectionStart = el.selectionEnd = caret;
+                    this.autoResizeDraft();
+                });
+            },
+
+            handleMarkdownTab(event) {
+                const el = this.$refs.draftInput;
+                if (!el) return false;
+
+                const value = el.value;
+                const start = el.selectionStart ?? 0;
+                const end = el.selectionEnd ?? 0;
+                const before = value.slice(0, start);
+                const after = value.slice(end);
+                const lineStart = before.lastIndexOf('\n') + 1;
+                const fullLineEnd = (() => {
+                    const fromStart = value.indexOf('\n', lineStart);
+                    return fromStart === -1 ? value.length : fromStart;
+                })();
+                const line = value.slice(lineStart, fullLineEnd);
+
+                // Inside fenced code: Tab inserts 4 spaces (Shift+Tab removes up to 4 leading spaces at caret).
+                if (this.markdownFenceOpen(before)) {
+                    event.preventDefault();
+                    if (event.shiftKey) {
+                        const left = before;
+                        const m = left.match(/(?:^|\n)( {1,4})$/);
+                        if (m) {
+                            const remove = m[1].length;
+                            const next = value.slice(0, start - remove) + after;
+                            this.applyDraftEdit(el, next, start - remove);
+                        }
+                        return true;
+                    }
+                    const insert = '    ';
+                    this.applyDraftEdit(el, before + insert + after, start + insert.length);
+                    return true;
+                }
+
+                const list = line.match(/^(\s*)([-*+]|\d+\.)(\s+)(.*)$/);
+                if (!list) return false;
+
+                event.preventDefault();
+                const indent = list[1];
+                if (event.shiftKey) {
+                    if (indent.length < 2) return true;
+                    const trimmed = indent.slice(2);
+                    const nextLine = trimmed + list[2] + list[3] + list[4];
+                    const next = value.slice(0, lineStart) + nextLine + value.slice(fullLineEnd);
+                    const caret = Math.max(lineStart, start - 2);
+                    this.applyDraftEdit(el, next, caret);
+                    return true;
+                }
+
+                const nextLine = '  ' + line;
+                const next = value.slice(0, lineStart) + nextLine + value.slice(fullLineEnd);
+                this.applyDraftEdit(el, next, start + 2);
+                return true;
+            },
+
             handleMarkdownEnter(event) {
                 const el = this.$refs.draftInput;
                 if (!el) return false;
@@ -1036,31 +1144,23 @@
                 const after = value.slice(end);
                 const lineStart = before.lastIndexOf('\n') + 1;
                 const line = before.slice(lineStart);
+                const prevLineStart = before.lastIndexOf('\n', lineStart - 2) + 1;
+                const prevLine = lineStart > 0 ? before.slice(prevLineStart, lineStart - 1) : '';
 
                 // Inside fenced code block: let Shift+Enter insert a normal newline.
-                const fenceCount = (before.match(/```/g) || []).length;
-                if (fenceCount % 2 === 1) return false;
+                if (this.markdownFenceOpen(before)) return false;
 
                 const ul = line.match(/^(\s*)([-*+])\s+(.*)$/);
                 if (ul) {
                     event.preventDefault();
                     if (ul[3] === '') {
-                        // Empty bullet → exit list.
+                        // Empty bullet → exit list (keep indent level exit one step: clear marker).
                         const next = value.slice(0, lineStart) + after;
-                        this.draft = next;
-                        this.$nextTick(() => {
-                            el.selectionStart = el.selectionEnd = lineStart;
-                            this.autoResizeDraft();
-                        });
+                        this.applyDraftEdit(el, next, lineStart);
                         return true;
                     }
                     const insert = '\n' + ul[1] + ul[2] + ' ';
-                    this.draft = before + insert + after;
-                    const caret = start + insert.length;
-                    this.$nextTick(() => {
-                        el.selectionStart = el.selectionEnd = caret;
-                        this.autoResizeDraft();
-                    });
+                    this.applyDraftEdit(el, before + insert + after, start + insert.length);
                     return true;
                 }
 
@@ -1069,39 +1169,45 @@
                     event.preventDefault();
                     if (ol[3] === '') {
                         const next = value.slice(0, lineStart) + after;
-                        this.draft = next;
-                        this.$nextTick(() => {
-                            el.selectionStart = el.selectionEnd = lineStart;
-                            this.autoResizeDraft();
-                        });
+                        this.applyDraftEdit(el, next, lineStart);
                         return true;
                     }
                     const n = Number(ol[2]) + 1;
                     const insert = '\n' + ol[1] + n + '. ';
-                    this.draft = before + insert + after;
-                    const caret = start + insert.length;
-                    this.$nextTick(() => {
-                        el.selectionStart = el.selectionEnd = caret;
-                        this.autoResizeDraft();
-                    });
+                    this.applyDraftEdit(el, before + insert + after, start + insert.length);
                     return true;
                 }
 
-                // Table row: continue with same number of cells.
-                if (/^\s*\|?.+\|.+\|?\s*$/.test(line) && !/^\s*\|?[\s:|-]+\|[\s:|-]*\|?\s*$/.test(line)) {
+                // Tables: header → |-|-| → |  |  | … ; empty row exits.
+                if (this.isTableSepLine(line) || this.isTableRowLine(line) || this.isEmptyTableRow(line)) {
                     event.preventDefault();
-                    let t = line.trim();
-                    if (t.startsWith('|')) t = t.slice(1);
-                    if (t.endsWith('|')) t = t.slice(0, -1);
-                    const cols = t.split('|').length;
-                    const cells = Array.from({ length: cols }, () => ' ');
-                    const insert = '\n| ' + cells.join(' | ') + ' |';
-                    this.draft = before + insert + after;
-                    const caret = start + 3; // after "| "
-                    this.$nextTick(() => {
-                        el.selectionStart = el.selectionEnd = caret;
-                        this.autoResizeDraft();
-                    });
+                    const cols = this.countTableCols(line);
+
+                    if (this.isEmptyTableRow(line)) {
+                        const next = value.slice(0, lineStart) + after;
+                        this.applyDraftEdit(el, next, lineStart);
+                        return true;
+                    }
+
+                    if (this.isTableSepLine(line)) {
+                        const insert = '\n' + this.tableEmptyRow(cols);
+                        const caret = start + ('\n| ').length;
+                        this.applyDraftEdit(el, before + insert + after, caret);
+                        return true;
+                    }
+
+                    // Header or body row with content.
+                    if (!this.isTableSepLine(prevLine) && !this.isTableRowLine(prevLine)) {
+                        // First table line → insert separator |-|-|
+                        const insert = '\n' + this.tableSepRow(cols);
+                        this.applyDraftEdit(el, before + insert + after, start + insert.length);
+                        return true;
+                    }
+
+                    // After separator or another body row → empty data row |  |  |
+                    const insert = '\n' + this.tableEmptyRow(cols);
+                    const caret = start + ('\n| ').length;
+                    this.applyDraftEdit(el, before + insert + after, caret);
                     return true;
                 }
 

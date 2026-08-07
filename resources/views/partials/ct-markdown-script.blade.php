@@ -28,13 +28,40 @@
 
         const lines = text.split('\n');
         const out = [];
-        let listType = null;
+        /** @type {{ type: 'ul'|'ol', level: number }[]} */
+        let listStack = [];
         let paraParts = []; // { html, breakAfter: 'soft'|'hard'|null }
 
-        const flushList = () => {
-            if (!listType) return;
-            out.push(listType === 'ol' ? '</ol>' : '</ul>');
-            listType = null;
+        const flushListsDeeperThan = (level) => {
+            while (listStack.length && listStack[listStack.length - 1].level > level) {
+                const top = listStack.pop();
+                out.push(top.type === 'ol' ? '</ol>' : '</ul>');
+            }
+        };
+
+        const flushAllLists = () => {
+            while (listStack.length) {
+                const top = listStack.pop();
+                out.push(top.type === 'ol' ? '</ol>' : '</ul>');
+            }
+        };
+
+        const openList = (type, level, startNum) => {
+            flushListsDeeperThan(level);
+            let top = listStack[listStack.length - 1];
+            if (top && top.level === level && top.type !== type) {
+                listStack.pop();
+                out.push(top.type === 'ol' ? '</ol>' : '</ul>');
+                top = listStack[listStack.length - 1];
+            }
+            if (!top || top.level < level) {
+                listStack.push({ type, level });
+                if (type === 'ol') {
+                    out.push('<ol class="ct-md-list" start="' + startNum + '">');
+                } else {
+                    out.push('<ul class="ct-md-list">');
+                }
+            }
         };
 
         const flushPara = () => {
@@ -52,7 +79,6 @@
         };
 
         const inline = (line) => {
-            // Strip hard-break markers from the visible line text.
             let raw = line.replace(/(\\)$/, '').replace(/ {2}$/, '');
             let s = escape(raw);
             s = s.replace(/`([^`]+)`/g, '<code class="ct-md-code">$1</code>');
@@ -91,6 +117,8 @@
             return t.split('|').map((c) => c.trim());
         };
 
+        const listLevel = (ws) => Math.floor((ws || '').replace(/\t/g, '  ').length / 2);
+
         const isSpecial = (line) => {
             if (/^%%CODEBLOCK\d+%%\s*$/.test(line.trim())) return true;
             if (/^#{1,3}\s+/.test(line)) return true;
@@ -104,14 +132,14 @@
 
             if (/^%%CODEBLOCK\d+%%\s*$/.test(line.trim())) {
                 flushPara();
-                flushList();
+                flushAllLists();
                 out.push(line.trim().replace(/%%CODEBLOCK(\d+)%%/, (_, n) => blocks[Number(n)] || ''));
                 continue;
             }
 
             if (isTableRow(line) && i + 1 < lines.length && isTableSep(lines[i + 1])) {
                 flushPara();
-                flushList();
+                flushAllLists();
                 const header = splitRow(line);
                 i += 1;
                 const body = [];
@@ -137,7 +165,7 @@
             const heading = line.match(/^(#{1,3})\s+(.*)$/);
             if (heading) {
                 flushPara();
-                flushList();
+                flushAllLists();
                 const level = heading[1].length;
                 out.push('<h' + level + ' class="ct-md-h">' + inline(heading[2]) + '</h' + level + '>');
                 continue;
@@ -146,11 +174,8 @@
             const ul = line.match(/^(\s*)[-*+]\s+(.*)$/);
             if (ul) {
                 flushPara();
-                if (listType !== 'ul') {
-                    flushList();
-                    listType = 'ul';
-                    out.push('<ul class="ct-md-list">');
-                }
+                const level = listLevel(ul[1]);
+                openList('ul', level, 1);
                 out.push('<li>' + inline(ul[2]) + '</li>');
                 continue;
             }
@@ -158,36 +183,30 @@
             const ol = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
             if (ol) {
                 flushPara();
-                if (listType !== 'ol') {
-                    flushList();
-                    listType = 'ol';
-                    out.push('<ol class="ct-md-list" start="' + ol[2] + '">');
-                }
+                const level = listLevel(ol[1]);
+                openList('ol', level, Number(ol[2]));
                 out.push('<li>' + inline(ol[3]) + '</li>');
                 continue;
             }
 
             if (/^\s*$/.test(line)) {
                 flushPara();
-                flushList();
+                flushAllLists();
                 continue;
             }
 
-            // Paragraph text: soft newline → space; \ or two trailing spaces → <br>
-            flushList();
+            flushAllLists();
             const kind = hardBreakKind(line);
             paraParts.push({ html: inline(line), breakAfter: kind });
 
-            // Peek: if next line starts a block, flush now (breakAfter unused at end).
             const next = lines[i + 1];
             if (next === undefined || /^\s*$/.test(next) || isSpecial(next)
                 || (isTableRow(next) && i + 2 < lines.length && isTableSep(lines[i + 2]))) {
-                // Keep breakAfter only between parts; flushPara ignores last breakAfter.
                 flushPara();
             }
         }
         flushPara();
-        flushList();
+        flushAllLists();
 
         return out.join('\n');
     };

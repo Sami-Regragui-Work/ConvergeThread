@@ -83,17 +83,18 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-[10px] leading-relaxed">
             <p><span class="text-brand-300">**bold**</span> · <span class="text-brand-300">*italic*</span> · <span class="text-brand-300">`code`</span></p>
             <p><span class="text-brand-300">## Heading</span></p>
-            <p><span class="text-brand-300">- item</span> · <span class="text-brand-300">1. item</span></p>
+            <p><span class="text-brand-300">- item</span> · <span class="text-brand-300">1. item</span> · <span class="text-brand-300">Tab</span> nest / <span class="text-brand-300">Shift+Tab</span> un-nest</p>
             <p><span class="text-brand-300">[link](https://…)</span></p>
-            <p class="sm:col-span-2"><span class="text-brand-300">```js</span> … <span class="text-brand-300">```</span> fenced code</p>
-            <p class="sm:col-span-2"><span class="text-brand-300">| a | b |</span> then <span class="text-brand-300">|---|---|</span> then rows</p>
+            <p class="sm:col-span-2"><span class="text-brand-300">```py</span> … <span class="text-brand-300">```</span> · Tab indents 4 spaces inside fences</p>
+            <p class="sm:col-span-2"><span class="text-brand-300">|a|b|</span> → Shift+Enter → <span class="text-brand-300">|-|-|</span> → <span class="text-brand-300">|  |  |</span> (empty row exits)</p>
         </div>
         <div class="border-t border-white/5 pt-2 space-y-1 text-[10px] text-slate-400">
             <p><span class="text-white font-medium">Line breaks (no empty line):</span></p>
             <p>End a line with <span class="text-brand-300 font-mono">\</span> then Shift+Enter → hard break</p>
             <p>Or end with <span class="text-brand-300 font-mono">two spaces</span> then Shift+Enter</p>
             <p><span class="text-white font-medium">Plain Shift+Enter</span> stays in the same paragraph (soft break)</p>
-            <p><span class="text-white font-medium">Blank line</span> (Shift+Enter twice) → new paragraph</p>
+            <p><span class="text-white font-medium">Blank line</span> (Shift+Enter twice) → new paragraph / leave list or table</p>
+            <p><span class="text-white font-medium">Nested lists:</span> on a list line, Tab adds 2 spaces (ul↔ol mix OK); or type the spaces yourself</p>
         </div>
     </div>
 
