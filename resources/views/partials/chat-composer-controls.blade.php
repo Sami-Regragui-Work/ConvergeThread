@@ -112,11 +112,15 @@
             x-text="showMarkdownGuide ? 'Hide guide' : 'Show guide'"></button>
     </div>
 
+    <div x-show="draftFormat === 'markdown' && draft.trim()" x-cloak
+        class="max-h-40 overflow-y-auto overscroll-contain rounded-xl border border-brand-500/20 bg-surface-300/80 px-4 py-2.5 text-sm text-slate-200 ct-md-body"
+        x-html="draftMarkdownPreviewHtml()"></div>
+
     <div class="flex items-end gap-2 flex-wrap sm:flex-nowrap">
         <button type="button" @click="toggleMentionMenu()"
             class="shrink-0 w-10 h-10 rounded-xl border border-white/10 bg-surface-200 text-brand-400 hover:bg-white/5 transition font-bold"
             title="Mention someone">&#64;</button>
-        <div class="flex-1 min-w-[10rem] basis-[min(100%,12rem)] sm:basis-auto space-y-2">
+        <div class="flex-1 min-w-40 basis-[min(100%,12rem)] sm:basis-auto">
             <textarea x-ref="draftInput" x-model="draft" rows="1"
                 @input="onDraftInput(); autoResizeDraft()"
                 @keydown="onDraftKeydown($event)"
@@ -124,10 +128,7 @@
                 autocomplete="off"
                 placeholder="{{ $composerPlaceholder }}"
                 :disabled="sending"
-                class="w-full bg-surface-200 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition placeholder-slate-500 disabled:opacity-50 resize-none max-h-40 min-h-10 leading-5"></textarea>
-            <div x-show="draftFormat === 'markdown' && draft.trim()" x-cloak
-                class="max-h-48 overflow-y-auto rounded-xl border border-brand-500/20 bg-surface-300/80 px-4 py-2.5 text-sm text-slate-200 ct-md-body"
-                x-html="draftMarkdownPreviewHtml()"></div>
+                class="w-full bg-surface-200 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition placeholder-slate-500 disabled:opacity-50 resize-none overflow-y-hidden min-h-10 leading-5"></textarea>
         </div>
         <label class="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl border border-white/10 bg-surface-200 text-slate-400 hover:bg-white/5 hover:text-white cursor-pointer transition"
             title="Attach files (50 MB limit checked on send)">

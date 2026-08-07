@@ -54,6 +54,7 @@
 
         ::-webkit-scrollbar {
             width: 6px;
+            height: 6px;
         }
 
         ::-webkit-scrollbar-track {
@@ -61,8 +62,21 @@
         }
 
         ::-webkit-scrollbar-thumb {
-            background: #374151;
+            background: rgba(99, 102, 241, 0.35);
             border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.55);
+        }
+
+        ::-webkit-scrollbar-corner {
+            background: transparent;
+        }
+
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(99, 102, 241, 0.45) transparent;
         }
 
         body {

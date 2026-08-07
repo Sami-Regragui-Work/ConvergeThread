@@ -171,6 +171,7 @@
 
             focusDraft() {
                 this.$refs.draftInput?.focus();
+                this.autoResizeDraft();
             },
 
             hasVideoStage() {
@@ -180,8 +181,14 @@
             autoResizeDraft() {
                 const el = this.$refs.draftInput;
                 if (!el) return;
-                el.style.height = 'auto';
-                el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+                const maxPx = 160;
+                // Collapse first so scrollHeight shrinks when text is deleted.
+                el.style.overflowY = 'hidden';
+                el.style.height = '0px';
+                const needed = el.scrollHeight;
+                const next = Math.min(Math.max(needed, 40), maxPx);
+                el.style.height = next + 'px';
+                el.style.overflowY = needed > maxPx ? 'auto' : 'hidden';
             },
 
             draftMarkdownPreviewHtml() {

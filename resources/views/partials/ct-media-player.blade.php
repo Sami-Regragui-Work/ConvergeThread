@@ -42,7 +42,7 @@
         <input type="range" min="0" :max="Math.max(duration, 0.01)" step="0.01"
             :value="current"
             @input="seek($event.target.value)"
-            class="flex-1 min-w-[6rem] h-1.5 accent-brand-500 cursor-pointer">
+            class="flex-1 min-w-24 h-1.5 accent-brand-500 cursor-pointer">
         <span class="shrink-0 text-[10px] tabular-nums text-slate-400 min-w-16 text-right"
             x-text="formatTime(current) + ' / ' + formatTime(duration)"></span>
         <button type="button" @click="showSpeed = !showSpeed; if (showSpeed) showTrim = false; ensureControlsVisible()"
