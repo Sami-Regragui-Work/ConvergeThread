@@ -27,7 +27,7 @@
     </button>
 
     <div x-show="open" x-cloak x-ref="panel" @click.outside="open = false"
-        class="z-100 max-h-64 overflow-hidden rounded-xl border border-white/10 bg-surface-300 shadow-xl flex flex-col fixed"
+        class="z-200 max-h-64 overflow-hidden rounded-xl border border-white/10 bg-surface-300 shadow-xl flex flex-col fixed"
         :style="panelStyle">
         <div class="p-3 border-b border-white/5 space-y-2">
             <input type="text" x-model="search" placeholder="Search members…"
@@ -82,20 +82,35 @@
 
                         const rect = btn.getBoundingClientRect();
                         const width = Math.max(rect.width, 280);
-                        let top = rect.bottom + 8;
-                        let bottom = 'auto';
+                        const gap = 8;
+                        const preferredHeight = Math.min(320, window.innerHeight - 24);
+                        const spaceBelow = window.innerHeight - rect.bottom - gap;
+                        const spaceAbove = rect.top - gap;
 
-                        if (this.direction === 'dropup') {
-                            top = 'auto';
-                            bottom = (window.innerHeight - rect.top + 8) + 'px';
+                        let placeUp = this.direction === 'dropup';
+                        if (this.direction !== 'dropup') {
+                            // Auto-flip when there isn't enough room for the Done button.
+                            placeUp = spaceBelow < 220 && spaceAbove > spaceBelow;
                         }
 
-                        this.panelStyle = [
-                            'top:' + (top === 'auto' ? 'auto' : top + 'px'),
-                            'bottom:' + bottom,
-                            'left:' + rect.left + 'px',
+                        const available = Math.max(160, placeUp ? spaceAbove : spaceBelow);
+                        const maxHeight = Math.min(preferredHeight, available);
+
+                        const style = [
+                            'left:' + Math.min(rect.left, window.innerWidth - width - 8) + 'px',
                             'width:' + width + 'px',
-                        ].join(';');
+                            'max-height:' + maxHeight + 'px',
+                        ];
+
+                        if (placeUp) {
+                            style.push('top:auto');
+                            style.push('bottom:' + (window.innerHeight - rect.top + gap) + 'px');
+                        } else {
+                            style.push('top:' + (rect.bottom + gap) + 'px');
+                            style.push('bottom:auto');
+                        }
+
+                        this.panelStyle = style.join(';');
                     },
                     filtered() {
                         const q = this.search.toLowerCase();

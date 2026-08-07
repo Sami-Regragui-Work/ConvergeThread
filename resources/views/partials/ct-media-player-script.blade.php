@@ -177,18 +177,59 @@
             onMeta() {
                 const el = this.mediaEl();
                 if (!el) return;
-                if (Number.isFinite(el.duration)) this.duration = el.duration;
-                if (this.trimEnd == null || this.trimEnd > this.duration) {
-                    this.trimEnd = this.duration || 0;
+                const d = el.duration;
+                if (Number.isFinite(d) && d > 0) {
+                    this.applyKnownDuration(d);
+                } else if (this.kind === 'audio') {
+                    this.probeAudioDuration();
+                }
+                el.playbackRate = this.clampRate(this.rate);
+                if (this.editable && this.duration > 0) {
+                    this.seekTo(Math.max(this.trimStart || 0, this.current || 0));
+                }
+                this.emitChange();
+            },
+
+            applyKnownDuration(d) {
+                const duration = Number(d);
+                if (!Number.isFinite(duration) || duration <= 0) return;
+                const prev = this.duration;
+                this.duration = duration;
+                // Repair trimEnd poisoned by early Infinity/0 metadata (common for WebM voice notes).
+                const unset = this.trimEnd == null || !Number.isFinite(this.trimEnd);
+                const poisoned = this.trimEnd === 0 && (prev === 0 || !Number.isFinite(prev));
+                if (unset || poisoned || this.trimEnd > duration) {
+                    this.trimEnd = duration;
                 }
                 if (this.trimStart > this.effectiveTrimEnd() - 0.05) {
                     this.trimStart = 0;
                 }
-                el.playbackRate = this.clampRate(this.rate);
-                if (this.editable) {
-                    this.seekTo(Math.max(this.trimStart || 0, this.current || 0));
+            },
+
+            async probeAudioDuration() {
+                if (this._probingDuration || this.duration > 0 || !this.src) return;
+                this._probingDuration = true;
+                try {
+                    const Ctx = window.AudioContext || window.webkitAudioContext;
+                    if (!Ctx) return;
+                    const res = await fetch(this.src);
+                    if (!res.ok) return;
+                    const buf = await res.arrayBuffer();
+                    const ctx = new Ctx();
+                    try {
+                        const decoded = await ctx.decodeAudioData(buf.slice(0));
+                        if (decoded?.duration > 0) {
+                            this.applyKnownDuration(decoded.duration);
+                            this.emitChange();
+                        }
+                    } finally {
+                        try { await ctx.close(); } catch (e) {}
+                    }
+                } catch (e) {
+                    // Fall back to durationchange after play.
+                } finally {
+                    this._probingDuration = false;
                 }
-                this.emitChange();
             },
 
             onTime() {

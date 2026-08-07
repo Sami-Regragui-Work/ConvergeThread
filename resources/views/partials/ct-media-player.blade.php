@@ -16,7 +16,7 @@
         @play="playing = true"
         @pause="playing = false"></video>
 </div>
-<audio x-ref="audioEl" preload="metadata" class="hidden"
+<audio x-ref="audioEl" preload="auto" class="hidden"
     @timeupdate="onTime()"
     @loadedmetadata="onMeta()"
     @durationchange="onMeta()"

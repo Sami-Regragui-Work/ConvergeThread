@@ -86,6 +86,7 @@ class SystemTenantRoleSeeder extends Seeder
                     Permissions::DUOS_CREATE,
 
                     Permissions::MERGE_SESSIONS_VIEW,
+                    Permissions::MERGE_SESSIONS_CREATE,
 
                     Permissions::MESSAGES_VIEW,
                     Permissions::MESSAGES_CREATE,

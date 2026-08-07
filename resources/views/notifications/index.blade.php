@@ -2,7 +2,16 @@
 @section('title', 'Notifications')
 
 @section('content')
-    <div class="max-w-2xl mx-auto space-y-6">
+    <div class="max-w-2xl mx-auto space-y-6"
+        x-data
+        x-init="
+            const refresh = () => { if (!document.hidden) window.location.reload(); };
+            window.addEventListener('ct-unread', refresh);
+            if (window.Echo) {
+                window.Echo.private('user.{{ (int) auth()->id() }}')
+                    .listen('.notifications.unread', refresh);
+            }
+        ">
         <div class="flex items-center justify-between gap-4">
             <div>
                 <h1 class="text-xl font-bold text-white">Notifications</h1>

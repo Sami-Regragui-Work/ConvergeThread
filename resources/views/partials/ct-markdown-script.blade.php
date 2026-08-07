@@ -181,16 +181,29 @@
             pre.classList.add('ct-md-pre');
 
             const langMatch = String(code.className || '').match(/(?:^|\s)language-([a-z0-9_+#-]+)/i);
-            if (langMatch && !block.querySelector('.ct-md-lang')) {
+            let lang = langMatch ? langMatch[1].toLowerCase() : '';
+            // Repair truncated langs from earlier Monaco sync bugs (```js → ```j).
+            const langFix = { j: 'js', p: 'py', ja: 'java', typescrip: 'typescript' };
+            if (langFix[lang]) lang = langFix[lang];
+            if (lang && !block.querySelector('.ct-md-lang')) {
                 const label = document.createElement('div');
                 label.className = 'ct-md-lang';
-                label.textContent = langMatch[1].toLowerCase();
+                label.textContent = lang;
                 block.insertBefore(label, pre);
             }
 
             if (window.hljs && code.dataset.highlighted !== 'yes') {
                 try {
-                    window.hljs.highlightElement(code);
+                    if (lang && window.hljs.getLanguage(lang)) {
+                        code.className = 'language-' + lang;
+                        window.hljs.highlightElement(code);
+                    } else if (lang && window.ctCodeSuggest?.normalizeLang) {
+                        const mapped = window.ctCodeSuggest.normalizeLang(lang);
+                        if (mapped && mapped !== 'plain' && window.hljs.getLanguage(mapped)) {
+                            code.className = 'language-' + mapped;
+                            window.hljs.highlightElement(code);
+                        }
+                    }
                 } catch (e) {
                     // Unknown language → leave plain
                 }

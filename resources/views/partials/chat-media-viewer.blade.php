@@ -1,7 +1,7 @@
 {{-- Fullscreen attachment viewer (Alpine: mediaViewer). --}}
 <template x-if="mediaViewer">
     <div
-        class="fixed inset-0 z-80 flex items-center justify-center bg-zinc-950/90 p-3 sm:p-6"
+        class="fixed inset-0 z-200 flex items-center justify-center bg-zinc-950/90 p-3 sm:p-6"
         @keydown.escape.window="closeMediaViewer()"
         role="dialog"
         aria-modal="true"

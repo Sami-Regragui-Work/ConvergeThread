@@ -1,7 +1,7 @@
 {{-- Lazy Monaco loader for markdown fenced-code editing (no LSP). --}}
 <script>
 (function () {
-    const MONACO_VER = '0.52.2';
+    const MONACO_VER = '0.45.0';
     const MONACO_BASE = `https://cdn.jsdelivr.net/npm/monaco-editor@${MONACO_VER}/min`;
     let loadPromise = null;
 
@@ -34,44 +34,91 @@
         return LANG_MAP[key] || 'plaintext';
     }
 
+    function ensureEditorCss() {
+        if (document.getElementById('ct-monaco-editor-css')) return;
+        const link = document.createElement('link');
+        link.id = 'ct-monaco-editor-css';
+        link.rel = 'stylesheet';
+        link.href = `${MONACO_BASE}/vs/editor/editor.main.css`;
+        document.head.appendChild(link);
+    }
+
+    function installMainThreadWorkers() {
+        // Avoid CDN blob/data worker CORS failures. Fence editing still gets
+        // syntax highlighting + word/snippet suggestions without language servers.
+        window.MonacoEnvironment = {
+            getWorker() {
+                return {
+                    postMessage() {},
+                    terminate() {},
+                    addEventListener() {},
+                    removeEventListener() {},
+                    dispatchEvent() { return false; },
+                };
+            },
+        };
+    }
+
     function loadMonaco() {
         if (window.monaco?.editor) return Promise.resolve(window.monaco);
         if (loadPromise) return loadPromise;
 
         loadPromise = new Promise((resolve, reject) => {
-            window.MonacoEnvironment = {
-                getWorkerUrl() {
-                    const src = `
-                        self.MonacoEnvironment = { baseUrl: '${MONACO_BASE}/' };
-                        importScripts('${MONACO_BASE}/vs/base/worker/workerMain.js');
-                    `;
-                    return URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
-                },
+            ensureEditorCss();
+            installMainThreadWorkers();
+
+            const timeout = setTimeout(() => {
+                loadPromise = null;
+                reject(new Error('Monaco load timed out'));
+            }, 20000);
+
+            const done = (err, monaco) => {
+                clearTimeout(timeout);
+                if (err) {
+                    loadPromise = null;
+                    reject(err);
+                    return;
+                }
+                resolve(monaco);
             };
+
+            const startRequire = () => {
+                try {
+                    const req = window.require;
+                    if (typeof req !== 'function' || typeof req.config !== 'function') {
+                        done(new Error('AMD require unavailable'));
+                        return;
+                    }
+                    req.config({
+                        paths: { vs: `${MONACO_BASE}/vs` },
+                        'vs/nls': { availableLanguages: { '*': '' } },
+                    });
+                    req(
+                        ['vs/editor/editor.main'],
+                        () => {
+                            if (!window.monaco?.editor) {
+                                done(new Error('Monaco missing after load'));
+                                return;
+                            }
+                            done(null, window.monaco);
+                        },
+                        (err) => done(err || new Error('Monaco AMD require failed')),
+                    );
+                } catch (err) {
+                    done(err);
+                }
+            };
+
+            if (typeof window.require === 'function' && window.require.config) {
+                startRequire();
+                return;
+            }
 
             const loader = document.createElement('script');
             loader.src = `${MONACO_BASE}/vs/loader.js`;
             loader.async = true;
-            loader.onerror = () => {
-                loadPromise = null;
-                reject(new Error('Monaco loader failed'));
-            };
-            loader.onload = () => {
-                try {
-                    window.require.config({ paths: { vs: `${MONACO_BASE}/vs` } });
-                    window.require(['vs/editor/editor.main'], () => {
-                        if (!window.monaco?.editor) {
-                            loadPromise = null;
-                            reject(new Error('Monaco missing after load'));
-                            return;
-                        }
-                        resolve(window.monaco);
-                    });
-                } catch (err) {
-                    loadPromise = null;
-                    reject(err);
-                }
-            };
+            loader.onerror = () => done(new Error('Monaco loader failed'));
+            loader.onload = () => startRequire();
             document.head.appendChild(loader);
         });
 
@@ -83,7 +130,6 @@
         loadMonaco,
         preferMonaco() {
             if (typeof window.matchMedia !== 'function') return true;
-            // Skip on coarse pointers / narrow screens — keep lightweight suggest.
             if (window.matchMedia('(max-width: 640px)').matches) return false;
             if (window.matchMedia('(pointer: coarse)').matches && !window.matchMedia('(pointer: fine)').matches) {
                 return false;

@@ -50,6 +50,7 @@
             _pdfjsLoading: null,
             _jszipLoading: null,
             _mammothLoading: null,
+            _xlsxLoading: null,
             pollTimer: null,
             echoBound: false,
             e2eeReady: false,
@@ -74,6 +75,7 @@
             _monacoSyncing: false,
             _monacoDisposed: true,
             _monacoFailed: false,
+            _monacoWaking: false,
             showSelectedPicker: false,
             mentionFilter: '',
             activeMentionIndex: -1,
@@ -280,20 +282,6 @@
                 if (!window.ChatCrypto || !this.cryptoShowUrl || !this.cryptoPublicKeyUrl) return;
 
                 try {
-                    // Survive browser restart: restore room key from local cache first.
-                    if (this.chatType && this.chatId) {
-                        const cached = await window.ChatCrypto.loadCachedRoomKey(
-                            this.currentUserId,
-                            this.chatType,
-                            this.chatId,
-                        );
-                        if (cached) {
-                            this.roomKey = cached;
-                            this.e2eeReady = true;
-                            this.e2eeError = '';
-                        }
-                    }
-
                     this.identity = await window.ChatCrypto.ensureIdentity(this.currentUserId, this.cryptoPublicKeyUrl);
                     const stateRes = await fetch(this.cryptoShowUrl, {
                         headers: { 'Accept': 'application/json' },
@@ -302,7 +290,18 @@
                     if (!stateRes.ok) throw new Error('Could not load chat keys');
                     const state = await stateRes.json();
 
-                    if (!this.roomKey && state.my_share) {
+                    let cached = null;
+                    if (this.chatType && this.chatId) {
+                        cached = await window.ChatCrypto.loadCachedRoomKey(
+                            this.currentUserId,
+                            this.chatType,
+                            this.chatId,
+                        );
+                    }
+
+                    // Prefer the server-wrapped share over a local mint — prevents split-brain keys.
+                    this.roomKey = null;
+                    if (state.my_share) {
                         try {
                             this.roomKey = await window.ChatCrypto.unwrapRoomKey(
                                 this.identity.privateKey,
@@ -311,8 +310,6 @@
                             );
                         } catch (unwrapErr) {
                             console.warn('E2EE unwrap failed (stale share or new identity)', unwrapErr);
-                            // Identity rotated (e.g. new Firefox container) — ask peers to re-wrap.
-                            this.roomKey = null;
                             if (this.chatType && this.chatId) {
                                 window.ChatCrypto.clearCachedRoomKey(this.currentUserId, this.chatType, this.chatId);
                             }
@@ -322,17 +319,20 @@
                             this.scheduleE2eeRetry();
                             return;
                         }
-                    } else if (!this.roomKey && state.has_room_key) {
+                    } else if (cached) {
+                        this.roomKey = cached;
+                    } else if (state.has_room_key) {
                         this.e2eeReady = false;
                         this.e2eeError = 'Unlocking chat keys…';
                         await this.requestChatKeyShare();
                         this.scheduleE2eeRetry();
                         return;
-                    } else if (!this.roomKey) {
+                    } else {
+                        // Only mint when this chat has no shares yet (brand-new empty room).
                         this.roomKey = await window.ChatCrypto.generateRoomKey();
                     }
 
-                    if (this.identity?.minted && state.has_room_key) {
+                    if (this.identity?.minted && state.has_room_key && !state.my_share) {
                         await this.requestChatKeyShare();
                     }
 
@@ -353,6 +353,9 @@
 
                     this.e2eeReady = !!this.roomKey;
                     this.e2eeError = this.e2eeReady ? '' : (this.e2eeError || 'Unlocking chat keys…');
+                    if (this.e2eeReady) {
+                        await this.redecryptVisibleMessages();
+                    }
                 } catch (e) {
                     console.error('E2EE setup failed', e);
                     this.e2eeReady = !!this.roomKey;
@@ -361,6 +364,38 @@
                         : 'Unlocking chat keys…';
                     if (!this.roomKey) this.scheduleE2eeRetry();
                 }
+            },
+
+            async redecryptVisibleMessages() {
+                if (!this.roomKey || !Array.isArray(this.messages)) return;
+                const next = [];
+                for (const message of this.messages) {
+                    next.push(await this.decryptMessageInPlace({ ...message }));
+                }
+                this.messages = next;
+                this.indexMessagesForSearch(this.messages);
+                if (this.parentMessage) {
+                    this.parentMessage = await this.decryptMessageInPlace({ ...this.parentMessage });
+                }
+            },
+
+            async recoverRoomKeyAndRetryDecrypt(message) {
+                if (!window.ChatCrypto || !this.chatType || this._e2eeRecovering) return message;
+                this._e2eeRecovering = true;
+                try {
+                    window.ChatCrypto.clearCachedRoomKey(this.currentUserId, this.chatType, this.chatId);
+                    this.roomKey = null;
+                    this.e2eeReady = false;
+                    await this.setupE2ee();
+                    if (this.roomKey && message) {
+                        return await this.decryptMessageInPlace(message);
+                    }
+                } catch (e) {
+                    console.warn('E2EE recover failed', e);
+                } finally {
+                    this._e2eeRecovering = false;
+                }
+                return message;
             },
 
             scheduleE2eeRetry() {
@@ -482,7 +517,7 @@
                 if (attachment.is_video) return 'video';
                 if (attachment.is_audio) return 'audio';
                 const mime = String(attachment.mime_type || '').toLowerCase();
-                const name = String(attachment.name || '').toLowerCase();
+                const name = String(attachment.name || '').toLowerCase().replace(/\.enc$/i, '');
                 if (attachment.kind === 'pdf' || mime.includes('pdf') || name.endsWith('.pdf')) return 'pdf';
                 if (
                     /\.(md|markdown)$/i.test(name)
@@ -499,13 +534,30 @@
                     return 'docx';
                 }
                 if (
+                    mime.includes('spreadsheetml')
+                    || mime.includes('ms-excel')
+                    || /\.xlsx$/i.test(name)
+                ) {
+                    return 'xlsx';
+                }
+                if (
+                    mime.includes('presentationml')
+                    || mime.includes('ms-powerpoint')
+                    || /\.pptx$/i.test(name)
+                ) {
+                    return 'pptx';
+                }
+                if (/\.(csv|tsv)$/i.test(name) || mime === 'text/csv' || mime === 'text/tab-separated-values') {
+                    return 'csv';
+                }
+                if (
                     mime.startsWith('text/')
                     || mime === 'application/json'
                     || mime === 'application/xml'
                     || mime === 'application/javascript'
                     || attachment.kind === 'code'
                     || attachment.kind === 'text'
-                    || /\.(txt|csv|tsv|json|xml|ya?ml|toml|log|html?|css|js|mjs|cjs|ts|tsx|jsx|py|php|rb|go|rs|java|c|cpp|h|hpp|cs|sh|bash|zsh|sql|ini|conf|env|r|swift|kt|scala|vue|svelte)$/i.test(name)
+                    || /\.(txt|json|xml|ya?ml|toml|log|html?|css|js|mjs|cjs|ts|tsx|jsx|py|php|rb|go|rs|java|c|cpp|h|hpp|cs|sh|bash|zsh|sql|ini|conf|env|r|swift|kt|scala|vue|svelte)$/i.test(name)
                 ) {
                     return 'text';
                 }
@@ -513,8 +565,54 @@
             },
 
             async openMediaViewer(attachment) {
+                if (!attachment) return;
+                // Ensure E2EE attachments are decrypted before preview parsers run.
+                if (attachment.is_encrypted && !attachment.local_url && attachment.encryption_iv && this.roomKey) {
+                    try {
+                        const res = await fetch(attachment.url, { credentials: 'same-origin' });
+                        if (res.ok) {
+                            const buf = await res.arrayBuffer();
+                            const plain = await window.ChatCrypto.decryptBytes(this.roomKey, attachment.encryption_iv, buf);
+                            const blob = new Blob([plain], { type: attachment.mime_type || 'application/octet-stream' });
+                            attachment.local_url = URL.createObjectURL(blob);
+                            attachment.url = attachment.local_url;
+                            attachment.decrypt_failed = false;
+                        }
+                    } catch (e) {
+                        attachment.decrypt_failed = true;
+                    }
+                }
+
                 const url = this.attachmentDisplayUrl(attachment) || attachment?.url;
-                if (!url) return;
+                if (!url) {
+                    this.mediaViewer = {
+                        url: '#',
+                        type: 'file',
+                        name: attachment.name || 'Media',
+                        meta: this.attachmentMetaLine(attachment),
+                        bodyHtml: '',
+                        bodyText: '',
+                        loading: false,
+                        error: attachment.is_encrypted
+                            ? 'File is still encrypted. Wait for chat keys, then try again.'
+                            : 'No file URL available.',
+                    };
+                    return;
+                }
+                if (String(url).startsWith('file:')) {
+                    this.mediaViewer = {
+                        url: '#',
+                        type: 'file',
+                        name: attachment.name || 'Media',
+                        meta: this.attachmentMetaLine(attachment),
+                        bodyHtml: '',
+                        bodyText: '',
+                        loading: false,
+                        error: 'Cannot preview local file:// paths in the browser. Re-upload or download from chat.',
+                    };
+                    return;
+                }
+
                 const type = this.attachmentViewerKind(attachment);
                 const base = {
                     url,
@@ -534,8 +632,9 @@
 
                 this.mediaViewer = { ...base, loading: true };
                 try {
-                    const res = await fetch(url);
-                    if (!res.ok) throw new Error('fetch failed');
+                    const res = await fetch(url, { credentials: 'same-origin' });
+                    if (!res.ok) throw new Error('fetch failed (' + res.status + ')');
+
                     if (type === 'docx') {
                         const buffer = await res.arrayBuffer();
                         const mammoth = await this.loadMammoth();
@@ -557,6 +656,44 @@
                         return;
                     }
 
+                    if (type === 'xlsx') {
+                        const buffer = await res.arrayBuffer();
+                        const XLSX = await this.loadXlsx();
+                        const workbook = XLSX.read(buffer, { type: 'array' });
+                        const sheetName = workbook.SheetNames[0];
+                        const sheet = workbook.Sheets[sheetName];
+                        let html = sheet
+                            ? XLSX.utils.sheet_to_html(sheet, { editable: false })
+                            : '<p class="text-sm text-zinc-500">Empty workbook.</p>';
+                        if (typeof DOMPurify !== 'undefined') {
+                            html = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+                        }
+                        const label = workbook.SheetNames.length > 1
+                            ? `<p class="mb-2 text-xs text-zinc-400">Sheet: ${this.escapeHtml(sheetName)} (${workbook.SheetNames.length} sheets)</p>`
+                            : '';
+                        if (this.mediaViewer?.url !== url) return;
+                        this.mediaViewer = {
+                            ...base,
+                            type: 'html',
+                            bodyHtml: `<div class="ct-sheet-preview overflow-auto">${label}${html}</div>`,
+                            loading: false,
+                        };
+                        return;
+                    }
+
+                    if (type === 'pptx') {
+                        const buffer = await res.arrayBuffer();
+                        const html = await this.pptxToPreviewHtml(buffer);
+                        if (this.mediaViewer?.url !== url) return;
+                        this.mediaViewer = {
+                            ...base,
+                            type: 'html',
+                            bodyHtml: html,
+                            loading: false,
+                        };
+                        return;
+                    }
+
                     const text = await res.text();
                     if (this.mediaViewer?.url !== url) return;
                     if (type === 'markdown') {
@@ -570,18 +707,127 @@
                         return;
                     }
 
+                    if (type === 'csv') {
+                        this.mediaViewer = {
+                            ...base,
+                            type: 'html',
+                            bodyHtml: this.csvToPreviewHtml(text),
+                            loading: false,
+                        };
+                        return;
+                    }
+
                     this.mediaViewer = { ...base, type: 'text', bodyText: text, loading: false };
                 } catch (e) {
+                    console.warn('preview failed', type, e);
                     if (this.mediaViewer?.url !== url) return;
                     this.mediaViewer = {
                         ...base,
                         type: 'file',
                         loading: false,
-                        error: 'Could not load an in-app preview for this file.',
+                        error: 'Could not preview this file (' + (e?.message || 'parse error') + '). Try Download.',
                     };
                 }
             },
+            csvToPreviewHtml(text) {
+                const rows = String(text || '')
+                    .replace(/^\uFEFF/, '')
+                    .split(/\r\n|\n|\r/)
+                    .filter((line, i, arr) => !(i === arr.length - 1 && line === ''))
+                    .slice(0, 200);
+                if (!rows.length) {
+                    return '<p class="text-sm text-zinc-500">Empty CSV.</p>';
+                }
+                const parseLine = (line) => {
+                    const cells = [];
+                    let cur = '';
+                    let inQ = false;
+                    for (let i = 0; i < line.length; i++) {
+                        const ch = line[i];
+                        if (ch === '"') {
+                            if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
+                            else inQ = !inQ;
+                            continue;
+                        }
+                        if ((ch === ',' || ch === '\t') && !inQ) {
+                            cells.push(cur);
+                            cur = '';
+                            continue;
+                        }
+                        cur += ch;
+                    }
+                    cells.push(cur);
+                    return cells;
+                };
+                const parsed = rows.map(parseLine);
+                const head = parsed[0] || [];
+                const body = parsed.slice(1);
+                let html = '<div class="ct-sheet-preview overflow-auto"><table class="ct-md-table w-full text-left text-xs"><thead><tr>';
+                head.forEach((c) => { html += '<th>' + this.escapeHtml(c) + '</th>'; });
+                html += '</tr></thead><tbody>';
+                body.forEach((row) => {
+                    html += '<tr>';
+                    head.forEach((_, i) => { html += '<td>' + this.escapeHtml(row[i] ?? '') + '</td>'; });
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
+                if (parsed.length >= 200) {
+                    html += '<p class="mt-2 text-[11px] text-zinc-500">Showing first 200 rows.</p>';
+                }
+                html += '</div>';
+                return html;
+            },
 
+            async pptxToPreviewHtml(buffer) {
+                const JSZip = await this.loadJsZip();
+                const zip = await JSZip.loadAsync(buffer);
+                const slideFiles = Object.keys(zip.files)
+                    .filter((n) => /^ppt\/slides\/slide\d+\.xml$/i.test(n))
+                    .sort((a, b) => {
+                        const na = Number((a.match(/slide(\d+)/i) || [])[1] || 0);
+                        const nb = Number((b.match(/slide(\d+)/i) || [])[1] || 0);
+                        return na - nb;
+                    });
+                if (!slideFiles.length) {
+                    return '<p class="text-sm text-zinc-500">No slides found in this presentation.</p>';
+                }
+                const parts = [];
+                for (let i = 0; i < Math.min(slideFiles.length, 30); i++) {
+                    const xml = await zip.files[slideFiles[i]].async('text');
+                    const texts = [];
+                    const re = /<a:t[^>]*>([^<]*)<\/a:t>/g;
+                    let m;
+                    while ((m = re.exec(xml))) {
+                        const t = (m[1] || '').trim();
+                        if (t) texts.push(t);
+                    }
+                    parts.push(
+                        `<section class="mb-4 rounded-xl border border-white/10 bg-zinc-900/70 p-4">`
+                        + `<p class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Slide ${i + 1}</p>`
+                        + (texts.length
+                            ? `<div class="space-y-1 text-sm text-zinc-100">${texts.map((t) => '<p>' + this.escapeHtml(t) + '</p>').join('')}</div>`
+                            : '<p class="text-sm text-zinc-500">(No extractable text)</p>')
+                        + `</section>`
+                    );
+                }
+                if (slideFiles.length > 30) {
+                    parts.push('<p class="text-[11px] text-zinc-500">Showing first 30 slides.</p>');
+                }
+                return parts.join('');
+            },
+
+            async loadXlsx() {
+                if (window.XLSX) return window.XLSX;
+                if (this._xlsxLoading) return this._xlsxLoading;
+                this._xlsxLoading = new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+                    script.onload = () => window.XLSX ? resolve(window.XLSX) : reject(new Error('SheetJS missing'));
+                    script.onerror = () => reject(new Error('SheetJS failed to load'));
+                    document.head.appendChild(script);
+                });
+                return this._xlsxLoading;
+            },
             closeMediaViewer() {
                 this.mediaViewer = null;
             },
@@ -639,12 +885,6 @@
                 return this._mammothLoading;
             },
 
-            attachmentExt(attachment) {
-                const name = (attachment?.name || '').toLowerCase();
-                const fromName = name.includes('.') ? name.split('.').pop() : '';
-                return (fromName || (attachment?.ext || '')).toLowerCase();
-            },
-
             async fetchAttachmentBlob(attachment) {
                 const url = this.attachmentDisplayUrl(attachment);
                 if (!url) return null;
@@ -656,6 +896,12 @@
                 const res = await fetch(url, { credentials: 'same-origin' });
                 if (!res.ok) return null;
                 return res.blob();
+            },
+
+            attachmentExt(attachment) {
+                const name = String(attachment?.name || '').toLowerCase().replace(/\.enc$/i, '');
+                const fromName = name.includes('.') ? name.split('.').pop() : '';
+                return (fromName || (attachment?.ext || '')).toLowerCase();
             },
 
             async thumbFromPdf(url) {
@@ -710,29 +956,41 @@
                 });
             },
 
-            async thumbFromText(blob) {
-                const text = await blob.text();
-                const sample = text.slice(0, 900).replace(/\t/g, '  ');
+            thumbFromTextString(text, { accent = '#64748b', label = '' } = {}) {
+                const sample = String(text || '').slice(0, 900).replace(/\t/g, '  ');
                 const canvas = document.createElement('canvas');
                 canvas.width = 420;
                 canvas.height = 280;
                 const ctx = canvas.getContext('2d');
                 ctx.fillStyle = '#0f172a';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
+                // Accent bar so doc/sheet/ppt thumbs feel typed.
+                ctx.fillStyle = accent;
+                ctx.fillRect(0, 0, 6, canvas.height);
+                if (label) {
+                    ctx.fillStyle = accent;
+                    ctx.font = 'bold 11px ui-sans-serif, system-ui, sans-serif';
+                    ctx.fillText(String(label).toUpperCase(), 16, 18);
+                }
                 ctx.fillStyle = '#cbd5e1';
                 ctx.font = '12px ui-monospace, SFMono-Regular, Menlo, monospace';
                 const lineHeight = 16;
-                let y = 18;
+                let y = label ? 36 : 18;
                 for (const line of sample.split(/\r?\n/)) {
                     const chunks = line.match(/.{1,52}/g) || [''];
                     for (const chunk of chunks) {
-                        ctx.fillText(chunk, 12, y);
+                        ctx.fillText(chunk, 16, y);
                         y += lineHeight;
                         if (y > canvas.height - 10) break;
                     }
                     if (y > canvas.height - 10) break;
                 }
                 return canvas.toDataURL('image/jpeg', 0.75);
+            },
+
+            async thumbFromText(blob, opts = {}) {
+                const text = await blob.text();
+                return this.thumbFromTextString(text, opts);
             },
 
             async thumbFromOfficeZip(blob) {
@@ -757,19 +1015,87 @@
                 return null;
             },
 
+            async thumbFromDocx(blob) {
+                try {
+                    const mammoth = await this.loadMammoth();
+                    const result = await mammoth.extractRawText({ arrayBuffer: await blob.arrayBuffer() });
+                    const text = String(result?.value || '').trim();
+                    if (!text) return null;
+                    return this.thumbFromTextString(text, { accent: '#3b82f6', label: 'DOCX' });
+                } catch (e) {
+                    return null;
+                }
+            },
+
+            async thumbFromXlsx(blob) {
+                try {
+                    const XLSX = await this.loadXlsx();
+                    const workbook = XLSX.read(await blob.arrayBuffer(), { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const sheet = workbook.Sheets[sheetName];
+                    if (!sheet) return null;
+                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }).slice(0, 12);
+                    const lines = rows.map((row) => (Array.isArray(row) ? row : [])
+                        .slice(0, 6)
+                        .map((c) => String(c ?? '').slice(0, 18))
+                        .join(' | '));
+                    const text = lines.filter(Boolean).join('\n');
+                    if (!text.trim()) return null;
+                    return this.thumbFromTextString(text, { accent: '#10b981', label: sheetName || 'XLSX' });
+                } catch (e) {
+                    return null;
+                }
+            },
+
+            async thumbFromPptx(blob) {
+                try {
+                    const JSZip = await this.loadJsZip();
+                    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+                    const slideFiles = Object.keys(zip.files)
+                        .filter((n) => /^ppt\/slides\/slide\d+\.xml$/i.test(n))
+                        .sort((a, b) => {
+                            const na = Number((a.match(/slide(\d+)/i) || [])[1] || 0);
+                            const nb = Number((b.match(/slide(\d+)/i) || [])[1] || 0);
+                            return na - nb;
+                        })
+                        .slice(0, 3);
+                    const chunks = [];
+                    for (const path of slideFiles) {
+                        const xml = await zip.files[path].async('text');
+                        const texts = [];
+                        const re = /<a:t[^>]*>([^<]*)<\/a:t>/g;
+                        let m;
+                        while ((m = re.exec(xml))) {
+                            const t = (m[1] || '').trim();
+                            if (t) texts.push(t);
+                        }
+                        if (texts.length) chunks.push(texts.slice(0, 8).join(' · '));
+                    }
+                    const text = chunks.join('\n\n');
+                    if (!text.trim()) return null;
+                    return this.thumbFromTextString(text, { accent: '#f97316', label: 'PPTX' });
+                } catch (e) {
+                    return null;
+                }
+            },
+
             async enrichAttachmentThumb(attachment) {
                 if (!attachment || attachment.thumb_url || attachment._thumbTried) return;
-                attachment._thumbTried = true;
 
                 // Images already display as media tiles; still set thumb for consistency.
                 if (attachment.is_image) {
                     const url = this.attachmentDisplayUrl(attachment);
-                    if (url) attachment.thumb_url = url;
+                    if (url) {
+                        attachment.thumb_url = url;
+                        attachment._thumbTried = true;
+                    }
                     return;
                 }
 
                 const url = this.attachmentDisplayUrl(attachment);
+                // Encrypted files often hit this before decrypt finishes — retry later.
                 if (!url) return;
+                attachment._thumbTried = true;
 
                 const ext = this.attachmentExt(attachment);
                 const mime = (attachment.mime_type || '').toLowerCase();
@@ -791,8 +1117,48 @@
                         return;
                     }
 
-                    const officeExts = ['docx', 'pptx', 'xlsx', 'odt', 'odp', 'ods'];
-                    if (['doc', 'ppt', 'sheet'].includes(kind) || officeExts.includes(ext)) {
+                    // CSV/TSV are "sheet" kind but plain text — content thumb, not zip.
+                    if (ext === 'csv' || ext === 'tsv' || mime === 'text/csv' || mime === 'text/tab-separated-values') {
+                        const blob = await this.fetchAttachmentBlob(attachment);
+                        if (blob) {
+                            const thumb = await this.thumbFromText(blob, { accent: '#10b981', label: ext.toUpperCase() });
+                            if (thumb) attachment.thumb_url = thumb;
+                        }
+                        return;
+                    }
+
+                    if (ext === 'docx' || (kind === 'doc' && ext !== 'doc')) {
+                        const blob = await this.fetchAttachmentBlob(attachment);
+                        if (!blob) return;
+                        const embedded = await this.thumbFromOfficeZip(blob).catch(() => null);
+                        if (embedded) { attachment.thumb_url = embedded; return; }
+                        const content = await this.thumbFromDocx(blob);
+                        if (content) attachment.thumb_url = content;
+                        return;
+                    }
+
+                    if (ext === 'xlsx' || (kind === 'sheet' && !['xls', 'csv', 'tsv'].includes(ext))) {
+                        const blob = await this.fetchAttachmentBlob(attachment);
+                        if (!blob) return;
+                        const embedded = await this.thumbFromOfficeZip(blob).catch(() => null);
+                        if (embedded) { attachment.thumb_url = embedded; return; }
+                        const content = await this.thumbFromXlsx(blob);
+                        if (content) attachment.thumb_url = content;
+                        return;
+                    }
+
+                    if (ext === 'pptx' || kind === 'ppt') {
+                        const blob = await this.fetchAttachmentBlob(attachment);
+                        if (!blob) return;
+                        const embedded = await this.thumbFromOfficeZip(blob).catch(() => null);
+                        if (embedded) { attachment.thumb_url = embedded; return; }
+                        const content = await this.thumbFromPptx(blob);
+                        if (content) attachment.thumb_url = content;
+                        return;
+                    }
+
+                    const officeExts = ['odt', 'odp', 'ods'];
+                    if (officeExts.includes(ext)) {
                         const blob = await this.fetchAttachmentBlob(attachment);
                         if (blob) {
                             const thumb = await this.thumbFromOfficeZip(blob);
@@ -801,7 +1167,7 @@
                         return;
                     }
 
-                    const textExts = ['txt', 'md', 'csv', 'json', 'xml', 'html', 'htm', 'log', 'yml', 'yaml', 'ini', 'css', 'js', 'ts', 'php', 'py', 'rb', 'go', 'rs', 'java', 'c', 'cpp', 'h', 'sql', 'sh'];
+                    const textExts = ['txt', 'md', 'json', 'xml', 'html', 'htm', 'log', 'yml', 'yaml', 'ini', 'css', 'js', 'ts', 'php', 'py', 'rb', 'go', 'rs', 'java', 'c', 'cpp', 'h', 'sql', 'sh'];
                     if (mime.startsWith('text/') || textExts.includes(ext)) {
                         const blob = await this.fetchAttachmentBlob(attachment);
                         if (blob) {
@@ -810,7 +1176,7 @@
                         }
                     }
                 } catch (e) {
-                    // Keep icon fallback when a format can't be rendered client-side.
+                    console.warn('thumb enrich failed', ext, e);
                 }
             },
 
@@ -824,6 +1190,7 @@
 
             async decryptMessageInPlace(message) {
                 if (!message || message.is_deleted) return message;
+                let textFailed = false;
 
                 if (this.roomKey && (message.is_encrypted || window.ChatCrypto?.isEncrypted(message.content))) {
                     try {
@@ -833,6 +1200,7 @@
                         message.is_encrypted = false;
                         message._was_encrypted = true;
                     } catch (e) {
+                        textFailed = true;
                         message.content = '[Unable to decrypt]';
                         message.content_html = null;
                     }
@@ -862,7 +1230,19 @@
                                 attachment.preview_url = attachment.local_url;
                             }
                             attachment.url = attachment.local_url;
-                        } catch (e) {}
+                            attachment.decrypt_failed = false;
+                        } catch (e) {
+                            attachment.decrypt_failed = true;
+                            textFailed = true;
+                        }
+                    }
+                }
+
+                if (textFailed && !this._e2eeRecovering && !message._e2ee_recover_attempted) {
+                    message._e2ee_recover_attempted = true;
+                    const recovered = await this.recoverRoomKeyAndRetryDecrypt(message);
+                    if (recovered && recovered.content !== '[Unable to decrypt]') {
+                        message = recovered;
                     }
                 }
 
@@ -1209,7 +1589,10 @@
             },
 
             syncMonacoFencePresence() {
-                if (this._monacoSyncing || this._monacoFailed) return;
+                if (this._monacoSyncing || this._monacoFailed || this._monacoWaking) return;
+                // While Monaco owns the fence, ignore textarea caret — overwriting the
+                // range from the textarea was corrupting ```js → ```j and crashing getPositionAt.
+                if (this.monacoFenceActive && this._monacoEditor) return;
                 if (this.draftFormat !== 'markdown' || !window.ctMonacoFence?.preferMonaco?.()) {
                     if (this.monacoFenceActive) this.sleepMonacoFence(false);
                     return;
@@ -1219,15 +1602,6 @@
                 const range = this.getCodeFenceRange(this.draft, caret);
                 if (!range) {
                     if (this.monacoFenceActive) this.sleepMonacoFence(false);
-                    return;
-                }
-                if (
-                    this.monacoFenceActive
-                    && this._monacoFenceRange
-                    && this._monacoFenceRange.openStart === range.openStart
-                ) {
-                    this._monacoFenceRange = range;
-                    this.monacoFenceLang = range.lang;
                     return;
                 }
                 clearTimeout(this._monacoWakeTimer);
@@ -1241,6 +1615,11 @@
                 if (!r) return;
                 const before = this.draft.slice(0, r.bodyStart);
                 const after = this.draft.slice(r.bodyEnd);
+                // Refuse sync that would eat into the opening fence marker.
+                if (!/(^|\n)```[^\n]*\n$/.test(before) && !/(^|\n)```[^\n]*$/.test(before)) {
+                    console.warn('[monaco] refused fence sync — bodyStart looks wrong');
+                    return;
+                }
                 const body = String(bodyText ?? '');
                 this._monacoSyncing = true;
                 this.draft = before + body + after;
@@ -1256,43 +1635,55 @@
                 if (!range || this.draftFormat !== 'markdown') return;
                 if (!window.ctMonacoFence?.preferMonaco?.()) return;
                 if (!window.ctMonacoFence?.loadMonaco) return;
+                if (this._monacoWaking) return;
 
                 clearTimeout(this._monacoWakeTimer);
                 this.closeCodeSuggest();
                 this.closeMentionMenu();
 
                 if (this.monacoFenceActive && this._monacoEditor && this._monacoFenceRange?.openStart === range.openStart) {
-                    this._monacoFenceRange = range;
                     return;
                 }
 
-                if (this.monacoFenceActive) {
-                    this.sleepMonacoFence(false);
-                }
-
-                this.monacoFenceActive = true;
-                this.monacoFenceLoading = true;
-                this.monacoFenceError = '';
-                this.monacoFenceLang = range.lang || 'plain';
-                this._monacoFenceRange = range;
-                this._monacoDisposed = false;
-
-                await this.$nextTick();
-                const host = this.$refs.monacoFenceHost;
-                if (!host || this._monacoDisposed) {
-                    this.monacoFenceLoading = false;
-                    return;
-                }
-
+                this._monacoWaking = true;
                 try {
+                    if (this._monacoEditor) {
+                        try { this._monacoEditor.dispose(); } catch (e) {}
+                        this._monacoEditor = null;
+                    }
+
+                    this.monacoFenceActive = true;
+                    this.monacoFenceLoading = true;
+                    this.monacoFenceError = '';
+                    this.monacoFenceLang = range.lang || 'plain';
+                    this._monacoFenceRange = { ...range };
+                    this._monacoDisposed = false;
+
+                    await this.$nextTick();
+                    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+                    const host = this.$refs.monacoFenceHost;
+                    if (!host || this._monacoDisposed) {
+                        this.monacoFenceLoading = false;
+                        return;
+                    }
+                    // Clear prior Monaco DOM/context on this host.
+                    host.innerHTML = '';
+                    host.classList.remove('hidden');
+
                     const monaco = await window.ctMonacoFence.loadMonaco();
                     if (this._monacoDisposed || !this.$refs.monacoFenceHost) {
                         this.monacoFenceLoading = false;
                         return;
                     }
-                    const body = this.draft.slice(range.bodyStart, range.bodyEnd);
-                    const language = window.ctMonacoFence.monacoLanguage(range.lang);
-                    this._monacoEditor = monaco.editor.create(this.$refs.monacoFenceHost, {
+
+                    // Re-read range from current draft in case it changed while loading.
+                    const live = this.getCodeFenceRange(this.draft, range.bodyStart) || range;
+                    this._monacoFenceRange = { ...live };
+                    const body = this.draft.slice(live.bodyStart, live.bodyEnd);
+                    const language = window.ctMonacoFence.monacoLanguage(live.lang);
+
+                    this._monacoEditor = monaco.editor.create(host, {
                         value: body,
                         language,
                         theme: 'vs-dark',
@@ -1320,23 +1711,44 @@
                     this._monacoEditor.addCommand(monaco.KeyCode.Escape, () => {
                         this.sleepMonacoFence(true);
                     });
-                    const el = this.$refs.draftInput;
-                    const caret = el?.selectionStart ?? range.bodyStart;
-                    const offset = Math.max(0, Math.min(caret - range.bodyStart, body.length));
-                    const model = this._monacoEditor.getModel();
-                    if (model) {
-                        const pos = model.getPositionAt(offset);
-                        this._monacoEditor.setPosition(pos);
-                        this._monacoEditor.focus();
+
+                    try {
+                        const model = this._monacoEditor.getModel();
+                        if (model) {
+                            const max = model.getValueLength();
+                            const el = this.$refs.draftInput;
+                            const caret = el?.selectionStart ?? live.bodyStart;
+                            const offset = Math.max(0, Math.min(caret - live.bodyStart, max));
+                            if (max > 0 || offset === 0) {
+                                this._monacoEditor.setPosition(model.getPositionAt(offset));
+                            }
+                            this._monacoEditor.focus();
+                        }
+                    } catch (posErr) {
+                        console.warn('[monaco] setPosition skipped', posErr);
+                        try { this._monacoEditor.focus(); } catch (e) {}
                     }
+
                     this.monacoFenceLoading = false;
+                    this.$nextTick(() => {
+                        try { this._monacoEditor?.layout?.(); } catch (e) {}
+                    });
                 } catch (e) {
-                    this._monacoFailed = true;
+                    console.error('[monaco]', e);
+                    this._monacoFailed = false;
                     this.monacoFenceLoading = false;
                     this.monacoFenceError = 'Code editor failed to load — using text suggestions instead.';
-                    this.monacoFenceActive = false;
+                    if (this._monacoEditor) {
+                        try { this._monacoEditor.dispose(); } catch (err) {}
+                    }
                     this._monacoEditor = null;
                     this._monacoFenceRange = null;
+                    this.monacoFenceActive = false;
+                    setTimeout(() => {
+                        if (!this.monacoFenceActive) this.monacoFenceError = '';
+                    }, 4000);
+                } finally {
+                    this._monacoWaking = false;
                 }
             },
 
@@ -1365,6 +1777,11 @@
                 this.monacoFenceLoading = false;
                 this.monacoFenceLang = '';
                 this.monacoFenceError = '';
+                const host = this.$refs.monacoFenceHost;
+                if (host) {
+                    host.innerHTML = '';
+                    host.classList.add('hidden');
+                }
                 if (focusTextarea) {
                     this.$nextTick(() => {
                         const el = this.$refs.draftInput;
@@ -2558,9 +2975,11 @@
                     if (idx >= 0 && data.message) {
                         this.messages[idx] = await this.decryptMessageInPlace(data.message);
                         this.messages = [...this.messages];
+                        this.indexMessagesForSearch([this.messages[idx]]);
                     }
                     if (this.parentMessage?.id === messageId && data.message) {
                         this.parentMessage = await this.decryptMessageInPlace(data.message);
+                        this.indexMessagesForSearch([this.parentMessage]);
                     }
                     this.cancelEdit();
                 } catch (error) {

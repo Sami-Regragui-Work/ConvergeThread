@@ -7,12 +7,27 @@ use Illuminate\Support\Facades\Auth;
 
 class NotificationController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $notifications = Auth::user()
             ->notifications()
             ->latest()
             ->paginate(30);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'notifications' => $notifications->getCollection()->map(fn ($n) => [
+                    'id' => $n->id,
+                    'data' => $n->data,
+                    'read_at' => $n->read_at?->toIso8601String(),
+                    'created_at' => $n->created_at?->toIso8601String(),
+                    'created_human' => $n->created_at?->diffForHumans(),
+                    'url' => ! empty($n->data['url'] ?? null)
+                        ? route('notifications.read', $n->id)
+                        : '#',
+                ])->values(),
+            ]);
+        }
 
         return view('notifications.index', compact('notifications'));
     }

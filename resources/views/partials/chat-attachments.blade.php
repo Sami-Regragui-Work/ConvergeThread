@@ -26,7 +26,7 @@
                 </button>
                 <div x-show="attachment.is_image && !attachmentDisplayUrl(attachment)" x-cloak
                     class="h-full w-full flex items-center justify-center bg-black text-[10px] text-slate-500">
-                    Decrypting…
+                    <span x-text="attachment.decrypt_failed ? 'Unable to decrypt' : 'Decrypting…'"></span>
                 </div>
 
                 {{-- Video --}}

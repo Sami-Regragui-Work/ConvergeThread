@@ -157,7 +157,8 @@
                     title="Close code editor (Esc)">Done</button>
             </div>
             <p x-show="monacoFenceError" x-cloak class="px-3 py-2 text-[11px] text-amber-300/90" x-text="monacoFenceError"></p>
-            <div x-ref="monacoFenceHost" class="h-52 w-full" x-show="monacoFenceActive && !monacoFenceError"></div>
+            <div x-ref="monacoFenceHost" class="h-52 w-full"
+                :class="(monacoFenceActive && !monacoFenceError) ? '' : 'hidden'"></div>
         </div>
 
         <div class="flex items-end gap-2 flex-wrap sm:flex-nowrap">

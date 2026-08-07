@@ -17,6 +17,8 @@
                         brand: { 400: '#818cf8', 500: '#6366f1', 600: '#4f46e5' }
                     },
                     zIndex: {
+                        80: '80',
+                        100: '100',
                         200: '200',
                         250: '250',
                         300: '300',
@@ -122,21 +124,28 @@
             border-radius: 0.3rem;
             background: rgba(15, 23, 42, 0.55);
         }
-        .ct-md-body .ct-md-codeblock { margin: 0.45em 0; }
+        .ct-md-body .ct-md-codeblock {
+            margin: 0.45em 0;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            background: rgba(15, 23, 42, 0.72);
+        }
         .ct-md-body .ct-md-lang {
             font-size: 0.65rem;
             text-transform: uppercase;
             letter-spacing: 0.04em;
             color: #94a3b8;
-            margin-bottom: 0.2rem;
+            margin: 0;
+            padding: 0.4rem 0.75em 0.15rem;
+            background: transparent;
         }
         .ct-md-body .ct-md-pre,
         .ct-md-body pre {
             margin: 0;
-            padding: 0.6em 0.75em;
-            border-radius: 0.5rem;
+            padding: 0.45em 0.75em 0.65em;
+            border-radius: 0;
             overflow-x: auto;
-            background: rgba(15, 23, 42, 0.65);
+            background: transparent;
             font-size: 0.8em;
         }
         .ct-md-body pre code.hljs,
@@ -152,6 +161,23 @@
             padding: 0;
             border-radius: 0;
             color: #e2e8f0;
+        }
+        .ct-sheet-preview table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+            color: #e2e8f0;
+        }
+        .ct-sheet-preview th,
+        .ct-sheet-preview td {
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            padding: 0.35em 0.5em;
+            text-align: left;
+            white-space: nowrap;
+        }
+        .ct-sheet-preview th {
+            background: rgba(15, 23, 42, 0.7);
+            font-weight: 600;
         }
         .ct-md-body .ct-md-link,
         .ct-md-body a { color: #a5b4fc; text-decoration: underline; }
