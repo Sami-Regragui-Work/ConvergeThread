@@ -1,49 +1,75 @@
-{{-- In-app media / document viewer --}}
-<div x-show="mediaViewer" x-cloak
-    class="fixed inset-0 z-250 flex items-center justify-center p-3 sm:p-6"
-    @keydown.escape.window="if (mediaViewer) closeMediaViewer()">
-    <div class="absolute inset-0 bg-black/85" @click="closeMediaViewer()"></div>
-    <div class="relative w-full max-w-5xl max-h-[90vh] flex flex-col rounded-2xl border border-white/10 bg-surface-300 shadow-2xl overflow-hidden">
-        <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/5 shrink-0">
-            <div class="min-w-0">
-                <p class="text-sm font-semibold text-white truncate" x-text="mediaViewer?.name || 'Media'"></p>
-                <p class="text-[11px] text-slate-500 truncate" x-text="mediaViewer?.meta || ''"></p>
+{{-- Fullscreen attachment viewer (Alpine: mediaViewer). --}}
+<template x-if="mediaViewer">
+    <div
+        class="fixed inset-0 z-80 flex items-center justify-center bg-zinc-950/90 p-3 sm:p-6"
+        @keydown.escape.window="closeMediaViewer()"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="mediaViewer.name || 'Media viewer'"
+    >
+        <button type="button" class="absolute inset-0 cursor-default" aria-label="Close viewer" @click="closeMediaViewer()"></button>
+        <div class="relative z-10 flex max-h-[min(92dvh,56rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black/50">
+            <div class="flex shrink-0 items-start justify-between gap-3 border-b border-white/10 px-4 py-3">
+                <div class="min-w-0">
+                    <p class="truncate text-sm font-semibold text-white" x-text="mediaViewer.name"></p>
+                    <p class="truncate text-[11px] text-zinc-400" x-text="mediaViewer.meta"></p>
+                </div>
+                <div class="flex shrink-0 items-center gap-2">
+                    <a
+                        :href="mediaViewer.url"
+                        download
+                        class="rounded-lg border border-white/15 px-2.5 py-1 text-[11px] font-semibold text-zinc-200 hover:bg-white/10"
+                    >Download</a>
+                    <button
+                        type="button"
+                        class="rounded-lg border border-white/15 px-2.5 py-1 text-[11px] font-semibold text-zinc-200 hover:bg-white/10"
+                        @click="closeMediaViewer()"
+                    >Close</button>
+                </div>
             </div>
-            <div class="flex items-center gap-2 shrink-0">
-                <a x-show="mediaViewer?.url" :href="mediaViewer?.url" download
-                    class="px-2.5 py-1.5 rounded-lg border border-white/10 text-xs text-slate-300 hover:bg-white/5">Download</a>
-                <button type="button" @click="closeMediaViewer()" class="px-2.5 py-1.5 rounded-lg border border-white/10 text-xs text-slate-300 hover:bg-white/5">Close</button>
-            </div>
-        </div>
-        <div class="flex-1 min-h-0 overflow-auto bg-black flex items-center justify-center p-3">
-            <img x-show="mediaViewer?.type === 'image'" x-cloak
-                :src="mediaViewer?.url" :alt="mediaViewer?.name"
-                class="max-w-full max-h-[75vh] object-contain">
-
-            <div x-show="mediaViewer?.type === 'video' || mediaViewer?.type === 'audio'" x-cloak
-                class="w-full max-w-3xl"
-                x-data="ctMediaPlayer({ src: '', kind: 'audio' })"
-                x-effect="
-                    if (mediaViewer && (mediaViewer.type === 'video' || mediaViewer.type === 'audio')) {
-                        src = mediaViewer.url || '';
-                        kind = mediaViewer.type;
-                        rate = 1;
-                        showSpeed = false;
-                        current = 0;
-                        playing = false;
-                        $nextTick(() => bindMedia());
-                    }
-                ">
-                @include('partials.ct-media-player')
-            </div>
-
-            <iframe x-show="mediaViewer?.type === 'pdf'" x-cloak
-                :src="mediaViewer?.url" class="w-full h-[75vh] bg-white rounded-lg" title="PDF"></iframe>
-            <div x-show="mediaViewer?.type === 'file'" x-cloak class="text-center p-8 space-y-3">
-                <p class="text-sm text-slate-300">No in-app preview for this file type.</p>
-                <a :href="mediaViewer?.url" download
-                    class="inline-flex px-4 py-2 rounded-xl bg-brand-500 text-white text-sm font-medium">Download file</a>
+            <div class="min-h-0 flex-1 overflow-auto bg-black/40 p-3 sm:p-4">
+                <template x-if="mediaViewer.loading">
+                    <div class="flex min-h-48 items-center justify-center text-sm text-zinc-400">Loading preview…</div>
+                </template>
+                <template x-if="!mediaViewer.loading && mediaViewer.type === 'image'">
+                    <img :src="mediaViewer.url" :alt="mediaViewer.name" class="mx-auto max-h-[min(78dvh,48rem)] w-auto max-w-full object-contain">
+                </template>
+                <template x-if="!mediaViewer.loading && mediaViewer.type === 'video'">
+                    <video :src="mediaViewer.url" controls playsinline class="mx-auto max-h-[min(78dvh,48rem)] w-full max-w-4xl"></video>
+                </template>
+                <template x-if="!mediaViewer.loading && mediaViewer.type === 'audio'">
+                    <div class="mx-auto flex max-w-xl flex-col gap-3 rounded-xl border border-white/10 bg-zinc-900/80 p-6">
+                        <p class="text-sm text-zinc-300" x-text="mediaViewer.name"></p>
+                        <audio :src="mediaViewer.url" controls class="w-full"></audio>
+                    </div>
+                </template>
+                <template x-if="!mediaViewer.loading && mediaViewer.type === 'pdf'">
+                    <iframe :src="mediaViewer.url" class="h-[min(78dvh,48rem)] w-full rounded-lg border border-white/10 bg-white" title="PDF preview"></iframe>
+                </template>
+                <template x-if="!mediaViewer.loading && (mediaViewer.type === 'markdown' || mediaViewer.type === 'html')">
+                    <div
+                        class="ct-md mx-auto max-w-3xl rounded-xl border border-white/10 bg-zinc-950/90 px-4 py-5 text-sm text-zinc-100 sm:px-6"
+                        x-html="mediaViewer.bodyHtml"
+                    ></div>
+                </template>
+                <template x-if="!mediaViewer.loading && mediaViewer.type === 'text'">
+                    <pre
+                        class="mx-auto max-h-[min(78dvh,48rem)] max-w-4xl overflow-auto whitespace-pre-wrap wrap-break-word rounded-xl border border-white/10 bg-zinc-950/90 p-4 font-mono text-[12px] leading-relaxed text-zinc-200"
+                        x-text="mediaViewer.bodyText"
+                    ></pre>
+                </template>
+                <template x-if="!mediaViewer.loading && mediaViewer.type === 'file'">
+                    <div class="mx-auto flex max-w-md flex-col items-center gap-3 rounded-xl border border-white/10 bg-zinc-900/80 px-6 py-10 text-center">
+                        <p class="text-sm font-medium text-zinc-200" x-text="mediaViewer.name"></p>
+                        <p class="text-xs text-zinc-400" x-text="mediaViewer.error || 'No in-app preview for this file type. Download to open it locally.'"></p>
+                        <a
+                            :href="mediaViewer.url"
+                            download
+                            class="mt-1 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500"
+                        >Download file</a>
+                    </div>
+                </template>
             </div>
         </div>
     </div>
-</div>
+</template>

@@ -52,6 +52,8 @@
                     {{ $chatLabel }}
                     <span x-show="callMediaMode === 'sfu'" x-cloak>· SFU</span>
                     <span x-show="callMediaMode === 'mesh'" x-cloak>· mesh</span>
+                    <span x-show="callMediaMode === 'sfu' && callMediaE2ee" x-cloak class="text-emerald-400">· E2EE</span>
+                    <span x-show="callMediaMode === 'sfu' && !callMediaE2ee" x-cloak class="text-amber-400">· media not E2EE</span>
                 </p>
             </div>
             <span class="text-[10px] uppercase tracking-wide px-2 py-1 rounded-lg border border-white/10 text-slate-400"

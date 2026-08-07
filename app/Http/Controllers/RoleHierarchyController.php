@@ -60,6 +60,16 @@ class RoleHierarchyController extends Controller
 
         WorkspaceSync::bump($user->tenant_id, ['hierarchies']);
 
+        if ($request->wantsJson()) {
+            return response()->json([
+                'ok' => true,
+                'hierarchy' => [
+                    'id' => $hierarchy->id,
+                    'name' => $hierarchy->name,
+                ],
+            ]);
+        }
+
         return back()->with('success', 'Hierarchy created.');
     }
 

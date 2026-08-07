@@ -42,6 +42,16 @@ class GroupRoleOverrideController extends Controller
             $credentials['permissions'] ?? null
         );
 
+        if ($request->wantsJson()) {
+            return response()->json([
+                'ok' => true,
+                'override' => [
+                    'tenant_role_id' => $tenantRole->id,
+                    'tenant_role_name' => $tenantRole->name,
+                ],
+            ]);
+        }
+
         return redirect()
             ->route('groups.role-overrides.index', $group)
             ->with('success', 'Group role override created successfully.');

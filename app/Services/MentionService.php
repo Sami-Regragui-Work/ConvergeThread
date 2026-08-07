@@ -427,10 +427,7 @@ class MentionService
             $work,
         ) ?? $work;
 
-        $html = \Illuminate\Support\Str::markdown($work, [
-            'html_input' => 'strip',
-            'allow_unsafe_links' => false,
-        ]);
+        $html = app(MarkdownService::class)->toHtml($work);
 
         return strtr($html, $placeholders);
     }

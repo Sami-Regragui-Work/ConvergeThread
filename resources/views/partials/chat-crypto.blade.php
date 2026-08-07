@@ -358,6 +358,8 @@
         return {
             ensureIdentity,
             generateRoomKey,
+            exportRoomKeyRaw,
+            importRoomKeyRaw,
             wrapRoomKeyFor,
             unwrapRoomKey,
             cacheRoomKey,

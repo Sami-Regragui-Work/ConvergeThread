@@ -49,6 +49,7 @@
             mediaViewer: null,
             _pdfjsLoading: null,
             _jszipLoading: null,
+            _mammothLoading: null,
             pollTimer: null,
             echoBound: false,
             e2eeReady: false,
@@ -58,6 +59,21 @@
             mentionQueue: [...(config.mentionIds ?? [])],
             mentionIndex: 0,
             showMentionMenu: false,
+            showCodeSuggest: false,
+            codeFenceLang: '',
+            codeSuggestPrefix: '',
+            codeSuggestStart: 0,
+            activeCodeSuggestIndex: -1,
+            monacoFenceActive: false,
+            monacoFenceLang: '',
+            monacoFenceLoading: false,
+            monacoFenceError: '',
+            _monacoEditor: null,
+            _monacoFenceRange: null,
+            _monacoWakeTimer: null,
+            _monacoSyncing: false,
+            _monacoDisposed: true,
+            _monacoFailed: false,
             showSelectedPicker: false,
             mentionFilter: '',
             activeMentionIndex: -1,
@@ -77,8 +93,10 @@
             callState: 'idle',
             callError: '',
             callMediaMode: 'mesh',
+            callMediaE2ee: false,
             livekitRoom: null,
             _livekitLoading: null,
+            _e2eeWorkerUrl: null,
             incomingCall: null,
             localStream: null,
             localMuted: false,
@@ -189,6 +207,10 @@
                 const next = Math.min(Math.max(needed, 40), maxPx);
                 el.style.height = next + 'px';
                 el.style.overflowY = needed > maxPx ? 'auto' : 'hidden';
+                // Keep the input row in view when the composer stack is tall (guide open).
+                try {
+                    el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+                } catch (e) {}
             },
 
             draftMarkdownPreviewHtml() {
@@ -197,8 +219,19 @@
                 return window.ctRenderMarkdown ? window.ctRenderMarkdown(raw) : this.escapeHtml(raw).replace(/\n/g, '<br>');
             },
 
+            /** Highlight fenced code in stored/server HTML for display. */
+            mdHtml(html) {
+                if (!html) return '';
+                if (window.ctEnhanceMarkdownHtml) return window.ctEnhanceMarkdownHtml(html);
+                return html;
+            },
+
             setDraftFormat(format) {
                 this.draftFormat = format === 'markdown' ? 'markdown' : 'plain';
+                if (this.draftFormat !== 'markdown') {
+                    this.sleepMonacoFence(false);
+                    this.closeCodeSuggest();
+                }
                 if (this.draftFormat === 'markdown' && localStorage.getItem('ct_md_guide') !== '0') {
                     this.showMarkdownGuide = true;
                 }
@@ -443,20 +476,110 @@
                 return parts.join(' · ');
             },
 
-            openMediaViewer(attachment) {
+            attachmentViewerKind(attachment) {
+                if (!attachment) return 'file';
+                if (attachment.is_image) return 'image';
+                if (attachment.is_video) return 'video';
+                if (attachment.is_audio) return 'audio';
+                const mime = String(attachment.mime_type || '').toLowerCase();
+                const name = String(attachment.name || '').toLowerCase();
+                if (attachment.kind === 'pdf' || mime.includes('pdf') || name.endsWith('.pdf')) return 'pdf';
+                if (
+                    /\.(md|markdown)$/i.test(name)
+                    || mime.includes('markdown')
+                    || mime === 'text/x-markdown'
+                ) {
+                    return 'markdown';
+                }
+                if (
+                    mime.includes('wordprocessingml')
+                    || mime === 'application/msword'
+                    || /\.docx$/i.test(name)
+                ) {
+                    return 'docx';
+                }
+                if (
+                    mime.startsWith('text/')
+                    || mime === 'application/json'
+                    || mime === 'application/xml'
+                    || mime === 'application/javascript'
+                    || attachment.kind === 'code'
+                    || attachment.kind === 'text'
+                    || /\.(txt|csv|tsv|json|xml|ya?ml|toml|log|html?|css|js|mjs|cjs|ts|tsx|jsx|py|php|rb|go|rs|java|c|cpp|h|hpp|cs|sh|bash|zsh|sql|ini|conf|env|r|swift|kt|scala|vue|svelte)$/i.test(name)
+                ) {
+                    return 'text';
+                }
+                return 'file';
+            },
+
+            async openMediaViewer(attachment) {
                 const url = this.attachmentDisplayUrl(attachment) || attachment?.url;
                 if (!url) return;
-                let type = 'file';
-                if (attachment.is_image) type = 'image';
-                else if (attachment.is_video) type = 'video';
-                else if (attachment.is_audio) type = 'audio';
-                else if (attachment.kind === 'pdf' || (attachment.mime_type || '').includes('pdf')) type = 'pdf';
-                this.mediaViewer = {
+                const type = this.attachmentViewerKind(attachment);
+                const base = {
                     url,
                     type,
                     name: attachment.name || 'Media',
                     meta: this.attachmentMetaLine(attachment),
+                    bodyHtml: '',
+                    bodyText: '',
+                    loading: false,
+                    error: '',
                 };
+
+                if (type === 'image' || type === 'video' || type === 'audio' || type === 'pdf' || type === 'file') {
+                    this.mediaViewer = base;
+                    return;
+                }
+
+                this.mediaViewer = { ...base, loading: true };
+                try {
+                    const res = await fetch(url);
+                    if (!res.ok) throw new Error('fetch failed');
+                    if (type === 'docx') {
+                        const buffer = await res.arrayBuffer();
+                        const mammoth = await this.loadMammoth();
+                        const result = await mammoth.convertToHtml({ arrayBuffer: buffer });
+                        let html = String(result?.value || '');
+                        if (typeof DOMPurify !== 'undefined') {
+                            html = DOMPurify.sanitize(html, {
+                                USE_PROFILES: { html: true },
+                                ADD_ATTR: ['target', 'rel'],
+                            });
+                        }
+                        if (this.mediaViewer?.url !== url) return;
+                        this.mediaViewer = {
+                            ...base,
+                            type: 'html',
+                            bodyHtml: html || '<p class="text-sm text-zinc-500">Empty document.</p>',
+                            loading: false,
+                        };
+                        return;
+                    }
+
+                    const text = await res.text();
+                    if (this.mediaViewer?.url !== url) return;
+                    if (type === 'markdown') {
+                        const raw = typeof ctRenderMarkdown === 'function'
+                            ? ctRenderMarkdown(text)
+                            : text;
+                        const html = typeof ctEnhanceMarkdownHtml === 'function'
+                            ? ctEnhanceMarkdownHtml(raw)
+                            : raw;
+                        this.mediaViewer = { ...base, type: 'markdown', bodyHtml: html, loading: false };
+                        return;
+                    }
+
+                    this.mediaViewer = { ...base, type: 'text', bodyText: text, loading: false };
+                } catch (e) {
+                    if (this.mediaViewer?.url !== url) return;
+                    this.mediaViewer = {
+                        ...base,
+                        type: 'file',
+                        loading: false,
+                        error: 'Could not load an in-app preview for this file.',
+                    };
+                }
             },
 
             closeMediaViewer() {
@@ -495,6 +618,25 @@
                     document.head.appendChild(script);
                 });
                 return this._jszipLoading;
+            },
+
+            async loadMammoth() {
+                if (window.mammoth) return window.mammoth;
+                if (this._mammothLoading) return this._mammothLoading;
+                this._mammothLoading = new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js';
+                    script.onload = () => {
+                        if (!window.mammoth) {
+                            reject(new Error('mammoth missing'));
+                            return;
+                        }
+                        resolve(window.mammoth);
+                    };
+                    script.onerror = () => reject(new Error('mammoth failed to load'));
+                    document.head.appendChild(script);
+                });
+                return this._mammothLoading;
             },
 
             attachmentExt(attachment) {
@@ -935,6 +1077,374 @@
                 this.mentionFilter = '';
             },
 
+            closeCodeSuggest() {
+                this.showCodeSuggest = false;
+                this.activeCodeSuggestIndex = -1;
+                this.codeSuggestPrefix = '';
+                this.codeFenceLang = '';
+            },
+
+            /**
+             * Full fence range when caret is in the body (not on ``` lines).
+             * { lang, bodyStart, bodyEnd, openStart, closeStart|null }
+             */
+            getCodeFenceRange(text, caret) {
+                const value = String(text ?? '');
+                const pos = Math.max(0, Math.min(caret ?? value.length, value.length));
+                const lines = value.split('\n');
+                let offset = 0;
+                let inFence = false;
+                let lang = '';
+                let openStart = -1;
+                let bodyStart = -1;
+
+                for (let li = 0; li < lines.length; li++) {
+                    const line = lines[li];
+                    const lineStart = offset;
+                    const lineEnd = offset + line.length;
+                    const isFenceLine = /^```/.test(line);
+                    const nextOffset = lineEnd + 1;
+
+                    if (isFenceLine) {
+                        if (!inFence) {
+                            inFence = true;
+                            lang = (line.match(/^```\s*([a-zA-Z0-9_+#-]*)/) || [])[1] || '';
+                            openStart = lineStart;
+                            bodyStart = value[lineEnd] === '\n' ? lineEnd + 1 : lineEnd;
+                        } else {
+                            const closeStart = lineStart;
+                            let bodyEnd = closeStart;
+                            if (bodyEnd > bodyStart && value[bodyEnd - 1] === '\n') {
+                                bodyEnd -= 1;
+                            }
+                            const inBody = pos >= bodyStart && pos <= bodyEnd;
+                            const onClose = pos >= closeStart && pos <= lineEnd;
+                            if (inBody && !onClose) {
+                                return {
+                                    lang: window.ctCodeSuggest?.normalizeLang(lang) || lang || 'plain',
+                                    openStart,
+                                    bodyStart,
+                                    bodyEnd,
+                                    closeStart,
+                                };
+                            }
+                            inFence = false;
+                            lang = '';
+                            openStart = -1;
+                            bodyStart = -1;
+                        }
+                        offset = nextOffset;
+                        continue;
+                    }
+
+                    const atEol = (pos === lineEnd && value[lineEnd] === '\n');
+                    const onLine = (pos >= lineStart && pos <= lineEnd) || atEol;
+                    if (onLine && inFence) {
+                        let bodyEnd = value.length;
+                        // Find closing fence if any (scan ahead already handled on close).
+                        // Unclosed: body runs to EOF; closed handled above.
+                        for (let j = li + 1, off = nextOffset; j < lines.length; j++) {
+                            const L = lines[j];
+                            const ls = off;
+                            const le = off + L.length;
+                            if (/^```/.test(L)) {
+                                bodyEnd = ls;
+                                if (bodyEnd > bodyStart && value[bodyEnd - 1] === '\n') bodyEnd -= 1;
+                                break;
+                            }
+                            off = le + 1;
+                        }
+                        if (pos >= bodyStart && pos <= bodyEnd) {
+                            return {
+                                lang: window.ctCodeSuggest?.normalizeLang(lang) || lang || 'plain',
+                                openStart,
+                                bodyStart,
+                                bodyEnd,
+                                closeStart: null,
+                            };
+                        }
+                        return null;
+                    }
+
+                    offset = nextOffset;
+                }
+
+                if (inFence && pos >= bodyStart) {
+                    return {
+                        lang: window.ctCodeSuggest?.normalizeLang(lang) || lang || 'plain',
+                        openStart,
+                        bodyStart,
+                        bodyEnd: value.length,
+                        closeStart: null,
+                    };
+                }
+                return null;
+            },
+
+            /** Detect caret inside a ```lang fence; return { lang, prefix, start } or null. */
+            getCodeFenceContext(text, caret) {
+                const range = this.getCodeFenceRange(text, caret);
+                if (!range) return null;
+                const value = String(text ?? '');
+                const pos = Math.max(0, Math.min(caret ?? value.length, value.length));
+                const lineStart = value.lastIndexOf('\n', Math.max(0, pos - 1)) + 1;
+                const col = Math.max(0, pos - lineStart);
+                const line = value.slice(lineStart, value.indexOf('\n', lineStart) === -1
+                    ? value.length
+                    : value.indexOf('\n', lineStart));
+                const before = line.slice(0, Math.min(col, line.length));
+                const m = before.match(/([A-Za-z_$][\w$]*)$/);
+                return {
+                    lang: range.lang,
+                    prefix: m ? m[1] : '',
+                    start: lineStart + (m ? col - m[1].length : col),
+                };
+            },
+
+            onDraftCaret() {
+                this.syncMonacoFencePresence();
+                if (!this.monacoFenceActive) {
+                    this.onDraftInput();
+                }
+            },
+
+            syncMonacoFencePresence() {
+                if (this._monacoSyncing || this._monacoFailed) return;
+                if (this.draftFormat !== 'markdown' || !window.ctMonacoFence?.preferMonaco?.()) {
+                    if (this.monacoFenceActive) this.sleepMonacoFence(false);
+                    return;
+                }
+                const el = this.$refs.draftInput;
+                const caret = el?.selectionStart ?? this.draft.length;
+                const range = this.getCodeFenceRange(this.draft, caret);
+                if (!range) {
+                    if (this.monacoFenceActive) this.sleepMonacoFence(false);
+                    return;
+                }
+                if (
+                    this.monacoFenceActive
+                    && this._monacoFenceRange
+                    && this._monacoFenceRange.openStart === range.openStart
+                ) {
+                    this._monacoFenceRange = range;
+                    this.monacoFenceLang = range.lang;
+                    return;
+                }
+                clearTimeout(this._monacoWakeTimer);
+                this._monacoWakeTimer = setTimeout(() => {
+                    this.wakeMonacoFence(range);
+                }, 280);
+            },
+
+            replaceFenceBody(bodyText, range) {
+                const r = range || this._monacoFenceRange;
+                if (!r) return;
+                const before = this.draft.slice(0, r.bodyStart);
+                const after = this.draft.slice(r.bodyEnd);
+                const body = String(bodyText ?? '');
+                this._monacoSyncing = true;
+                this.draft = before + body + after;
+                const nextEnd = r.bodyStart + body.length;
+                this._monacoFenceRange = { ...r, bodyEnd: nextEnd };
+                this.$nextTick(() => {
+                    this._monacoSyncing = false;
+                    this.autoResizeDraft();
+                });
+            },
+
+            async wakeMonacoFence(range) {
+                if (!range || this.draftFormat !== 'markdown') return;
+                if (!window.ctMonacoFence?.preferMonaco?.()) return;
+                if (!window.ctMonacoFence?.loadMonaco) return;
+
+                clearTimeout(this._monacoWakeTimer);
+                this.closeCodeSuggest();
+                this.closeMentionMenu();
+
+                if (this.monacoFenceActive && this._monacoEditor && this._monacoFenceRange?.openStart === range.openStart) {
+                    this._monacoFenceRange = range;
+                    return;
+                }
+
+                if (this.monacoFenceActive) {
+                    this.sleepMonacoFence(false);
+                }
+
+                this.monacoFenceActive = true;
+                this.monacoFenceLoading = true;
+                this.monacoFenceError = '';
+                this.monacoFenceLang = range.lang || 'plain';
+                this._monacoFenceRange = range;
+                this._monacoDisposed = false;
+
+                await this.$nextTick();
+                const host = this.$refs.monacoFenceHost;
+                if (!host || this._monacoDisposed) {
+                    this.monacoFenceLoading = false;
+                    return;
+                }
+
+                try {
+                    const monaco = await window.ctMonacoFence.loadMonaco();
+                    if (this._monacoDisposed || !this.$refs.monacoFenceHost) {
+                        this.monacoFenceLoading = false;
+                        return;
+                    }
+                    const body = this.draft.slice(range.bodyStart, range.bodyEnd);
+                    const language = window.ctMonacoFence.monacoLanguage(range.lang);
+                    this._monacoEditor = monaco.editor.create(this.$refs.monacoFenceHost, {
+                        value: body,
+                        language,
+                        theme: 'vs-dark',
+                        automaticLayout: true,
+                        minimap: { enabled: false },
+                        fontSize: 13,
+                        lineNumbers: 'on',
+                        scrollBeyondLastLine: false,
+                        wordWrap: 'on',
+                        tabSize: 4,
+                        insertSpaces: true,
+                        renderLineHighlight: 'line',
+                        padding: { top: 8, bottom: 8 },
+                        overviewRulerLanes: 0,
+                        folding: true,
+                        quickSuggestions: true,
+                        suggestOnTriggerCharacters: true,
+                        wordBasedSuggestions: 'currentDocument',
+                        snippetSuggestions: 'inline',
+                    });
+                    this._monacoEditor.onDidChangeModelContent(() => {
+                        if (!this._monacoEditor || this._monacoDisposed) return;
+                        this.replaceFenceBody(this._monacoEditor.getValue(), this._monacoFenceRange);
+                    });
+                    this._monacoEditor.addCommand(monaco.KeyCode.Escape, () => {
+                        this.sleepMonacoFence(true);
+                    });
+                    const el = this.$refs.draftInput;
+                    const caret = el?.selectionStart ?? range.bodyStart;
+                    const offset = Math.max(0, Math.min(caret - range.bodyStart, body.length));
+                    const model = this._monacoEditor.getModel();
+                    if (model) {
+                        const pos = model.getPositionAt(offset);
+                        this._monacoEditor.setPosition(pos);
+                        this._monacoEditor.focus();
+                    }
+                    this.monacoFenceLoading = false;
+                } catch (e) {
+                    this._monacoFailed = true;
+                    this.monacoFenceLoading = false;
+                    this.monacoFenceError = 'Code editor failed to load — using text suggestions instead.';
+                    this.monacoFenceActive = false;
+                    this._monacoEditor = null;
+                    this._monacoFenceRange = null;
+                }
+            },
+
+            sleepMonacoFence(focusTextarea = false) {
+                clearTimeout(this._monacoWakeTimer);
+                this._monacoDisposed = true;
+                let caretInBody = null;
+                if (this._monacoEditor && this._monacoFenceRange) {
+                    try {
+                        const value = this._monacoEditor.getValue();
+                        const pos = this._monacoEditor.getPosition();
+                        const model = this._monacoEditor.getModel();
+                        if (model && pos) {
+                            caretInBody = model.getOffsetAt(pos);
+                        }
+                        this.replaceFenceBody(value, this._monacoFenceRange);
+                    } catch (e) {}
+                    try {
+                        this._monacoEditor.dispose();
+                    } catch (e) {}
+                }
+                const range = this._monacoFenceRange;
+                this._monacoEditor = null;
+                this._monacoFenceRange = null;
+                this.monacoFenceActive = false;
+                this.monacoFenceLoading = false;
+                this.monacoFenceLang = '';
+                this.monacoFenceError = '';
+                if (focusTextarea) {
+                    this.$nextTick(() => {
+                        const el = this.$refs.draftInput;
+                        if (!el) return;
+                        el.focus();
+                        if (range && caretInBody != null) {
+                            const c = range.bodyStart + caretInBody;
+                            el.selectionStart = el.selectionEnd = c;
+                        }
+                        this.autoResizeDraft();
+                    });
+                }
+            },
+
+            filteredCodeSuggestions() {
+                if (!window.ctCodeSuggest) return [];
+                return window.ctCodeSuggest.filter(this.codeFenceLang, this.codeSuggestPrefix);
+            },
+
+            updateCodeSuggest(force = false) {
+                if (this.monacoFenceActive) {
+                    this.closeCodeSuggest();
+                    return;
+                }
+                const el = this.$refs.draftInput;
+                const caret = el?.selectionStart ?? this.draft.length;
+                const ctx = this.getCodeFenceContext(this.draft, caret);
+                if (!ctx || this.draftFormat !== 'markdown') {
+                    this.closeCodeSuggest();
+                    return;
+                }
+                this.codeFenceLang = ctx.lang || 'plain';
+                this.codeSuggestPrefix = ctx.prefix || '';
+                this.codeSuggestStart = ctx.start;
+                const items = this.filteredCodeSuggestions();
+                const open = items.length > 0 && (force || (ctx.prefix && ctx.prefix.length >= 1));
+                this.showCodeSuggest = open;
+                this.activeCodeSuggestIndex = open ? 0 : -1;
+                if (open) this.closeMentionMenu();
+            },
+
+            pickCodeSuggestion(item) {
+                if (!item || !window.ctCodeSuggest) return;
+                const el = this.$refs.draftInput;
+                if (!el) return;
+                const caret = el.selectionStart ?? this.draft.length;
+                const start = this.codeSuggestStart ?? caret;
+                const expanded = window.ctCodeSuggest.expandSnippet(item.insert || item.label);
+                const before = this.draft.slice(0, start);
+                const after = this.draft.slice(caret);
+                const next = before + expanded.text + after;
+                const newCaret = start + expanded.caret;
+                this.draft = next;
+                this.closeCodeSuggest();
+                this.$nextTick(() => {
+                    el.focus();
+                    el.selectionStart = el.selectionEnd = newCaret;
+                    this.autoResizeDraft();
+                });
+            },
+
+            acceptActiveCodeSuggest() {
+                const items = this.filteredCodeSuggestions();
+                if (!items.length) return false;
+                const idx = this.activeCodeSuggestIndex >= 0 ? this.activeCodeSuggestIndex : 0;
+                this.pickCodeSuggestion(items[idx]);
+                return true;
+            },
+
+            codeSuggestNav(delta) {
+                if (!this.showCodeSuggest) return;
+                const items = this.filteredCodeSuggestions();
+                if (!items.length) return;
+                if (this.activeCodeSuggestIndex < 0) {
+                    this.activeCodeSuggestIndex = delta > 0 ? 0 : items.length - 1;
+                } else {
+                    this.activeCodeSuggestIndex = (this.activeCodeSuggestIndex + delta + items.length) % items.length;
+                }
+            },
+
             pickSuggestion(item) {
                 if (!item) return;
                 if (item.special === 'selected') {
@@ -966,6 +1476,56 @@
             },
 
             onDraftKeydown(event) {
+                if ((event.ctrlKey || event.metaKey) && event.code === 'Space') {
+                    const el = this.$refs.draftInput;
+                    const caret = el?.selectionStart ?? this.draft.length;
+                    if (this.draftFormat === 'markdown') {
+                        const range = this.getCodeFenceRange(this.draft, caret);
+                        if (range) {
+                            event.preventDefault();
+                            if (window.ctMonacoFence?.preferMonaco?.() && !this.monacoFenceActive) {
+                                this.wakeMonacoFence(range);
+                            } else if (!this.monacoFenceActive) {
+                                this.updateCodeSuggest(true);
+                            }
+                            return;
+                        }
+                    }
+                }
+
+                if (this.monacoFenceActive && event.key === 'Escape') {
+                    event.preventDefault();
+                    this.sleepMonacoFence(true);
+                    return;
+                }
+
+                if (this.showCodeSuggest) {
+                    if (event.key === 'ArrowDown') {
+                        event.preventDefault();
+                        this.codeSuggestNav(1);
+                        return;
+                    }
+                    if (event.key === 'ArrowUp') {
+                        event.preventDefault();
+                        this.codeSuggestNav(-1);
+                        return;
+                    }
+                    if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey && this.activeCodeSuggestIndex >= 0)) {
+                        if (!this.filteredCodeSuggestions().length) {
+                            // fall through for Tab indent / Enter send
+                        } else {
+                            event.preventDefault();
+                            this.acceptActiveCodeSuggest();
+                            return;
+                        }
+                    }
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        this.closeCodeSuggest();
+                        return;
+                    }
+                }
+
                 if (this.showMentionMenu) {
                     if (event.key === 'ArrowDown') {
                         event.preventDefault();
@@ -1076,6 +1636,117 @@
                 });
             },
 
+            listIndentWidth(ws) {
+                return String(ws || '').replace(/\t/g, '  ').length;
+            },
+
+            parseListLine(line) {
+                const m = String(line).match(/^(\s*)([-*+]|\d+\.)(\s+)(.*)$/);
+                if (!m) return null;
+                const indentWs = m[1].replace(/\t/g, '  ');
+                return {
+                    indentWs,
+                    indent: indentWs.length,
+                    marker: m[2],
+                    spaces: m[3],
+                    text: m[4],
+                    markerWidth: m[2].length + m[3].length,
+                };
+            },
+
+            /** Previous list item before lineStart with exact indent, or with indent < maxIndent. */
+            findPreviousListItem(value, lineStart, { exactIndent = null, maxIndent = null } = {}) {
+                const lines = value.slice(0, lineStart).split('\n');
+                for (let i = lines.length - 1; i >= 0; i--) {
+                    if (/^\s*$/.test(lines[i])) continue;
+                    const parsed = this.parseListLine(lines[i]);
+                    if (!parsed) {
+                        if (maxIndent != null && this.listIndentWidth(lines[i].match(/^\s*/)[0]) < maxIndent) {
+                            break;
+                        }
+                        if (exactIndent != null) break;
+                        continue;
+                    }
+                    if (exactIndent != null) {
+                        if (parsed.indent === exactIndent) return parsed;
+                        if (parsed.indent < exactIndent) break;
+                        continue;
+                    }
+                    if (maxIndent != null) {
+                        if (parsed.indent < maxIndent) return parsed;
+                        continue;
+                    }
+                    return parsed;
+                }
+                return null;
+            },
+
+            /** Next OL number at indent, scanning lines before `beforeIndex`. */
+            nextOlNumberBefore(value, beforeIndex, indentWidth) {
+                const lines = value.slice(0, beforeIndex).split('\n');
+                let last = 0;
+                for (let i = lines.length - 1; i >= 0; i--) {
+                    const m = lines[i].match(/^(\s*)(\d+)\.\s/);
+                    if (!m) {
+                        if (/^\s*$/.test(lines[i])) continue;
+                        if (this.listIndentWidth(lines[i].match(/^\s*/)[0]) <= indentWidth
+                            && !/^(\s*)([-*+]|\d+\.)\s/.test(lines[i])) {
+                            break;
+                        }
+                        continue;
+                    }
+                    const w = this.listIndentWidth(m[1]);
+                    if (w === indentWidth) {
+                        last = Number(m[2]);
+                        break;
+                    }
+                    if (w < indentWidth) break;
+                }
+                return last + 1;
+            },
+
+            /**
+             * Outdent one list level (to parent indent).
+             * CommonMark needs OL nests at marker width (usually 3), so outdent targets the real parent indent.
+             */
+            outdentListLine(line, value, lineStart) {
+                const parsed = this.parseListLine(line);
+                if (!parsed || parsed.indent < 1) return null;
+
+                const parent = this.findPreviousListItem(value, lineStart, { maxIndent: parsed.indent });
+                const newWidth = parent ? parent.indent : 0;
+                if (newWidth >= parsed.indent) return null;
+
+                let marker = parsed.marker;
+                if (/^\d+\.$/.test(marker)) {
+                    marker = this.nextOlNumberBefore(value, lineStart, newWidth) + '.';
+                }
+                const nextLine = ' '.repeat(newWidth) + marker + parsed.spaces + parsed.text;
+                return { line: nextLine, delta: nextLine.length - line.length };
+            },
+
+            /**
+             * Indent one level under the previous sibling.
+             * Nest width follows CommonMark (parent indent + marker width), so OL under `1. ` uses 3 spaces.
+             */
+            indentListLine(line, value, lineStart) {
+                const parsed = this.parseListLine(line);
+                if (!parsed) return null;
+
+                const sibling = this.findPreviousListItem(value, lineStart, { exactIndent: parsed.indent });
+                let newWidth = sibling
+                    ? sibling.indent + sibling.markerWidth
+                    : parsed.indent + (/^\d+\.$/.test(parsed.marker) ? 3 : 2);
+                if (newWidth <= parsed.indent) {
+                    newWidth = parsed.indent + (/^\d+\.$/.test(parsed.marker) ? 3 : 2);
+                }
+
+                let marker = parsed.marker;
+                if (/^\d+\.$/.test(marker)) marker = '1.';
+                const nextLine = ' '.repeat(newWidth) + marker + parsed.spaces + parsed.text;
+                return { line: nextLine, delta: nextLine.length - line.length };
+            },
+
             handleMarkdownTab(event) {
                 const el = this.$refs.draftInput;
                 if (!el) return false;
@@ -1110,24 +1781,22 @@
                     return true;
                 }
 
-                const list = line.match(/^(\s*)([-*+]|\d+\.)(\s+)(.*)$/);
-                if (!list) return false;
+                if (!/^(\s*)([-*+]|\d+\.)\s/.test(line)) return false;
 
                 event.preventDefault();
-                const indent = list[1];
                 if (event.shiftKey) {
-                    if (indent.length < 2) return true;
-                    const trimmed = indent.slice(2);
-                    const nextLine = trimmed + list[2] + list[3] + list[4];
-                    const next = value.slice(0, lineStart) + nextLine + value.slice(fullLineEnd);
-                    const caret = Math.max(lineStart, start - 2);
+                    const out = this.outdentListLine(line, value, lineStart);
+                    if (!out) return true;
+                    const next = value.slice(0, lineStart) + out.line + value.slice(fullLineEnd);
+                    const caret = Math.max(lineStart, start + out.delta);
                     this.applyDraftEdit(el, next, caret);
                     return true;
                 }
 
-                const nextLine = '  ' + line;
-                const next = value.slice(0, lineStart) + nextLine + value.slice(fullLineEnd);
-                this.applyDraftEdit(el, next, start + 2);
+                const ind = this.indentListLine(line, value, lineStart);
+                if (!ind) return true;
+                const next = value.slice(0, lineStart) + ind.line + value.slice(fullLineEnd);
+                this.applyDraftEdit(el, next, start + ind.delta);
                 return true;
             },
 
@@ -1154,7 +1823,15 @@
                 if (ul) {
                     event.preventDefault();
                     if (ul[3] === '') {
-                        // Empty bullet → exit list (keep indent level exit one step: clear marker).
+                        // Empty → outdent one level only; at root, leave the list.
+                        const out = this.outdentListLine(line, value, lineStart);
+                        if (out) {
+                            const m = out.line.match(/^(\s*)([-*+]|\d+\.)(\s+)(.*)$/);
+                            const parentLine = m ? (m[1] + m[2] + m[3]) : out.line;
+                            const next = value.slice(0, lineStart) + parentLine + after;
+                            this.applyDraftEdit(el, next, lineStart + parentLine.length);
+                            return true;
+                        }
                         const next = value.slice(0, lineStart) + after;
                         this.applyDraftEdit(el, next, lineStart);
                         return true;
@@ -1168,12 +1845,22 @@
                 if (ol) {
                     event.preventDefault();
                     if (ol[3] === '') {
+                        // Empty → outdent one level and continue parent numbering.
+                        const out = this.outdentListLine(line, value, lineStart);
+                        if (out) {
+                            const m = out.line.match(/^(\s*)([-*+]|\d+\.)(\s+)(.*)$/);
+                            const parentLine = m ? (m[1] + m[2] + m[3]) : out.line;
+                            const next = value.slice(0, lineStart) + parentLine + after;
+                            this.applyDraftEdit(el, next, lineStart + parentLine.length);
+                            return true;
+                        }
                         const next = value.slice(0, lineStart) + after;
                         this.applyDraftEdit(el, next, lineStart);
                         return true;
                     }
-                    const n = Number(ol[2]) + 1;
-                    const insert = '\n' + ol[1] + n + '. ';
+                    const indentWidth = this.listIndentWidth(ol[1]);
+                    const nextNum = this.nextOlNumberBefore(value, lineStart + line.length, indentWidth);
+                    const insert = '\n' + ol[1] + nextNum + '. ';
                     this.applyDraftEdit(el, before + insert + after, start + insert.length);
                     return true;
                 }
@@ -1250,6 +1937,20 @@
             },
 
             onDraftInput() {
+                this.syncMonacoFencePresence();
+                if (this.monacoFenceActive) {
+                    this.closeCodeSuggest();
+                    this.closeMentionMenu();
+                    return;
+                }
+                const el = this.$refs.draftInput;
+                const caret = el?.selectionStart ?? this.draft.length;
+                if (this.draftFormat === 'markdown' && this.getCodeFenceContext(this.draft, caret)) {
+                    this.updateCodeSuggest(false);
+                    return;
+                }
+                this.closeCodeSuggest();
+
                 const match = this.draft.match(/@([A-Za-z0-9_:.\/-]*)$/);
                 if (match) {
                     this.mentionFilter = match[1];
@@ -1928,6 +2629,51 @@
                 }
             },
 
+            supportsCallInsertableStreams() {
+                try {
+                    if (typeof RTCRtpScriptTransform !== 'undefined') return true;
+                    return !!(window.RTCRtpSender
+                        && typeof RTCRtpSender.prototype.createEncodedStreams === 'function');
+                } catch (e) {
+                    return false;
+                }
+            },
+
+            async createLiveKitE2eeWorker() {
+                const url = 'https://cdn.jsdelivr.net/npm/livekit-client@2.9.8/dist/livekit-client.e2ee.worker.mjs';
+                const res = await fetch(url);
+                if (!res.ok) throw new Error('Could not load E2EE worker.');
+                const blob = await res.blob();
+                if (this._e2eeWorkerUrl) {
+                    try { URL.revokeObjectURL(this._e2eeWorkerUrl); } catch (e) {}
+                }
+                this._e2eeWorkerUrl = URL.createObjectURL(blob);
+                return new Worker(this._e2eeWorkerUrl, { type: 'module' });
+            },
+
+            async buildSfuE2eeOptions(LK) {
+                if (!this.roomKey || !window.ChatCrypto?.exportRoomKeyRaw || !window.ChatCrypto?.b64encode) {
+                    return { enabled: false, reason: 'Chat room key not ready yet.' };
+                }
+                if (!this.supportsCallInsertableStreams()) {
+                    return { enabled: false, reason: 'Browser lacks Insertable Streams for call E2EE.' };
+                }
+                const KeyProvider = LK.ExternalE2EEKeyProvider;
+                if (!KeyProvider) {
+                    return { enabled: false, reason: 'LiveKit E2EE provider unavailable.' };
+                }
+                try {
+                    const keyProvider = new KeyProvider();
+                    const raw = await window.ChatCrypto.exportRoomKeyRaw(this.roomKey);
+                    await keyProvider.setKey(window.ChatCrypto.b64encode(raw));
+                    const worker = await this.createLiveKitE2eeWorker();
+                    return { enabled: true, keyProvider, worker };
+                } catch (e) {
+                    console.warn('SFU call E2EE setup failed', e);
+                    return { enabled: false, reason: e?.message || 'Could not enable call E2EE.' };
+                }
+            },
+
             async connectSfu() {
                 if (!this.sfuTokenUrl || !this.callId) {
                     throw new Error('SFU is not configured.');
@@ -1956,11 +2702,23 @@
                 }
                 if (generation !== this._sfuGeneration || this.callState === 'idle') return;
 
-                const room = new LK.Room({
+                const e2ee = await this.buildSfuE2eeOptions(LK);
+                if (generation !== this._sfuGeneration || this.callState === 'idle') return;
+
+                const roomOpts = {
                     adaptiveStream: true,
                     dynacast: true,
-                });
+                };
+                if (e2ee.enabled) {
+                    const opts = { keyProvider: e2ee.keyProvider, worker: e2ee.worker };
+                    // livekit-client 2.9 uses `e2ee`; newer docs use `encryption`.
+                    roomOpts.e2ee = opts;
+                    roomOpts.encryption = opts;
+                }
+
+                const room = new LK.Room(roomOpts);
                 this.livekitRoom = room;
+                this.callMediaE2ee = false;
 
                 const attachParticipant = (participant) => {
                     const userId = Number(participant.identity);
@@ -2004,6 +2762,22 @@
                     }
                 });
 
+                if (e2ee.enabled) {
+                    try {
+                        await room.setE2EEEnabled(true);
+                        this.callMediaE2ee = true;
+                    } catch (e) {
+                        console.warn('Could not enable LiveKit E2EE', e);
+                        this.callMediaE2ee = false;
+                        this.callError = this.callError || 'SFU joined without media E2EE.';
+                    }
+                } else if (e2ee.reason) {
+                    this.callMediaE2ee = false;
+                    if (String(e2ee.reason).includes('Insertable Streams') && !this.callError) {
+                        this.callError = 'SFU call: ' + e2ee.reason;
+                    }
+                }
+
                 await room.connect(data.url, data.token);
                 if (generation !== this._sfuGeneration || this.callState === 'idle') {
                     try { await room.disconnect(); } catch (e) {}
@@ -2023,6 +2797,7 @@
 
             async disconnectSfu() {
                 this._sfuGeneration = (this._sfuGeneration || 0) + 1;
+                this.callMediaE2ee = false;
                 const room = this.livekitRoom;
                 this.livekitRoom = null;
                 if (!room) return;
@@ -2203,6 +2978,7 @@
                 this.callId = null;
                 this.callState = 'idle';
                 this.callMediaMode = 'mesh';
+                this.callMediaE2ee = false;
                 this.showCallModal = false;
                 this.incomingCall = null;
                 this.callError = '';
@@ -2626,6 +3402,7 @@
 
             async sendMessage() {
                 if (this.sending) return;
+                this.sleepMonacoFence(false);
                 if (!this.draft.trim() && !this.files.length) return;
 
                 this.sending = true;

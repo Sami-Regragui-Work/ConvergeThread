@@ -53,7 +53,7 @@
     </template>
 </div>
 
-<div class="relative shrink-0 space-y-2" @click.outside="closeMentionMenu()">
+<div class="relative shrink-0 flex flex-col min-h-0 max-h-[min(48dvh,26rem)]" @click.outside="closeMentionMenu(); closeCodeSuggest()">
     <div x-show="showMentionMenu" x-cloak
         class="absolute bottom-full left-0 right-0 mb-2 max-h-48 overflow-y-auto rounded-xl border border-white/10 bg-surface-300 shadow-xl z-40">
         <template x-for="(item, index) in filteredSuggestions()" :key="item.token">
@@ -70,95 +70,142 @@
         </template>
     </div>
 
-    <p x-show="recording" x-cloak
-        class="text-xs text-red-300 px-1">Recording… <span x-text="recordSeconds + 's'"></span> — click mic to stop</p>
-
-    <div x-show="draftFormat === 'markdown' && showMarkdownGuide" x-cloak
-        class="rounded-xl border border-white/10 bg-surface-300/90 px-3 py-2.5 text-[11px] text-slate-300 space-y-2 max-h-52 overflow-y-auto">
-        <div class="flex items-center justify-between gap-2">
-            <p class="text-xs font-semibold text-white">Markdown cheat sheet</p>
-            <button type="button" @click="setMarkdownGuide(false)"
-                class="text-[10px] text-slate-400 hover:text-white px-1.5 py-0.5 rounded border border-white/10">Hide</button>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-[10px] leading-relaxed">
-            <p><span class="text-brand-300">**bold**</span> · <span class="text-brand-300">*italic*</span> · <span class="text-brand-300">`code`</span></p>
-            <p><span class="text-brand-300">## Heading</span></p>
-            <p><span class="text-brand-300">- item</span> · <span class="text-brand-300">1. item</span> · <span class="text-brand-300">Tab</span> nest / <span class="text-brand-300">Shift+Tab</span> un-nest</p>
-            <p><span class="text-brand-300">[link](https://…)</span></p>
-            <p class="sm:col-span-2"><span class="text-brand-300">```py</span> … <span class="text-brand-300">```</span> · Tab indents 4 spaces inside fences</p>
-            <p class="sm:col-span-2"><span class="text-brand-300">|a|b|</span> → Shift+Enter → <span class="text-brand-300">|-|-|</span> → <span class="text-brand-300">|  |  |</span> (empty row exits)</p>
-        </div>
-        <div class="border-t border-white/5 pt-2 space-y-1 text-[10px] text-slate-400">
-            <p><span class="text-white font-medium">Line breaks (no empty line):</span></p>
-            <p>End a line with <span class="text-brand-300 font-mono">\</span> then Shift+Enter → hard break</p>
-            <p>Or end with <span class="text-brand-300 font-mono">two spaces</span> then Shift+Enter</p>
-            <p><span class="text-white font-medium">Plain Shift+Enter</span> stays in the same paragraph (soft break)</p>
-            <p><span class="text-white font-medium">Blank line</span> (Shift+Enter twice) → new paragraph / leave list or table</p>
-            <p><span class="text-white font-medium">Nested lists:</span> on a list line, Tab adds 2 spaces (ul↔ol mix OK); or type the spaces yourself</p>
-        </div>
+    <div x-show="showCodeSuggest && filteredCodeSuggestions().length" x-cloak
+        class="absolute bottom-full left-0 right-0 mb-2 max-h-52 overflow-y-auto rounded-xl border border-white/10 bg-surface-300 shadow-xl z-40">
+        <p class="px-3 py-1.5 text-[10px] uppercase tracking-wide text-slate-500 border-b border-white/5 sticky top-0 bg-surface-300">
+            <span x-text="(codeFenceLang || 'code') + ' · Tab to accept · Ctrl+Space'"></span>
+        </p>
+        <template x-for="(item, index) in filteredCodeSuggestions()" :key="item.kind + ':' + item.label + ':' + index">
+            <button type="button"
+                @mousedown.prevent="pickCodeSuggestion(item)"
+                class="w-full text-left px-4 py-2 text-sm flex items-center justify-between gap-3"
+                :class="activeCodeSuggestIndex === index ? 'bg-white/10' : 'hover:bg-white/5'">
+                <span class="font-mono text-brand-300 truncate" x-text="item.label"></span>
+                <span class="text-[10px] text-slate-500 shrink-0"
+                    x-text="item.detail || item.kind"></span>
+            </button>
+        </template>
     </div>
 
-    <div class="flex items-center justify-between gap-2 px-0.5">
-        <div class="inline-flex rounded-lg border border-white/10 bg-surface-200 p-0.5 text-[10px] font-semibold">
-            <button type="button" @click="setDraftFormat('plain')"
-                class="px-2 py-1 rounded-md transition"
-                :class="draftFormat === 'plain' ? 'bg-brand-500 text-white' : 'text-slate-400 hover:text-white'">Plain</button>
-            <button type="button" @click="setDraftFormat('markdown')"
-                class="px-2 py-1 rounded-md transition"
-                :class="draftFormat === 'markdown' ? 'bg-brand-500 text-white' : 'text-slate-400 hover:text-white'">Markdown</button>
+    {{-- Guide / preview scroll above; input stays pinned at the bottom of the composer --}}
+    <div class="min-h-0 overflow-y-auto overscroll-contain space-y-2">
+        <p x-show="recording" x-cloak
+            class="text-xs text-red-300 px-1">Recording… <span x-text="recordSeconds + 's'"></span> — click mic to stop</p>
+
+        <div x-show="draftFormat === 'markdown' && showMarkdownGuide" x-cloak
+            class="rounded-xl border border-white/10 bg-surface-300/90 px-3 py-2.5 text-[11px] text-slate-300 space-y-2">
+            <div class="flex items-center justify-between gap-2">
+                <p class="text-xs font-semibold text-white">Markdown cheat sheet</p>
+                <button type="button" @click="setMarkdownGuide(false)"
+                    class="text-[10px] text-slate-400 hover:text-white px-1.5 py-0.5 rounded border border-white/10">Hide</button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-[10px] leading-relaxed">
+                <p><span class="text-brand-300">**bold**</span> · <span class="text-brand-300">*italic*</span> · <span class="text-brand-300">~~strike~~</span> · <span class="text-brand-300">==mark==</span></p>
+                <p><span class="text-brand-300">`code`</span> · <span class="text-brand-300">++underline++</span> · <span class="text-brand-300">^sup</span></p>
+                <p><span class="text-brand-300"># H1</span>–<span class="text-brand-300">###### H6</span> · <span class="text-brand-300">&gt; quote</span></p>
+                <p><span class="text-brand-300">- item</span> · <span class="text-brand-300">1. item</span> · <span class="text-brand-300">- [ ] task</span></p>
+                <p><span class="text-brand-300">[link](https://…)</span> · <span class="text-brand-300">![alt](https://…)</span></p>
+                <p><span class="text-brand-300">&gt;!spoiler!&lt;</span> or <span class="text-brand-300">||spoiler||</span></p>
+                <p class="sm:col-span-2"><span class="text-brand-300">```js</span> / <span class="text-brand-300">```py</span> / <span class="text-brand-300">```php</span> … — syntax colors + keyword/snippet suggestions (Tab / Ctrl+Space)</p>
+                <p class="sm:col-span-2"><span class="text-brand-300">|a|b|</span> → Shift+Enter → <span class="text-brand-300">|-|-|</span> → row (empty row exits)</p>
+                <p class="sm:col-span-2"><span class="text-brand-300">&gt; [!NOTE]</span> / TIP / WARNING · footnotes <span class="text-brand-300">[^1]</span> · term + <span class="text-brand-300">: def</span></p>
+                <p class="sm:col-span-2">Safe HTML OK: <span class="text-brand-300">&lt;details&gt;</span>, <span class="text-brand-300">&lt;kbd&gt;</span>, <span class="text-brand-300">&lt;sub&gt;</span> (scripts/handlers stripped)</p>
+            </div>
+            <div class="border-t border-white/5 pt-2 space-y-1 text-[10px] text-slate-400">
+                <p><span class="text-white font-medium">Line breaks (no empty line):</span></p>
+                <p>End a line with <span class="text-brand-300 font-mono">\</span> then Shift+Enter → hard break</p>
+                <p>Or end with <span class="text-brand-300 font-mono">two spaces</span> then Shift+Enter</p>
+                <p><span class="text-white font-medium">Plain Shift+Enter</span> stays in the same paragraph (soft break)</p>
+                <p><span class="text-white font-medium">Blank line</span> (Shift+Enter twice) → new paragraph / leave list or table</p>
+                <p><span class="text-white font-medium">Nested lists:</span> Tab nests under the previous item (OL uses CommonMark-safe indent, restarts at 1); Shift+Tab / empty Shift+Enter outdents one level (OL continues parent)</p>
+            </div>
         </div>
-        <button type="button" x-show="draftFormat === 'markdown'" x-cloak
-            @click="setMarkdownGuide(!showMarkdownGuide)"
-            class="text-[10px] font-semibold px-2 py-1 rounded-lg border border-white/10 text-slate-300 hover:bg-white/5 transition"
-            x-text="showMarkdownGuide ? 'Hide guide' : 'Show guide'"></button>
+
+        <div class="flex items-center justify-between gap-2 px-0.5">
+            <div class="inline-flex rounded-lg border border-white/10 bg-surface-200 p-0.5 text-[10px] font-semibold">
+                <button type="button" @click="setDraftFormat('plain')"
+                    class="px-2 py-1 rounded-md transition"
+                    :class="draftFormat === 'plain' ? 'bg-brand-500 text-white' : 'text-slate-400 hover:text-white'">Plain</button>
+                <button type="button" @click="setDraftFormat('markdown')"
+                    class="px-2 py-1 rounded-md transition"
+                    :class="draftFormat === 'markdown' ? 'bg-brand-500 text-white' : 'text-slate-400 hover:text-white'">Markdown</button>
+            </div>
+            <button type="button" x-show="draftFormat === 'markdown'" x-cloak
+                @click="setMarkdownGuide(!showMarkdownGuide)"
+                class="text-[10px] font-semibold px-2 py-1 rounded-lg border border-white/10 text-slate-300 hover:bg-white/5 transition"
+                x-text="showMarkdownGuide ? 'Hide guide' : 'Show guide'"></button>
+        </div>
+
+        <div x-show="draftFormat === 'markdown' && draft.trim()" x-cloak
+            class="max-h-40 overflow-y-auto overscroll-contain rounded-xl border border-brand-500/20 bg-surface-300/80 px-4 py-2.5 text-sm text-slate-200 ct-md-body"
+            x-html="draftMarkdownPreviewHtml()"></div>
     </div>
 
-    <div x-show="draftFormat === 'markdown' && draft.trim()" x-cloak
-        class="max-h-40 overflow-y-auto overscroll-contain rounded-xl border border-brand-500/20 bg-surface-300/80 px-4 py-2.5 text-sm text-slate-200 ct-md-body"
-        x-html="draftMarkdownPreviewHtml()"></div>
-
-    <div class="flex items-end gap-2 flex-wrap sm:flex-nowrap">
-        <button type="button" @click="toggleMentionMenu()"
-            class="shrink-0 w-10 h-10 rounded-xl border border-white/10 bg-surface-200 text-brand-400 hover:bg-white/5 transition font-bold"
-            title="Mention someone">&#64;</button>
-        <div class="flex-1 min-w-40 basis-[min(100%,12rem)] sm:basis-auto">
-            <textarea x-ref="draftInput" x-model="draft" rows="1"
-                @input="onDraftInput(); autoResizeDraft()"
-                @keydown="onDraftKeydown($event)"
-                @paste="onComposerPaste($event)"
-                autocomplete="off"
-                placeholder="{{ $composerPlaceholder }}"
-                :disabled="sending"
-                class="w-full bg-surface-200 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition placeholder-slate-500 disabled:opacity-50 resize-none overflow-y-hidden min-h-10 leading-5"></textarea>
+    <div class="shrink-0 space-y-2 pt-2 border-t border-white/5 mt-1">
+        <div x-show="monacoFenceActive || monacoFenceError" x-cloak
+            class="rounded-xl border border-brand-500/30 bg-zinc-950/90 overflow-hidden">
+            <div class="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-white/10">
+                <p class="text-[11px] text-slate-300 truncate">
+                    <span class="font-semibold text-brand-300">Code editor</span>
+                    <span class="text-slate-500"> · </span>
+                    <span class="font-mono text-slate-400" x-text="monacoFenceLang || 'plain'"></span>
+                    <span x-show="monacoFenceLoading" class="text-slate-500"> · loading…</span>
+                </p>
+                <button type="button"
+                    class="shrink-0 rounded-md border border-white/10 px-2 py-0.5 text-[10px] font-semibold text-slate-300 hover:bg-white/5"
+                    @click="sleepMonacoFence(true)"
+                    title="Close code editor (Esc)">Done</button>
+            </div>
+            <p x-show="monacoFenceError" x-cloak class="px-3 py-2 text-[11px] text-amber-300/90" x-text="monacoFenceError"></p>
+            <div x-ref="monacoFenceHost" class="h-52 w-full" x-show="monacoFenceActive && !monacoFenceError"></div>
         </div>
-        <label class="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl border border-white/10 bg-surface-200 text-slate-400 hover:bg-white/5 hover:text-white cursor-pointer transition"
-            title="Attach files (50 MB limit checked on send)">
-            <input type="file" x-ref="fileInput" accept="*/*" multiple @change="onFilesChange($event)" class="sr-only">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-            </svg>
-        </label>
-        <button type="button" @click="toggleRecording()"
-            class="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl border transition"
-            :class="recording ? 'border-red-500/50 bg-red-500/15 text-red-300' : 'border-white/10 bg-surface-200 text-slate-400 hover:bg-white/5 hover:text-white'"
-            :title="recording ? ('Stop recording (' + recordSeconds + 's)') : 'Record voice note'">
-            <svg x-show="!recording" class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 14a3 3 0 003-3V7a3 3 0 10-6 0v4a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 0014 0h-2zm-5 9a1 1 0 01-1-1v-2.07A7.002 7.002 0 015 11h2a5 5 0 0010 0h2a7.002 7.002 0 01-6 6.93V19a1 1 0 01-1 1z"/>
-            </svg>
-            <span x-show="recording" x-cloak class="w-3 h-3 rounded-full bg-red-400 animate-pulse"></span>
-        </button>
-        <button type="submit" :disabled="sending || (!draft.trim() && !files.length) || recording"
-            class="shrink-0 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition">
-            <span x-text="sending ? '…' : @js($composerSubmitLabel)"></span>
-        </button>
-    </div>
 
-    <p x-show="draftFormat === 'markdown'" x-cloak class="text-[10px] text-slate-500 px-1">
-        Enter to send · Shift+Enter soft break (same paragraph) · <span class="font-mono">\</span>+Shift+Enter for &lt;br&gt;
-    </p>
-    <p x-show="draftFormat === 'plain'" x-cloak class="text-[10px] text-slate-500 px-1">
-        Enter to send · Shift+Enter for a new line
-    </p>
-    <p x-show="sendError" x-cloak class="text-xs text-red-400" x-text="sendError"></p>
+        <div class="flex items-end gap-2 flex-wrap sm:flex-nowrap">
+            <button type="button" @click="toggleMentionMenu()"
+                class="shrink-0 w-10 h-10 rounded-xl border border-white/10 bg-surface-200 text-brand-400 hover:bg-white/5 transition font-bold"
+                title="Mention someone">&#64;</button>
+            <div class="flex-1 min-w-40 basis-[min(100%,12rem)] sm:basis-auto">
+                <textarea x-ref="draftInput" x-model="draft" rows="1"
+                    @input="onDraftInput(); autoResizeDraft()"
+                    @keydown="onDraftKeydown($event)"
+                    @keyup="onDraftCaret()"
+                    @click="onDraftCaret()"
+                    @select="onDraftCaret()"
+                    @paste="onComposerPaste($event)"
+                    autocomplete="off"
+                    placeholder="{{ $composerPlaceholder }}"
+                    :disabled="sending"
+                    class="w-full bg-surface-200 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition placeholder-slate-500 disabled:opacity-50 resize-none overflow-y-hidden min-h-10 leading-5"></textarea>
+            </div>
+            <label class="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl border border-white/10 bg-surface-200 text-slate-400 hover:bg-white/5 hover:text-white cursor-pointer transition"
+                title="Attach files (50 MB limit checked on send)">
+                <input type="file" x-ref="fileInput" accept="*/*" multiple @change="onFilesChange($event)" class="sr-only">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                </svg>
+            </label>
+            <button type="button" @click="toggleRecording()"
+                class="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl border transition"
+                :class="recording ? 'border-red-500/50 bg-red-500/15 text-red-300' : 'border-white/10 bg-surface-200 text-slate-400 hover:bg-white/5 hover:text-white'"
+                :title="recording ? ('Stop recording (' + recordSeconds + 's)') : 'Record voice note'">
+                <svg x-show="!recording" class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 14a3 3 0 003-3V7a3 3 0 10-6 0v4a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 0014 0h-2zm-5 9a1 1 0 01-1-1v-2.07A7.002 7.002 0 015 11h2a5 5 0 0010 0h2a7.002 7.002 0 01-6 6.93V19a1 1 0 01-1 1z"/>
+                </svg>
+                <span x-show="recording" x-cloak class="w-3 h-3 rounded-full bg-red-400 animate-pulse"></span>
+            </button>
+            <button type="submit" :disabled="sending || (!draft.trim() && !files.length) || recording"
+                class="shrink-0 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition">
+                <span x-text="sending ? '…' : @js($composerSubmitLabel)"></span>
+            </button>
+        </div>
+
+        <p x-show="draftFormat === 'markdown'" x-cloak class="text-[10px] text-slate-500 px-1">
+            Enter to send · Shift+Enter soft break · in <span class="font-mono">```lang</span>: code editor (desktop) · Esc closes · Ctrl+Space
+        </p>
+        <p x-show="draftFormat === 'plain'" x-cloak class="text-[10px] text-slate-500 px-1">
+            Enter to send · Shift+Enter for a new line
+        </p>
+        <p x-show="sendError" x-cloak class="text-xs text-red-400" x-text="sendError"></p>
+    </div>
 </div>

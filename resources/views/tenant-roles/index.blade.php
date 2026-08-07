@@ -6,10 +6,10 @@
         <div class="flex items-center justify-between mb-6">
             <h1 class="text-xl font-bold text-white">Tenant Roles</h1>
             @can('create', App\Models\TenantRole::class)
-                <a href="{{ route('tenant-roles.create') }}"
+                <button type="button" @click="window.__openTenantRoleCreate?.()"
                     class="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold px-4 py-2 rounded-xl transition">
                     + New Role
-                </a>
+                </button>
             @endcan
         </div>
 
@@ -30,13 +30,21 @@
                         </div>
                         <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
                         @can('update', $role)
-                            <a href="{{ route('tenant-roles.edit', $role) }}"
-                                class="p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition">
+                            <button type="button"
+                                @click="window.__openTenantRoleEdit?.(@js([
+                                    'id' => $role->id,
+                                    'name' => $role->name,
+                                    'color' => $role->color ?? '#94a3b8',
+                                    'permissions' => $role->permissions ?? [],
+                                    'is_system' => (bool) $role->is_system,
+                                ]))"
+                                class="p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition"
+                                title="Edit role">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                         d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                 </svg>
-                            </a>
+                            </button>
                         @endcan
                         @if(!$role->is_system)
                                 @can('delete', $role)
@@ -60,4 +68,6 @@
             </div>
         </div>
     </div>
+
+    @include('partials.tenant-role-modal')
 @endsection

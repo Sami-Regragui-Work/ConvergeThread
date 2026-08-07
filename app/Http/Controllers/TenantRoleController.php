@@ -45,12 +45,24 @@ class TenantRoleController extends Controller
 
         $tenant = Auth::user()->tenant;
 
-        $this->roleService->createTenantRole(
+        $role = $this->roleService->createTenantRole(
             $tenant,
             $credentials['name'],
             $credentials['permissions'],
             $credentials['color'],
         );
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'ok' => true,
+                'role' => [
+                    'id' => $role->id,
+                    'name' => $role->name,
+                    'color' => $role->color,
+                    'permissions' => $role->permissions,
+                ],
+            ]);
+        }
 
         return redirect()
             ->route('tenant-roles.index')
@@ -72,12 +84,25 @@ class TenantRoleController extends Controller
         $credentials = $request->validated();
         Gate::authorize('update', $tenantRole);
 
-        $this->roleService->updateTenantRole(
+        $role = $this->roleService->updateTenantRole(
             $tenantRole,
             $credentials['name'],
             $credentials['permissions'] ?? $tenantRole->permissions ?? [],
             $credentials['color'],
         );
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'ok' => true,
+                'role' => [
+                    'id' => $role->id,
+                    'name' => $role->name,
+                    'color' => $role->color,
+                    'permissions' => $role->permissions,
+                    'is_system' => (bool) $role->is_system,
+                ],
+            ]);
+        }
 
         return redirect()
             ->route('tenant-roles.index')

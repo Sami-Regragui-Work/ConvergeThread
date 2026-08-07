@@ -136,7 +136,7 @@
                                     :class="message.user_id === currentUserId ? 'bg-brand-500 text-white rounded-tr-sm' : 'bg-surface-100 text-slate-200 rounded-tl-sm'">
                                     @include('partials.chat-attachments')
                                     <template x-if="message.content_html">
-                                        <div :class="message.is_markdown ? 'ct-md-body' : 'whitespace-pre-wrap'" x-html="message.content_html"></div>
+                                        <div :class="message.is_markdown ? 'ct-md-body' : 'whitespace-pre-wrap'" x-html="message.is_markdown ? mdHtml(message.content_html) : message.content_html"></div>
                                     </template>
                                     <template x-if="message.content && !message.content_html">
                                         <span class="whitespace-pre-wrap" x-text="message.content"></span>

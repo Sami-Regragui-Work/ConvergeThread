@@ -7,6 +7,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use App\Support\DisplayName;
 
+/**
+ * @property int $id
+ * @property string $slug
+ * @property string|null $admin_email
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ *
+ * @method mixed getKey()
+ */
 class Tenant extends Model
 {
     protected $fillable = [

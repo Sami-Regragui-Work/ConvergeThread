@@ -3,37 +3,18 @@
 
 @section('content')
     <div class="max-w-3xl mx-auto space-y-6">
-        <div class="flex items-center gap-3">
-            <h1 class="text-xl font-bold text-white">Role Overrides</h1>
-            <span class="text-xs text-slate-500">{{ $group->name }}</span>
-        </div>
-
-        @can('create', [App\Models\GroupRoleOverride::class, $group])
-            <div class="bg-surface-200 border border-white/5 rounded-2xl px-6 py-5">
-                <h2 class="text-sm font-semibold text-white mb-4">Create override</h2>
-                <form method="POST" action="{{ route('groups.role-overrides.store', $group) }}" class="space-y-4">
-                    @csrf
-                    <div>
-                        <label class="block text-sm text-slate-300 mb-1.5">Base tenant role</label>
-                        <select name="tenant_role_id" required
-                        class="w-full bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition">
-                            <option value="">— Select role —</option>
-                            @foreach($tenantRoles as $role)
-                                <option value="{{ $role->id }}" {{ old('tenant_role_id') == $role->id ? 'selected' : '' }}>
-                                    {{ $role->name }}</option>
-                            @endforeach
-                        </select>
-                        @error('tenant_role_id')<p class="mt-1 text-xs text-red-400">{{ $message }}</p>@enderror
-                    </div>
-                    <p class="text-xs text-slate-500">Optional: pick specific permissions below to override the base role for this group.</p>
-                    @include('partials.permission-checkboxes', ['selected' => old('permissions', [])])
-                    <button type="submit"
-                        class="bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold px-4 py-2 rounded-xl transition">
-                        Add override
-                    </button>
-                </form>
+        <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3 min-w-0">
+                <h1 class="text-xl font-bold text-white">Role Overrides</h1>
+                <span class="text-xs text-slate-500 truncate">{{ $group->name }}</span>
             </div>
-        @endcan
+            @can('create', [App\Models\GroupRoleOverride::class, $group])
+                <button type="button" @click="window.__openRoleOverrideCreate?.()"
+                    class="shrink-0 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold px-4 py-2 rounded-xl transition">
+                    + Override
+                </button>
+            @endcan
+        </div>
 
         <div class="bg-surface-200 border border-white/5 rounded-2xl overflow-hidden">
             <div class="divide-y divide-white/5">
@@ -63,4 +44,6 @@
             </div>
         </div>
     </div>
+
+    @include('partials.role-override-modal')
 @endsection

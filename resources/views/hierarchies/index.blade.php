@@ -8,12 +8,10 @@
                 <h1 class="text-xl font-bold text-white">Role Hierarchies</h1>
                 <p class="text-sm text-slate-500 mt-1">Separate chains (e.g. Engineering vs Finance). Level 0 is the top.</p>
             </div>
-            <form method="POST" action="{{ route('hierarchies.store') }}" class="flex gap-2">
-                @csrf
-                <input type="text" name="name" required placeholder="New hierarchy name"
-                    class="bg-surface-200 border border-white/10 text-white rounded-xl px-4 py-2 text-sm min-w-48 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition">
-                <button type="submit" class="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-xl text-sm font-semibold">Create</button>
-            </form>
+            <button type="button" @click="window.__openHierarchyCreate?.()"
+                class="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-xl text-sm font-semibold self-start sm:self-auto">
+                + New hierarchy
+            </button>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -90,4 +88,6 @@
             </div>
         </div>
     </div>
+
+    @include('partials.hierarchy-create-modal')
 @endsection

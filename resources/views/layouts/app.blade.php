@@ -100,14 +100,22 @@
         .ct-md-body p { margin: 0.35em 0; }
         .ct-md-body p:first-child { margin-top: 0; }
         .ct-md-body p:last-child { margin-bottom: 0; }
-        .ct-md-body .ct-md-h { font-weight: 700; margin: 0.5em 0 0.25em; line-height: 1.25; }
-        .ct-md-body h1.ct-md-h { font-size: 1.15em; }
-        .ct-md-body h2.ct-md-h { font-size: 1.05em; }
-        .ct-md-body h3.ct-md-h { font-size: 1em; }
-        .ct-md-body .ct-md-list { margin: 0.35em 0; padding-left: 1.25em; list-style: disc; }
-        .ct-md-body ol.ct-md-list { list-style: decimal; }
-        .ct-md-body .ct-md-list .ct-md-list { margin: 0.2em 0; }
-        .ct-md-body .ct-md-code {
+        .ct-md-body .ct-md-h,
+        .ct-md-body h1, .ct-md-body h2, .ct-md-body h3,
+        .ct-md-body h4, .ct-md-body h5, .ct-md-body h6 {
+            font-weight: 700; margin: 0.5em 0 0.25em; line-height: 1.25;
+        }
+        .ct-md-body h1.ct-md-h, .ct-md-body h1 { font-size: 1.15em; }
+        .ct-md-body h2.ct-md-h, .ct-md-body h2 { font-size: 1.05em; }
+        .ct-md-body h3.ct-md-h, .ct-md-body h3 { font-size: 1em; }
+        .ct-md-body h4, .ct-md-body h5, .ct-md-body h6 { font-size: 0.95em; }
+        .ct-md-body .ct-md-list,
+        .ct-md-body ul, .ct-md-body ol { margin: 0.35em 0; padding-left: 1.25em; list-style: disc; }
+        .ct-md-body ol.ct-md-list, .ct-md-body ol { list-style: decimal; }
+        .ct-md-body .ct-md-list .ct-md-list,
+        .ct-md-body ul ul, .ct-md-body ol ol, .ct-md-body ul ol, .ct-md-body ol ul { margin: 0.2em 0; }
+        .ct-md-body .ct-md-code,
+        .ct-md-body :not(pre) > code {
             font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
             font-size: 0.85em;
             padding: 0.1em 0.35em;
@@ -122,7 +130,8 @@
             color: #94a3b8;
             margin-bottom: 0.2rem;
         }
-        .ct-md-body .ct-md-pre {
+        .ct-md-body .ct-md-pre,
+        .ct-md-body pre {
             margin: 0;
             padding: 0.6em 0.75em;
             border-radius: 0.5rem;
@@ -130,22 +139,124 @@
             background: rgba(15, 23, 42, 0.65);
             font-size: 0.8em;
         }
-        .ct-md-body .ct-md-link { color: #a5b4fc; text-decoration: underline; }
+        .ct-md-body pre code.hljs,
+        .ct-md-body .hljs {
+            background: transparent !important;
+            padding: 0;
+            color: inherit;
+        }
+        .ct-md-body pre code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: inherit;
+            background: transparent;
+            padding: 0;
+            border-radius: 0;
+            color: #e2e8f0;
+        }
+        .ct-md-body .ct-md-link,
+        .ct-md-body a { color: #a5b4fc; text-decoration: underline; }
         .ct-md-body .ct-md-table-wrap { overflow-x: auto; margin: 0.5em 0; }
-        .ct-md-body .ct-md-table {
+        .ct-md-body .ct-md-table,
+        .ct-md-body table {
             width: 100%;
             border-collapse: collapse;
             font-size: 0.85em;
         }
         .ct-md-body .ct-md-table th,
-        .ct-md-body .ct-md-table td {
+        .ct-md-body .ct-md-table td,
+        .ct-md-body table th,
+        .ct-md-body table td {
             border: 1px solid rgba(255, 255, 255, 0.12);
             padding: 0.35em 0.55em;
             text-align: left;
         }
-        .ct-md-body .ct-md-table th {
+        .ct-md-body .ct-md-table th,
+        .ct-md-body table th {
             background: rgba(15, 23, 42, 0.55);
             font-weight: 600;
+        }
+        .ct-md-body blockquote {
+            margin: 0.4em 0;
+            padding: 0.15em 0.75em;
+            border-left: 3px solid rgba(165, 180, 252, 0.55);
+            color: #cbd5e1;
+        }
+        .ct-md-body hr {
+            border: 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.12);
+            margin: 0.75em 0;
+        }
+        .ct-md-body del, .ct-md-body s { color: #94a3b8; }
+        .ct-md-body mark {
+            background: rgba(250, 204, 21, 0.35);
+            color: #fef9c3;
+            padding: 0 0.15em;
+            border-radius: 0.2rem;
+        }
+        .ct-md-body input[type="checkbox"] {
+            margin-right: 0.4em;
+            vertical-align: middle;
+        }
+        .ct-md-body dl { margin: 0.4em 0; }
+        .ct-md-body dt { font-weight: 600; color: #e2e8f0; }
+        .ct-md-body dd { margin: 0.15em 0 0.45em 1em; color: #cbd5e1; }
+        .ct-md-body details {
+            margin: 0.4em 0;
+            padding: 0.4em 0.6em;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.5rem;
+            background: rgba(15, 23, 42, 0.35);
+        }
+        .ct-md-body summary { cursor: pointer; font-weight: 600; }
+        .ct-md-body img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 0.5rem;
+            margin: 0.35em 0;
+        }
+        .ct-md-body .footnotes {
+            margin-top: 0.75em;
+            padding-top: 0.5em;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 0.8em;
+            color: #94a3b8;
+        }
+        .ct-md-body .ct-md-spoiler {
+            background: #1e293b;
+            color: transparent;
+            border-radius: 0.25rem;
+            cursor: pointer;
+            padding: 0 0.2em;
+            transition: color 0.12s ease, background 0.12s ease;
+            box-decoration-break: clone;
+            -webkit-box-decoration-break: clone;
+        }
+        .ct-md-body .ct-md-spoiler:not(.is-revealed):hover {
+            background: #334155;
+        }
+        .ct-md-body .ct-md-spoiler.is-revealed {
+            color: inherit;
+            background: rgba(51, 65, 85, 0.55);
+        }
+        .ct-md-body .ct-md-alert {
+            margin: 0.5em 0;
+            padding: 0.55em 0.75em;
+            border-radius: 0.6rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(15, 23, 42, 0.45);
+        }
+        .ct-md-body .ct-md-alert-note { border-color: rgba(96, 165, 250, 0.45); }
+        .ct-md-body .ct-md-alert-tip { border-color: rgba(52, 211, 153, 0.45); }
+        .ct-md-body .ct-md-alert-important { border-color: rgba(167, 139, 250, 0.5); }
+        .ct-md-body .ct-md-alert-warning { border-color: rgba(251, 191, 36, 0.5); }
+        .ct-md-body .ct-md-alert-caution { border-color: rgba(248, 113, 113, 0.5); }
+        .ct-md-body kbd {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 0.8em;
+            padding: 0.05em 0.35em;
+            border-radius: 0.3rem;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(15, 23, 42, 0.55);
         }
 
         .msg-focus-pulse {
@@ -161,7 +272,7 @@
 
 <body class="antialiased @hasSection('fill-height') h-dvh overflow-hidden @else min-h-dvh @endif"
     x-data="{
-        sidebarOpen: {{ auth()->check() ? "window.matchMedia('(min-width: 1024px)').matches" : 'false' }},
+        sidebarOpen: false,
         unreadNotifs: {{ auth()->check() ? auth()->user()->unreadNotifications()->count() : 0 }},
         stamps: {},
         ownerSearch: '',
@@ -169,6 +280,19 @@
         soundsMuted: false,
         init() {
             @auth
+            const mq = window.matchMedia('(min-width: 1024px)');
+            const desktopPref = () => {
+                try {
+                    const v = localStorage.getItem('ct_sidebar_open');
+                    if (v === '1') return true;
+                    if (v === '0') return false;
+                } catch (e) {}
+                return true;
+            };
+            this.sidebarOpen = mq.matches ? desktopPref() : false;
+            mq.addEventListener('change', (e) => {
+                this.sidebarOpen = e.matches ? desktopPref() : false;
+            });
             try { this.soundsMuted = localStorage.getItem('ct_sounds_muted') === '1'; } catch (e) {}
             this.setupRealtime();
             this.pollWorkspace();
@@ -178,6 +302,15 @@
                 if (typeof e.detail?.count === 'number') this.applyUnread(e.detail.count);
             });
             @endauth
+        },
+        toggleSidebar() {
+            this.sidebarOpen = !this.sidebarOpen;
+            if (window.matchMedia('(min-width: 1024px)').matches) {
+                try { localStorage.setItem('ct_sidebar_open', this.sidebarOpen ? '1' : '0'); } catch (e) {}
+            }
+        },
+        closeSidebarMobile() {
+            if (window.innerWidth < 1024) this.sidebarOpen = false;
         },
         ownerMatch(haystack) {
             const q = (this.ownerSearch || '').toLowerCase().trim();
@@ -286,19 +419,26 @@
     <div class="flex h-dvh min-h-0 bg-surface-400">
         @auth
             <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
-                class="fixed inset-y-0 left-0 z-40 w-64 border-r border-white/5 bg-surface-300 transition-transform duration-300 flex flex-col">
+                class="fixed inset-y-0 left-0 z-40 w-[min(100vw-3rem,16rem)] sm:w-64 max-w-full border-r border-white/5 bg-surface-300 transition-transform duration-300 flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
 
                 {{-- Logo --}}
-                <div class="flex items-center gap-3 px-5 py-4 border-b border-white/5 select-none">
+                <div class="flex items-center gap-3 px-4 sm:px-5 py-3 sm:py-4 border-b border-white/5 select-none">
                     <div
-                        class="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center text-white font-bold text-sm">
+                        class="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center text-white font-bold text-sm shrink-0">
                         CT
                     </div>
-                    <span class="font-semibold text-white text-sm tracking-wide">ConvergeThread</span>
+                    <span class="font-semibold text-white text-sm tracking-wide truncate">ConvergeThread</span>
+                    <button type="button" @click="sidebarOpen = false"
+                        class="ml-auto p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 lg:hidden"
+                        aria-label="Close sidebar">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
                 </div>
 
                 {{-- Nav links --}}
-                <nav class="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+                <nav class="flex-1 overflow-y-auto py-4 px-3 space-y-1" @click="closeSidebarMobile()">
                     @if(auth()->user()->tenant_id === 1)
                         <p class="text-xs text-slate-500 uppercase tracking-widest px-2 mb-2">Owner</p>
 
@@ -384,11 +524,11 @@
             :class="sidebarOpen ? 'lg:ml-64' : 'lg:ml-0'">
             {{-- Header --}}
             <header
-                class="sticky top-0 z-20 flex items-center gap-4 px-4 sm:px-5 py-3 border-b border-white/5 bg-surface-300/95 backdrop-blur shrink-0">
+                class="sticky top-0 z-20 flex items-center gap-2 sm:gap-4 px-3 sm:px-5 py-3 border-b border-white/5 bg-surface-300/95 backdrop-blur shrink-0">
                 @auth
-                    <button @click="sidebarOpen = !sidebarOpen"
+                    <button @click="toggleSidebar()"
                         class="inline-flex items-center justify-center p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition"
-                        type="button" aria-label="Toggle sidebar">
+                        type="button" aria-label="Toggle sidebar" :aria-expanded="sidebarOpen">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M4 6h16M4 12h16M4 18h16" />
@@ -416,7 +556,7 @@
                     @endauth
                 </div>
 
-                <div class="ml-auto flex items-center gap-3">
+                <div class="ml-auto flex items-center gap-1.5 sm:gap-3">
                     @auth
                         @php
                             $showChatBrowse = !auth()->user()->isOwner();
@@ -512,6 +652,8 @@
             @include('partials.chat-search-index')
             @include('partials.chat-browse-ui')
             @include('partials.ct-markdown-script')
+            @include('partials.ct-code-suggest')
+            @include('partials.ct-monaco-fence')
             @include('partials.ct-media-export-script')
             @include('partials.ct-media-player-script')
         @endunless

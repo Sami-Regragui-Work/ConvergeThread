@@ -12,11 +12,12 @@ class TenantUserService
     public function generateUniqueTenantUsername(string $displayName, Tenant $tenant): string
     {
         $username = Str::slug($displayName, '_');
+        $tenantId = (int) $tenant->getKey();
 
-        if (!User::where('tenant_id', $tenant->id)->where('username', $username)->exists())
+        if (!User::where('tenant_id', $tenantId)->where('username', $username)->exists())
             return $username;
 
-        $usernames = User::where('tenant_id', $tenant->id)
+        $usernames = User::where('tenant_id', $tenantId)
             ->whereLike('username', "$username%")
             ->pluck('username')
             ->toArray();

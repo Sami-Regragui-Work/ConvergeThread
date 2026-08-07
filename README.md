@@ -1,6 +1,42 @@
 # ConvergeThread
 
-Laravel 12 collaboration platform — session-auth web monolith with groups, duos, merge sessions, and threaded messaging.
+Work-oriented multi-group collaboration — not another general-purpose messenger.
+
+Laravel 12 web monolith (session auth, Blade, MySQL) with isolated workspaces, hierarchical roles, groups, duos, temporary inter-group merge sessions, and threaded messaging.
+
+## Why ConvergeThread (not Slack / Teams / Discord / WhatsApp)
+
+Classic chat apps optimize for open conversation. Organizations need something else:
+
+| Pain with typical messengers | What ConvergeThread does |
+|------------------------------|---------------------------|
+| **Digital distraction** — feeds and DMs pull focus away from work | Chats are scoped to **groups, duos, and merge sessions** — no free-for-all DM graph |
+| **Internal silos** — departments cannot collaborate without a messy side channel | **Merge sessions** open a temporary shared channel between exactly two groups, then close |
+| **Unwanted contact** — hierarchy and org charts get abused as open ping targets | Access is **permissioned** (tenant → group → member override), not “everyone can DM everyone” |
+| **Scattered threads & files** — context lives in email, Drive, and three chat tools | **Threaded messages + attachments** stay on the chatable (group / duo / merge) |
+| **Weak role/access control** — coarse admin/member toggles | **Three-level permissions** with custom tenant roles, group role overrides, and JSON permission catalogs |
+
+### Our answer (product pillars)
+
+1. **Structure** — Isolated tenants (workspaces), users, and hierarchical roles (including role hierarchy chains).
+2. **Collaborate** — Groups, membership lifecycle, and **duos** (two-person channels under a parent group).
+3. **Converge** — **Merge sessions**: temporary inter-group messaging with shared history for the session.
+4. **Trace** — Polymorphic messages, attachments, threads, edits/deletes, and audit-friendly server storage (ciphertext when E2EE is on).
+
+Built for teams that need **controlled collaboration**, not another social inbox.
+
+## What shipped beyond the PFE MVP pitch
+
+The presentation MVP covered auth, groups, members/roles, messaging, duos, merge sessions, and Laravel policies. Since then the product also includes:
+
+- **Client-side E2EE** for message text and attachments (Web Crypto; server stores ciphertext; password-wrapped key backup)
+- **Voice/video calls** — WebRTC mesh for small/duo rooms; optional **LiveKit SFU** for larger group/merge calls; optional call media E2EE via Insertable Streams
+- **Mentions & notifications** — `@user` / `@all` / `@role:` / merge `@group:`; in-app notification center; chat & thread mutes
+- **Workspace tooling** — members page, role hierarchy UI, tenant role colors, invitation list/revoke, owner dashboard live search
+- **Rich composer** — Markdown (CommonMark + GFM, spoilers, alerts, footnotes, safe HTML), media trim/speed before send, fence **Monaco** editor (desktop; sleeps when you leave the fence), lightweight suggestions on mobile
+- **Search & files** — local decrypted IndexedDB search; files-by-thread browse; deep-link to message
+- **Attachment viewer** — images/video/audio/PDF; markdown/text/code preview; DOCX via Mammoth; download fallback for other Office types
+- **UX polish** — Alpine create/edit modals, responsive sidebar drawer, Reverb realtime with poll fallback
 
 ## Requirements
 
@@ -86,9 +122,11 @@ php artisan test
 - Laravel Reverb WebSockets for chat, workspace sync, and WebRTC call signaling
 - Client-side E2EE for chat text and attachments (Web Crypto; private keys stay in the browser; password-wrapped account backup restores keys automatically on login)
 - WebRTC voice/video calls (mesh + optional TURN for small/duo calls; optional LiveKit SFU for group/merge)
-- Markdown compose mode, media trim/speed before send, in-app media viewer
+- Markdown compose mode (CommonMark + GFM + spoilers, alerts, footnotes, safe HTML); fence Monaco IntelliSense on desktop (lazy load / dispose); media trim/speed before send; in-app media viewer
 - Header chat search (local encrypted IndexedDB index; per-chat or all my chats) and files-by-thread browse
-- Alpine modals for group create/rename, duo create, and merge-session create (classic pages remain as fallback)
+- Alpine modals for group create/rename, duo create, merge-session create, tenant roles, hierarchy create, and role-override permissions (classic pages remain as fallback)
+- LiveKit SFU call media E2EE via Insertable Streams (shared chat room key) when the browser supports it
+- Responsive sidebar: mobile drawer with close control, desktop open/close preference persisted
 
 ## Documentation
 
@@ -104,8 +142,4 @@ Feature work uses `feature/*` branches merged into `main`. See `references/branc
 
 ## Roadmap / Todo
 
-See `references/todo.md` and `references/known-limitations.md` (docs branch). Remaining highlights:
-
-- App-level call E2EE if using SFU (Insertable Streams / SFrame)
-- Dense editors still on full pages (tenant roles, hierarchies, role-override permissions)
-- Sidebar UX polish on very small screens
+See `references/todo.md` and `references/known-limitations.md` (docs branch).
