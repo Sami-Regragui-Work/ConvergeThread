@@ -49,7 +49,7 @@ class GroupRoleOverrideController extends Controller
 
     public function destroy(Group $group, GroupRoleOverride $groupRoleOverride)
     {
-        Gate::authorize('delete', [$group, $groupRoleOverride]);
+        Gate::authorize('delete', [GroupRoleOverride::class, $group, $groupRoleOverride]);
 
         $this->roleService->deleteGroupRoleOverride($groupRoleOverride);
 

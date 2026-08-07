@@ -246,7 +246,10 @@ class MessageService
         $data['edited_at'] = now();
         $message->update($data);
 
-        return $message->fresh(['user.tenantRole', 'attachments']);
+        $fresh = $message->fresh(['user.tenantRole', 'attachments', 'deletedBy', 'replies']);
+        MessageSent::dispatch($fresh);
+
+        return $fresh;
     }
 
     public function hideForUser(Message $message, User $user): void

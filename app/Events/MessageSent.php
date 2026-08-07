@@ -3,7 +3,9 @@
 namespace App\Events;
 
 use App\Models\Message;
+use App\Services\MentionService;
 use App\Support\ChatChannel;
+use App\Support\MessageEncryption;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
@@ -16,7 +18,7 @@ class MessageSent implements ShouldBroadcastNow
 
     public function __construct(public Message $message)
     {
-        $this->message->loadMissing('user');
+        $this->message->loadMissing('user.tenantRole', 'attachments', 'deletedBy', 'replies');
     }
 
     public function broadcastOn(): array
@@ -36,8 +38,26 @@ class MessageSent implements ShouldBroadcastNow
 
     public function broadcastWith(): array
     {
+        $payload = $this->message->toChatPayload();
+
+        if (
+            ($payload['content'] ?? null)
+            && ! ($payload['is_encrypted'] ?? false)
+            && ! MessageEncryption::isEncrypted($payload['content'])
+        ) {
+            $payload['content_html'] = app(MentionService::class)->renderContentHtml(
+                $payload['content'],
+                [],
+                [],
+                [],
+                (bool) ($payload['is_markdown'] ?? false),
+            );
+        } else {
+            $payload['content_html'] = null;
+        }
+
         return [
-            'message' => $this->message->toChatPayload(),
+            'message' => $payload,
         ];
     }
 }

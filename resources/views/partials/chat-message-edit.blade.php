@@ -1,7 +1,7 @@
 {{-- Inline message editor with attachment add/remove --}}
-<div class="space-y-2 min-w-[16rem] sm:min-w-[20rem]">
+<div class="space-y-2 w-full min-w-0 max-w-full sm:min-w-[20rem]">
     <input type="text" x-model="editDraft"
-        class="w-full bg-surface-200 border border-white/10 text-white rounded-xl px-3 py-2 text-sm"
+        class="w-full bg-surface-200 border border-white/10 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition"
         placeholder="Message text (optional if files remain)">
 
     <div class="flex flex-wrap gap-2" x-show="editKeepAttachments.length || editFilePreviews.length">

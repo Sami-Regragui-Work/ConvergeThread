@@ -38,9 +38,9 @@
                     @csrf
                     <input type="hidden" name="tenant_id" value="{{ auth()->user()->tenant_id }}">
                     <input type="email" name="email" placeholder="colleague@example.com" required
-                        class="flex-1 min-w-0 bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm placeholder-slate-500">
+                        class="flex-1 min-w-0 bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition">
                     <select name="tenant_role_id"
-                        class="bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm min-w-40">
+                        class="bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm min-w-40 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition">
                         <option value="">Moderator (default)</option>
                         @foreach($tenantRoles as $role)
                             <option value="{{ $role->id }}" @selected(old('tenant_role_id') == $role->id)>{{ $role->name }}</option>

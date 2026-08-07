@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Events\CallSignal;
 use App\Http\Controllers\Concerns\ResolvesChatable;
 use App\Models\Message;
+use App\Models\User;
 use App\Services\CallSessionService;
 use App\Services\LiveKitTokenService;
 use Illuminate\Http\Request;
@@ -24,6 +25,7 @@ class CallController extends Controller
 
     public function signal(Request $request, string $chatType, int $chatId)
     {
+        /** @var User $user */
         $user = Auth::user();
         $chatable = $this->resolveChatable($user, $chatType, $chatId);
         Gate::authorize('viewAny', [Message::class, $chatable]);
@@ -100,6 +102,7 @@ class CallController extends Controller
 
     public function active(string $chatType, int $chatId)
     {
+        /** @var User $user */
         $user = Auth::user();
         $chatable = $this->resolveChatable($user, $chatType, $chatId);
         Gate::authorize('viewAny', [Message::class, $chatable]);
@@ -113,6 +116,7 @@ class CallController extends Controller
 
     public function sfuToken(Request $request, string $chatType, int $chatId)
     {
+        /** @var User $user */
         $user = Auth::user();
         $chatable = $this->resolveChatable($user, $chatType, $chatId);
         Gate::authorize('viewAny', [Message::class, $chatable]);
@@ -132,6 +136,11 @@ class CallController extends Controller
             $chatId,
             $data['call_id'],
         );
+
+        $active = $this->callSessions->active($chatType, $chatId);
+        if (! $active || ($active['call_id'] ?? null) !== $data['call_id']) {
+            return response()->json(['message' => 'No matching active call.'], 404);
+        }
 
         $room = 'ct_'.$chatType.'_'.$chatId.'_'.$data['call_id'];
         $token = $this->liveKit->mint(

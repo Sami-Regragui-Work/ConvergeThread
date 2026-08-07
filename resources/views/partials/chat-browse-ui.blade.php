@@ -484,16 +484,16 @@
             class="fixed inset-0 z-200 flex items-start justify-center p-4 sm:p-8"
             @keydown.escape.window="if ($store.chatBrowse.showSearch) $store.chatBrowse.showSearch = false">
             <div class="absolute inset-0 bg-black/70" @click="$store.chatBrowse.showSearch = false"></div>
-            <div class="relative w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl border border-white/10 bg-surface-300 shadow-2xl overflow-hidden"
+            <div class="relative w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl border border-white/10 bg-surface-300 shadow-2xl overflow-hidden min-h-0"
                 @click.outside="$store.chatBrowse.showAuthorMenu = false">
-                <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/5">
+                <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/5 shrink-0">
                     <div>
                         <p class="text-sm font-semibold text-white">Search chats</p>
                         <p class="text-[11px] text-slate-500">Pick a chat, then search body keywords locally (E2EE-safe)</p>
                     </div>
                     <button type="button" @click="$store.chatBrowse.showSearch = false" class="text-slate-400 hover:text-white text-sm">Close</button>
                 </div>
-                <div class="p-4 space-y-3 border-b border-white/5">
+                <div class="p-4 space-y-3 border-b border-white/5 shrink-0 max-h-[45vh] overflow-y-auto">
                     <div>
                         <label class="block text-[11px] text-slate-500 mb-1">Chat</label>
                         <select data-chat-browse-select data-allow-all="1"
@@ -577,7 +577,7 @@
                         <span class="text-[11px] text-slate-500" x-text="$store.chatBrowse.status"></span>
                     </div>
                 </div>
-                <div class="flex-1 overflow-y-auto p-3 space-y-2">
+                <div class="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
                     <template x-if="!$store.chatBrowse.results.length && !$store.chatBrowse.busy">
                         <p class="text-sm text-slate-500 text-center py-8">No results yet.</p>
                     </template>
@@ -602,15 +602,15 @@
             class="fixed inset-0 z-200 flex items-start justify-center p-4 sm:p-8"
             @keydown.escape.window="if ($store.chatBrowse.showMedia) $store.chatBrowse.showMedia = false">
             <div class="absolute inset-0 bg-black/70" @click="$store.chatBrowse.showMedia = false"></div>
-            <div class="relative w-full max-w-3xl max-h-[85vh] flex flex-col rounded-2xl border border-white/10 bg-surface-300 shadow-2xl overflow-hidden">
-                <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/5">
+            <div class="relative w-full max-w-3xl max-h-[85vh] flex flex-col rounded-2xl border border-white/10 bg-surface-300 shadow-2xl overflow-hidden min-h-0">
+                <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/5 shrink-0">
                     <div>
                         <p class="text-sm font-semibold text-white">Files by thread</p>
                         <p class="text-[11px] text-slate-500">Grouped by root message · jump to place in chat</p>
                     </div>
                     <button type="button" @click="$store.chatBrowse.showMedia = false" class="text-slate-400 hover:text-white text-sm">Close</button>
                 </div>
-                <div class="p-4 border-b border-white/5 space-y-2">
+                <div class="p-4 border-b border-white/5 space-y-2 shrink-0">
                     <label class="block text-[11px] text-slate-500">Chat</label>
                     <div class="flex flex-col sm:flex-row gap-2">
                         <select data-chat-browse-select
@@ -625,7 +625,7 @@
                         </button>
                     </div>
                 </div>
-                <div class="flex-1 overflow-y-auto p-4 space-y-6">
+                <div class="flex-1 min-h-0 overflow-y-auto p-4 space-y-6">
                     <p x-show="$store.chatBrowse.mediaStatus" class="text-xs text-slate-500" x-text="$store.chatBrowse.mediaStatus"></p>
                     <template x-if="!$store.chatBrowse.mediaSections.length && !$store.chatBrowse.busy">
                         <p class="text-sm text-slate-500 text-center py-8">No files in this chat.</p>

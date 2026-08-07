@@ -25,7 +25,7 @@
     @pause="playing = false"></audio>
 
 <div class="flex flex-col gap-1.5 shrink-0">
-    <div class="flex items-center gap-2">
+    <div class="flex flex-wrap items-center gap-2">
         <button type="button" @click="togglePlay()"
             class="shrink-0 w-8 h-8 rounded-full bg-brand-500/90 hover:bg-brand-500 text-white flex items-center justify-center transition"
             :title="playing ? 'Pause' : 'Play'">
@@ -42,7 +42,7 @@
         <input type="range" min="0" :max="Math.max(duration, 0.01)" step="0.01"
             :value="current"
             @input="seek($event.target.value)"
-            class="flex-1 h-1.5 accent-brand-500 cursor-pointer">
+            class="flex-1 min-w-[6rem] h-1.5 accent-brand-500 cursor-pointer">
         <span class="shrink-0 text-[10px] tabular-nums text-slate-400 min-w-16 text-right"
             x-text="formatTime(current) + ' / ' + formatTime(duration)"></span>
         <button type="button" @click="showSpeed = !showSpeed; if (showSpeed) showTrim = false; ensureControlsVisible()"

@@ -64,7 +64,7 @@ class DuoController extends Controller
      */
     public function destroy(Group $group, Duo $duo)
     {
-        Gate::authorize('delete', [$group, $duo]);
+        Gate::authorize('delete', [Duo::class, $group, $duo]);
 
         $this->duoService->delete($duo);
 

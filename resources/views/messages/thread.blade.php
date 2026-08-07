@@ -36,6 +36,7 @@
             ),
             parentMessage: @js($parentPayload),
             currentUserName: @js(auth()->user()->displayLabel()),
+            activeCall: @js($activeCall),
             iceServers: @js(config('webrtc.ice_servers')),
         })"
         x-init="init()">
@@ -45,7 +46,7 @@
                 <p class="text-sm font-semibold text-white">Thread</p>
                 <p class="text-xs text-slate-500">Replies · type &#64; to mention</p>
             </div>
-            <div class="flex items-center gap-2 shrink-0">
+            <div class="flex items-center gap-2 shrink-0 flex-wrap justify-end">
                 @include('partials.chat-call-ui', ['mode' => 'buttons'])
                 <form method="POST" action="{{ route('messages.thread.mute', $message) }}">
                     @csrf
@@ -56,6 +57,20 @@
                     </button>
                 </form>
             </div>
+        </div>
+
+        <div x-show="activeCall && callState === 'idle'" x-cloak
+            class="mb-4 shrink-0 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div class="min-w-0 flex-1">
+                <p class="text-sm text-emerald-200 font-medium"
+                    x-text="(activeCall?.from_user_name || 'Someone') + ' started a ' + (activeCall?.call_type === 'video' ? 'video' : 'voice') + ' call'"></p>
+                <p class="text-xs text-emerald-200/70 mt-0.5"
+                    x-text="(activeCall?.participant_count ? (activeCall.participant_count + ' in call · ') : '') + 'Join to connect with people already in the call.'"></p>
+            </div>
+            <button type="button" @click="joinActiveCall()"
+                class="shrink-0 px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 text-xs font-semibold transition">
+                Join call
+            </button>
         </div>
 
         <div class="bg-surface-200 border border-white/5 rounded-2xl p-5 mb-4 shrink-0"
@@ -185,7 +200,7 @@
                                 class="text-xs text-slate-400 hover:text-white">Close</button>
                         </div>
                         <input type="text" x-model="selectedSearch" placeholder="Search…"
-                            class="w-full bg-surface-200 border border-white/10 text-white rounded-lg px-3 py-2 text-sm">
+                            class="w-full bg-surface-200 border border-white/10 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition">
                         <div class="flex gap-2 text-xs">
                             <button type="button" @click="selectAllFiltered()"
                                 class="text-brand-400 hover:text-brand-300">Select filtered</button>

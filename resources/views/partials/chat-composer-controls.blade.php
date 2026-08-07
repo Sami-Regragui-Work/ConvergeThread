@@ -112,11 +112,11 @@
             x-text="showMarkdownGuide ? 'Hide guide' : 'Show guide'"></button>
     </div>
 
-    <div class="flex items-end gap-2">
+    <div class="flex items-end gap-2 flex-wrap sm:flex-nowrap">
         <button type="button" @click="toggleMentionMenu()"
             class="shrink-0 w-10 h-10 rounded-xl border border-white/10 bg-surface-200 text-brand-400 hover:bg-white/5 transition font-bold"
             title="Mention someone">&#64;</button>
-        <div class="flex-1 min-w-0 space-y-2">
+        <div class="flex-1 min-w-[10rem] basis-[min(100%,12rem)] sm:basis-auto space-y-2">
             <textarea x-ref="draftInput" x-model="draft" rows="1"
                 @input="onDraftInput(); autoResizeDraft()"
                 @keydown="onDraftKeydown($event)"

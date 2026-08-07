@@ -43,7 +43,7 @@
 
 <div x-show="showCallModal && callState !== 'idle'" x-cloak class="fixed inset-0 z-200 flex items-center justify-center p-4">
     <div class="absolute inset-0 bg-black/70"></div>
-    <div class="relative bg-surface-200 border border-white/10 rounded-2xl p-5 sm:p-6 max-w-3xl w-full shadow-2xl space-y-4">
+    <div class="relative bg-surface-200 border border-white/10 rounded-2xl p-5 sm:p-6 max-w-3xl w-full max-h-[90dvh] overflow-y-auto shadow-2xl space-y-4">
         <div class="flex items-center justify-between gap-3">
             <div>
                 <p class="text-white font-semibold"

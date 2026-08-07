@@ -319,9 +319,10 @@ class MessageController extends Controller
 
     public function update(UpdateMessageRequest $request, Message $message)
     {
-        $credentials = $request->validated();
-        Gate::authorize('update', $message);
         abort_if($message->isDeleted(), 404);
+        Gate::authorize('update', $message);
+
+        $credentials = $request->validated();
 
         $message->loadMissing('chatable');
         $chatType = match ($message->chatable_type) {
@@ -337,7 +338,7 @@ class MessageController extends Controller
             $files[] = $singleFile;
         }
 
-        $this->messageService->update(
+        $updated = $this->messageService->update(
             $message,
             $credentials['content'] ?? null,
             $files,
@@ -347,9 +348,18 @@ class MessageController extends Controller
             $credentials['attachment_meta'] ?? null,
         );
 
+        if (array_key_exists('content', $credentials) || array_key_exists('empty_content', $credentials)) {
+            $this->mentionService->syncForMessage(
+                $updated,
+                $message->chatable,
+                $chatType,
+                $credentials['mention_user_ids'] ?? null,
+            );
+        }
+
         $user = Auth::user();
         $renderContext = $this->renderContextFor($message->chatable, $chatType, $user->tenant_id);
-        $fresh = $message->fresh(['user.tenantRole', 'attachments']);
+        $fresh = $updated->fresh(['user.tenantRole', 'attachments']);
 
         if ($request->wantsJson()) {
             return response()->json(['message' => $this->payload($fresh, $user->id, $renderContext, $chatType, $message->chatable)]);
@@ -466,6 +476,7 @@ class MessageController extends Controller
         $mentionSuggestions = $this->mentionSuggestions($chatable, $participants, $user->id, $chatType, $user->tenant_id);
         $parentPayload = $this->payload($thread['message'], $user->id, $renderContext, $chatType, $chatable);
         $threadMuted = $this->notificationStackService->isThreadMuted($user, $message->id);
+        $activeCall = app(\App\Services\CallSessionService::class)->active($chatType, (int) $message->chatable_id);
 
         return view('messages.thread', array_merge($thread, [
             'chatType' => $chatType,
@@ -475,6 +486,7 @@ class MessageController extends Controller
             'mentionSuggestions' => $mentionSuggestions,
             'parentPayload' => $parentPayload,
             'threadMuted' => $threadMuted,
+            'activeCall' => $activeCall,
         ]));
     }
 

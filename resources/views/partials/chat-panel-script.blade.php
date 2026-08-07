@@ -798,6 +798,7 @@
                 this.incomingCall = {
                     call_id: this.activeCall.call_id,
                     call_type: this.activeCall.call_type,
+                    media_mode: this.activeCall.media_mode || this.preferredMediaMode,
                     from_user_id: this.activeCall.from_user_id,
                     from_user_name: this.activeCall.from_user_name,
                 };
@@ -1818,8 +1819,10 @@
                 if (!this.sfuTokenUrl || !this.callId) {
                     throw new Error('SFU is not configured.');
                 }
+                const generation = (this._sfuGeneration = (this._sfuGeneration || 0) + 1);
                 const LK = await this.loadLiveKit();
                 if (!LK?.Room) throw new Error('LiveKit client unavailable.');
+                if (generation !== this._sfuGeneration || this.callState === 'idle') return;
 
                 const res = await fetch(this.sfuTokenUrl, {
                     method: 'POST',
@@ -1838,6 +1841,7 @@
                 if (!res.ok || !data.token || !data.url) {
                     throw new Error(data.message || 'Could not get SFU token.');
                 }
+                if (generation !== this._sfuGeneration || this.callState === 'idle') return;
 
                 const room = new LK.Room({
                     adaptiveStream: true,
@@ -1876,8 +1880,23 @@
                 room.on(LK.RoomEvent.ParticipantDisconnected, (participant) => {
                     this.removePeer(Number(participant.identity));
                 });
+                room.on(LK.RoomEvent.LocalTrackUnpublished, (publication) => {
+                    if (publication?.source === LK.Track?.Source?.ScreenShare
+                        || publication?.track?.source === LK.Track?.Source?.ScreenShare
+                        || String(publication?.source || '').includes('screen')) {
+                        this.sharingScreen = false;
+                        this.screenTrack = null;
+                        this.bindLocalPreview();
+                        this.peers = [...this.peers];
+                    }
+                });
 
                 await room.connect(data.url, data.token);
+                if (generation !== this._sfuGeneration || this.callState === 'idle') {
+                    try { await room.disconnect(); } catch (e) {}
+                    if (this.livekitRoom === room) this.livekitRoom = null;
+                    return;
+                }
 
                 if (this.localStream) {
                     const audio = this.localStream.getAudioTracks()[0];
@@ -1890,6 +1909,7 @@
             },
 
             async disconnectSfu() {
+                this._sfuGeneration = (this._sfuGeneration || 0) + 1;
                 const room = this.livekitRoom;
                 this.livekitRoom = null;
                 if (!room) return;
@@ -2051,7 +2071,7 @@
                 window.__ctSetInCall?.(false);
                 Object.values(this.peerDisconnectTimers || {}).forEach((t) => clearTimeout(t));
                 this.peerDisconnectTimers = {};
-                this.disconnectSfu();
+                void this.disconnectSfu();
                 Object.values(this.peerConnections).forEach((pc) => {
                     try { pc.close(); } catch (e) {}
                 });
@@ -2079,22 +2099,33 @@
                 if (!this.localStream) return;
                 this.localMuted = !this.localMuted;
                 this.localStream.getAudioTracks().forEach((t) => { t.enabled = !this.localMuted; });
-                if (this.livekitRoom?.localParticipant?.setMicrophoneEnabled) {
-                    try {
-                        await this.livekitRoom.localParticipant.setMicrophoneEnabled(!this.localMuted);
-                    } catch (e) {}
-                }
+                // Prefer muting published tracks (matches publishTrack path) over setMicrophoneEnabled.
+                try {
+                    const pubs = this.livekitRoom?.localParticipant?.audioTrackPublications;
+                    if (pubs) {
+                        pubs.forEach((pub) => {
+                            if (pub?.track?.mediaStreamTrack) {
+                                pub.track.mediaStreamTrack.enabled = !this.localMuted;
+                            }
+                        });
+                    }
+                } catch (e) {}
             },
 
             async toggleVideo() {
                 if (!this.localStream || this.callType !== 'video' || this.sharingScreen) return;
                 this.localVideoOff = !this.localVideoOff;
                 this.localStream.getVideoTracks().forEach((t) => { t.enabled = !this.localVideoOff; });
-                if (this.livekitRoom?.localParticipant?.setCameraEnabled) {
-                    try {
-                        await this.livekitRoom.localParticipant.setCameraEnabled(!this.localVideoOff);
-                    } catch (e) {}
-                }
+                try {
+                    const pubs = this.livekitRoom?.localParticipant?.videoTrackPublications;
+                    if (pubs) {
+                        pubs.forEach((pub) => {
+                            if (pub?.track?.mediaStreamTrack) {
+                                pub.track.mediaStreamTrack.enabled = !this.localVideoOff;
+                            }
+                        });
+                    }
+                } catch (e) {}
             },
 
             localShowsVideo() {
@@ -2180,6 +2211,19 @@
                         await this.livekitRoom.localParticipant.setScreenShareEnabled(true);
                         this.sharingScreen = true;
                         this.localVideoOff = false;
+                        try {
+                            const pubs = this.livekitRoom.localParticipant.videoTrackPublications
+                                || this.livekitRoom.localParticipant.trackPublications;
+                            pubs?.forEach((pub) => {
+                                const track = pub?.track?.mediaStreamTrack;
+                                if (track && (pub.source === 'screen_share' || String(pub.source || '').includes('screen'))) {
+                                    this.screenTrack = track;
+                                    track.onended = () => {
+                                        if (this.sharingScreen) this.stopScreenShare();
+                                    };
+                                }
+                            });
+                        } catch (e) {}
                         this.bindLocalPreview();
                         this.peers = [...this.peers];
                         return;

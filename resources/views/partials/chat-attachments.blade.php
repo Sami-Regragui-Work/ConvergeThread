@@ -5,7 +5,7 @@
             <div class="relative group/att overflow-hidden rounded-xl border border-white/10 shrink-0 bg-black/40"
                 :class="{
                     'w-36 h-36 sm:w-40 sm:h-40': attachment.is_image || attachment.is_video,
-                    'w-72 sm:w-80': attachment.is_audio,
+                    'w-full max-w-xs sm:max-w-sm': attachment.is_audio,
                     'w-52 sm:w-60': !attachment.is_image && !attachment.is_video && !attachment.is_audio,
                 }">
                 <button type="button" @click.stop="downloadAttachment(attachment)"

@@ -31,7 +31,7 @@
         :style="panelStyle">
         <div class="p-3 border-b border-white/5 space-y-2">
             <input type="text" x-model="search" placeholder="Search members…"
-                class="w-full bg-surface-200 border border-white/10 text-white rounded-lg px-3 py-2 text-sm">
+                class="w-full bg-surface-200 border border-white/10 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition">
             <div class="flex gap-3 text-xs">
                 <button type="button" @click="selectFiltered()" class="text-brand-400 hover:text-brand-300">Select filtered</button>
                 <button type="button" @click="unselectFiltered()" class="text-slate-400 hover:text-white">Unselect filtered</button>

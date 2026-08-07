@@ -30,6 +30,8 @@ class UpdateMessageRequest extends FormRequest
             'attachment_meta.*.name' => 'nullable|string|max:255',
             'attachment_meta.*.mime' => 'nullable|string|max:127',
             'attachment_meta.*.iv' => 'nullable|string|max:64',
+            'mention_user_ids' => 'nullable|array',
+            'mention_user_ids.*' => 'integer|exists:users,id',
         ];
     }
 
