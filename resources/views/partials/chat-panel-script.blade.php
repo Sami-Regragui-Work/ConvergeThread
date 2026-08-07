@@ -109,6 +109,7 @@
             sharingScreen: false,
             cameraTrack: null,
             screenTrack: null,
+            screenStream: null,
             peers: [],
             peerConnections: {},
             peerDisconnectTimers: {},
@@ -3204,32 +3205,95 @@
                     const userId = Number(participant.identity);
                     if (!userId || userId === Number(this.currentUserId)) return;
                     const stream = new MediaStream();
+                    let screenSharing = false;
                     participant.trackPublications.forEach((pub) => {
+                        if (pub?.source === LK.Track?.Source?.ScreenShare
+                            || String(pub?.source || '').includes('screen')) {
+                            screenSharing = true;
+                            return;
+                        }
                         if (pub.track) stream.addTrack(pub.track.mediaStreamTrack);
                     });
                     this.upsertPeer(userId, participant.name || ('User #' + userId), stream.getTracks().length ? stream : null);
+                    if (screenSharing) {
+                        const peer = this.peers.find((p) => Number(p.userId) === userId);
+                        if (peer) {
+                            this.peers = this.peers.map((p) =>
+                                Number(p.userId) === userId ? { ...p, screenSharing: true } : p
+                            );
+                        }
+                    }
                 };
 
-                room.on(LK.RoomEvent.TrackSubscribed, (track, _pub, participant) => {
+                room.on(LK.RoomEvent.TrackSubscribed, (track, pub, participant) => {
                     const userId = Number(participant.identity);
                     if (!userId || userId === Number(this.currentUserId)) return;
+                    const isScreen = pub?.source === LK.Track?.Source?.ScreenShare
+                        || String(pub?.source || '').includes('screen');
+                    if (isScreen) {
+                        let peer = this.peers.find((p) => Number(p.userId) === userId);
+                        if (!peer) {
+                            this.upsertPeer(userId, participant.name || ('User #' + userId));
+                            peer = this.peers.find((p) => Number(p.userId) === userId);
+                        }
+                        this.peers = this.peers.map((p) =>
+                            Number(p.userId) === userId
+                                ? { ...p, screenSharing: true, screenStream: new MediaStream([track.mediaStreamTrack]) }
+                                : p
+                        );
+                        return;
+                    }
                     let peer = this.peers.find((p) => Number(p.userId) === userId);
                     const stream = peer?.stream ? peer.stream : new MediaStream();
                     stream.addTrack(track.mediaStreamTrack);
                     this.upsertPeer(userId, participant.name || ('User #' + userId), stream);
                 });
-                room.on(LK.RoomEvent.TrackUnsubscribed, (track, _pub, participant) => {
+                room.on(LK.RoomEvent.TrackUnsubscribed, (track, pub, participant) => {
                     const userId = Number(participant.identity);
+                    const isScreen = pub?.source === LK.Track?.Source?.ScreenShare
+                        || String(pub?.source || '').includes('screen');
                     const peer = this.peers.find((p) => Number(p.userId) === userId);
+                    if (isScreen) {
+                        this.peers = this.peers.map((p) =>
+                            Number(p.userId) === userId
+                                ? { ...p, screenSharing: false, screenStream: null }
+                                : p
+                        );
+                        return;
+                    }
                     if (!peer?.stream) return;
                     peer.stream.getTracks().forEach((t) => {
                         if (t.id === track.mediaStreamTrack.id) peer.stream.removeTrack(t);
                     });
                     this.peers = [...this.peers];
                 });
+                room.on(LK.RoomEvent.TrackUnpublished, (_pub, participant) => {
+                    const userId = Number(participant.identity);
+                    this.peers = this.peers.map((p) =>
+                        Number(p.userId) === userId
+                            ? { ...p, screenSharing: false, screenStream: null }
+                            : p
+                    );
+                });
                 room.on(LK.RoomEvent.ParticipantConnected, (participant) => attachParticipant(participant));
                 room.on(LK.RoomEvent.ParticipantDisconnected, (participant) => {
                     this.removePeer(Number(participant.identity));
+                });
+                room.on(LK.RoomEvent.LocalTrackPublished, (publication) => {
+                    if (publication?.source === LK.Track?.Source?.ScreenShare
+                        || publication?.track?.source === LK.Track?.Source?.ScreenShare
+                        || String(publication?.source || '').includes('screen')) {
+                        const track = publication?.track?.mediaStreamTrack;
+                        if (track) {
+                            this.screenTrack = track;
+                            this.screenStream = new MediaStream([track]);
+                            track.onended = () => {
+                                if (this.sharingScreen) this.stopScreenShare();
+                            };
+                            this.bindLocalPreview();
+                            this.peers = [...this.peers];
+                        }
+                    }
                 });
                 room.on(LK.RoomEvent.LocalTrackUnpublished, (publication) => {
                     if (publication?.source === LK.Track?.Source?.ScreenShare
@@ -3237,6 +3301,7 @@
                         || String(publication?.source || '').includes('screen')) {
                         this.sharingScreen = false;
                         this.screenTrack = null;
+                        this.screenStream = null;
                         this.bindLocalPreview();
                         this.peers = [...this.peers];
                     }
@@ -3305,6 +3370,7 @@
                 this.localVideoOff = false;
                 this.sharingScreen = false;
                 this.screenTrack = null;
+                this.screenStream = null;
                 this.cameraTrack = this.localStream.getVideoTracks()[0] || null;
                 this.bindLocalPreview();
             },
@@ -3449,6 +3515,7 @@
                     try { this.screenTrack.stop(); } catch (e) {}
                 }
                 this.screenTrack = null;
+                this.screenStream = null;
                 this.cameraTrack = null;
                 this.sharingScreen = false;
                 if (this.localStream) {
@@ -3498,7 +3565,11 @@
             },
 
             localShowsVideo() {
-                return this.callType === 'video' || this.sharingScreen;
+                return this.callType === 'video';
+            },
+
+            localShowsScreen() {
+                return this.sharingScreen && !!this.screenStream;
             },
 
             peerShowsVideo(peer) {
@@ -3509,29 +3580,32 @@
 
             bindLocalPreview() {
                 this.$nextTick(() => {
-                    if (!this.$refs.localVideo) return;
-                    if (this.sharingScreen && this.screenTrack) {
-                        this.$refs.localVideo.srcObject = new MediaStream([this.screenTrack]);
-                    } else {
+                    if (this.$refs.localVideo) {
                         this.$refs.localVideo.srcObject = this.localStream;
+                    }
+                    if (this.$refs.localScreenVideo) {
+                        this.$refs.localScreenVideo.srcObject = this.localShowsScreen() ? this.screenStream : null;
                     }
                 });
             },
 
-            async replaceVideoTrackForPeers(track) {
+            async publishScreenTrack(track) {
                 const needsRenegotiate = [];
                 for (const [userId, pc] of Object.entries(this.peerConnections || {})) {
                     if (!pc) continue;
-                    const videoSender = pc.getSenders().find((s) => s.track?.kind === 'video');
-                    if (videoSender) {
+                    const screenSender = pc.getSenders().find((s) =>
+                        s.track === track
+                        || (s.track && String(s.track.label || '').toLowerCase().includes('screen'))
+                    );
+                    if (screenSender) {
                         try {
-                            await videoSender.replaceTrack(track);
+                            await screenSender.replaceTrack(track);
                         } catch (e) {
                             console.warn(e);
                         }
-                    } else if (track) {
+                    } else {
                         try {
-                            pc.addTrack(track, this.localStream || new MediaStream([track]));
+                            pc.addTrack(track, this.screenStream || new MediaStream([track]));
                             needsRenegotiate.push(userId);
                         } catch (e) {
                             console.warn(e);
@@ -3587,6 +3661,7 @@
                                 const track = pub?.track?.mediaStreamTrack;
                                 if (track && (pub.source === 'screen_share' || String(pub.source || '').includes('screen'))) {
                                     this.screenTrack = track;
+                                    this.screenStream = new MediaStream([track]);
                                     track.onended = () => {
                                         if (this.sharingScreen) this.stopScreenShare();
                                     };
@@ -3598,30 +3673,28 @@
                         return;
                     }
 
-                    const screenStream = await navigator.mediaDevices.getDisplayMedia({
+                    const displayStream = await navigator.mediaDevices.getDisplayMedia({
                         video: { frameRate: 15 },
                         audio: false,
                     });
-                    const track = screenStream.getVideoTracks()[0];
+                    const track = displayStream.getVideoTracks()[0];
                     if (!track) {
-                        screenStream.getTracks().forEach((t) => t.stop());
+                        displayStream.getTracks().forEach((t) => t.stop());
                         this.callError = 'No screen track available.';
                         return;
                     }
 
-                    // Keep camera track so we can restore it after sharing.
-                    if (!this.cameraTrack && this.localStream) {
-                        this.cameraTrack = this.localStream.getVideoTracks()[0] || null;
-                    }
-
                     this.screenTrack = track;
+                    this.screenStream = new MediaStream([track]);
                     this.sharingScreen = true;
                     this.localVideoOff = false;
                     track.onended = () => {
                         if (this.sharingScreen) this.stopScreenShare();
                     };
 
-                    await this.replaceVideoTrackForPeers(track);
+                    // Camera keeps its own track/sender; screen share is published as a
+                    // separate track so remotes still see our face in the video tile.
+                    await this.publishScreenTrack(track);
                     this.bindLocalPreview();
                     // Refresh peer tiles so remote video visibility updates when others share.
                     this.peers = [...this.peers];
@@ -3638,6 +3711,8 @@
                         await this.livekitRoom.localParticipant.setScreenShareEnabled(false);
                     } catch (e) {}
                     this.sharingScreen = false;
+                    this.screenTrack = null;
+                    this.screenStream = null;
                     this.bindLocalPreview();
                     this.peers = [...this.peers];
                     return;
@@ -3645,16 +3720,36 @@
 
                 const screen = this.screenTrack;
                 this.screenTrack = null;
+                this.screenStream = null;
                 this.sharingScreen = false;
+
+                // Remove the dedicated screen sender from every peer connection; the
+                // camera sender is untouched so no restore dance is needed.
+                const needsRenegotiate = [];
+                for (const [userId, pc] of Object.entries(this.peerConnections || {})) {
+                    if (!pc) continue;
+                    const screenSender = screen
+                        ? pc.getSenders().find((s) => s.track === screen)
+                        : null;
+                    const sender = screenSender || pc.getSenders().find((s) =>
+                        s.track?.kind === 'video'
+                        && String(s.track.label || '').toLowerCase().includes('screen')
+                    );
+                    if (sender) {
+                        try {
+                            pc.removeTrack(sender);
+                            needsRenegotiate.push(userId);
+                        } catch (e) {
+                            console.warn(e);
+                        }
+                    }
+                }
                 if (screen) {
                     try { screen.stop(); } catch (e) {}
                 }
-
-                const restore = (this.callType === 'video' && this.cameraTrack && this.cameraTrack.readyState === 'live')
-                    ? this.cameraTrack
-                    : null;
-
-                await this.replaceVideoTrackForPeers(restore);
+                for (const userId of needsRenegotiate) {
+                    await this.renegotiateOffer(userId);
+                }
                 this.bindLocalPreview();
                 this.peers = [...this.peers];
             },
@@ -3700,9 +3795,9 @@
 
                 if (this.localStream) {
                     this.localStream.getTracks().forEach((track) => pc.addTrack(track, this.localStream));
-                    if (this.sharingScreen && this.screenTrack
+                    if (this.sharingScreen && this.screenTrack && this.screenStream
                         && !this.localStream.getVideoTracks().includes(this.screenTrack)) {
-                        pc.addTrack(this.screenTrack, this.localStream);
+                        pc.addTrack(this.screenTrack, this.screenStream);
                     }
                 }
 
@@ -3719,6 +3814,26 @@
 
                 pc.ontrack = (event) => {
                     const stream = event.streams[0] || new MediaStream([event.track]);
+                    const existing = this.peers.find((p) => Number(p.userId) === Number(userId));
+                    const mainHasVideo = (existing?.stream?.getVideoTracks?.() || []).length > 0;
+                    const differentStream = existing?.stream && existing.stream !== stream;
+                    // Any video track that is not the peer's camera counts as screen share.
+                    if (existing && event.track.kind === 'video' && (mainHasVideo || differentStream)) {
+                        const updated = {
+                            ...existing,
+                            screenSharing: true,
+                            screenStream: stream,
+                        };
+                        this.peers = this.peers.map((p) => Number(p.userId) === Number(userId) ? updated : p);
+                        event.track.addEventListener('ended', () => {
+                            this.peers = this.peers.map((p) =>
+                                Number(p.userId) === Number(userId)
+                                    ? { ...p, screenSharing: false, screenStream: null }
+                                    : p
+                            );
+                        });
+                        return;
+                    }
                     this.upsertPeer(userId, name, stream);
                     const refresh = () => { this.peers = [...this.peers]; };
                     event.track.addEventListener('ended', refresh);
