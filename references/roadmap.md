@@ -48,7 +48,7 @@
 
 ## Post-MVP (see [todo.md](./todo.md) + [known-limitations.md](./known-limitations.md))
 
-- TURN for restrictive NATs; SFU if large group calls
+- Optional TURN for restrictive NATs; optional LiveKit SFU for large group/merge calls
 - Multi-device E2EE recovery / late-joiner key share
 - Call entry on thread view; secure-context / Reverb ops notes
 - Expanded feature test coverage

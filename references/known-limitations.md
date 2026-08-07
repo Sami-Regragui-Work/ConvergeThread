@@ -5,30 +5,17 @@ Operational caveats for E2EE and WebRTC as shipped. Pair with [todo.md](./todo.m
 
 ---
 
-## 1. Calls fail on restrictive NATs (STUN only)
+## 1. Calls fail on restrictive NATs (without TURN)
 
-**Today:** `RTCPeerConnection` uses public Google STUN only (`stun.l.google.com`). Peers behind symmetric NAT / strict firewalls often never get media.
+**Today:** `config/webrtc.php` always includes public Google STUN. Optional TURN is wired from `TURN_URLS` / `TURN_USERNAME` / `TURN_CREDENTIAL` into `iceServers` for mesh calls. Without TURN, peers behind symmetric NAT / strict firewalls often never get media.
 
-**Fix:**
-1. Run a TURN server (coturn) or use a hosted TURN (Twilio, Cloudflare Calls, Metered, etc.).
-2. Put credentials in `.env`, e.g. `TURN_URLS`, `TURN_USERNAME`, `TURN_CREDENTIAL`.
-3. Expose an authenticated endpoint (or Blade config) that returns `iceServers` including TURN.
-4. In `chat-panel-script.blade.php`, replace the hardcoded STUN list with that config:
-
-```js
-iceServers: [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'turn:turn.example.com:3478', username: '...', credential: '...' },
-]
-```
-
-Prefer short-lived TURN credentials minted server-side.
+**Fix:** Run coturn or a hosted TURN; set the env vars; reload config. Short-lived TURN credentials minted server-side are nicer for production.
 
 ---
 
 ## 2. Calls need Reverb (no signaling without WebSockets)
 
-**Today:** Offer/answer/ICE go through `CallSignal` on the private chat channel. Without Reverb, invite never reaches the other client (polling does not carry call signals).
+**Today:** Offer/answer/ICE (mesh) and invite/join/leave (mesh + SFU) go through `CallSignal` on the private chat channel. Without Reverb, invite never reaches the other client (polling does not carry call signals).
 
 **Fix:** Always run `composer run serve` (or `reverb:start`) locally. In production set `BROADCAST_CONNECTION=reverb` and keep the Reverb process up. Optional hardening: queue a fallback “missed call” notification if no `join` arrives within N seconds.
 
@@ -42,49 +29,48 @@ Prefer short-lived TURN credentials minted server-side.
 
 ---
 
-## 4. Mesh calls do not scale
+## 4. Mesh vs LiveKit SFU
 
-**Today:** Every joiner opens a peer connection to every other joiner (full mesh). Fine for 2–4 people; bandwidth and CPU explode after that.
+**Today:** Duo calls stay on full-mesh (+ TURN when configured). Group/merge calls use LiveKit SFU when `LIVEKIT_URL` + `LIVEKIT_API_KEY` + `LIVEKIT_API_SECRET` are set (`CallController` mints JWTs; client loads `livekit-client` from CDN). Without LiveKit, group calls fall back to mesh. `LIVEKIT_FORCE_ALL=true` forces SFU for every chat type.
 
-**Fix:** Introduce an SFU (LiveKit, mediasoup, Janus, Cloudflare Calls). Clients publish one uplink; the SFU fans out. Keep Reverb (or SFU signaling) for session control; move media off mesh. Update the call UI to talk to the SFU client SDK instead of raw `RTCPeerConnection` mesh helpers.
+**Ops:** Run LiveKit (e.g. `livekit/livekit-server --dev`) and point `.env` at it. See README.
+
+**Still open:** App-level call E2EE on the SFU path (see §9).
 
 ---
 
-## 5. Thread view has no call UI
+## 5. Thread view call UI
 
-**Today:** Voice/video buttons and call modals live on `messages/index.blade.php` only.
-
-**Fix:** Pass `callSignalUrl` + `currentUserName` into the thread `chatPanel(...)` config and reuse the same header controls / modals (or extract a Blade partial). Signaling already keys off `chatType`/`chatId`, so the parent chat channel works if you intentionally call from the main chat; for “call about this thread” you can keep using the parent chat id.
+**Today:** Thread view reuses the shared call buttons/modals and parent-chat signaling (`chatType`/`chatId` of the parent chatable).
 
 ---
 
 ## 6. E2EE private keys are browser-local only
 
-**Today:** Identity private key is stored in `localStorage` (`ct_e2ee_private_{userId}`). A second browser/device generates a **new** keypair, posts a new public key, and cannot unwrap old room-key shares meant for the previous public key. Clearing site data = permanent loss of that identity.
+**Today:** Identity private key is stored in `localStorage` (`ct_e2ee_private_{userId}`), with optional password-wrapped account backup restore on login. A second browser without the backup passphrase generates a **new** keypair and cannot unwrap old room-key shares. Clearing site data without a backup = permanent loss of that identity.
 
 **Fix (pick one or combine):**
-1. **Recovery passphrase:** encrypt the private JWK with a key derived from a user passphrase (PBKDF2/Argon2 + AES-GCM); upload the wrapped blob to the server; restore on new devices.
+1. **Recovery passphrase** (shipped): encrypt the private JWK; upload wrapped blob; restore on new devices.
 2. **Device linking:** QR/code challenge — old device wraps the private key (or each room key) to the new device’s ephemeral public key.
-3. **Per-device keys + re-share:** keep multiple public keys per user; when a device comes online, an existing device (or the sender) wraps the room key to every device public key (`chat_key_shares` already is per-user; extend to per-device).
+3. **Per-device keys + re-share:** keep multiple public keys per user; when a device comes online, an existing device (or the sender) wraps the room key to every device public key.
 
-Until then: one browser profile per account for demos; warn users that clearing storage loses history decryptability.
+Until then: one browser profile per account for demos unless backup/restore is used; warn users that clearing storage loses history decryptability without a backup.
 
 ---
 
 ## 7. Late joiners wait for a room-key share
 
-**Today:** If the chat already has a room key and the current user has no `chat_key_shares` row, the UI shows “Waiting for an existing member to share…” until someone with the key opens the chat and `publishShares()` runs.
+**Today:** If the chat already has a room key and the current user has no `chat_key_shares` row, the UI shows “Waiting for an existing member to share…” until someone with the key opens the chat and `publishShares()` runs. A “request key” path exists for online members to re-share.
 
 **Fix:**
-1. On membership add / invite accept, have any online member (or the inviter) push shares immediately via Reverb (`WorkspaceUpdated` / a dedicated `ChatKeyShare` event).
+1. On membership add / invite accept, have any online member (or the inviter) push shares immediately via Reverb.
 2. Or: sender-side fan-out — each message encrypts a small per-recipient key package (heavier; closer to Signal sender keys).
-3. UX: allow the waiting user to ping “request key” so online members re-run share publish.
 
 ---
 
 ## 8. Notification previews stay opaque (search does not)
 
-**Today:** In-app notifications still show generic “Encrypted message” text — the server never sees plaintext. **Chat search is different:** header Search syncs a ciphertext feed (`messages.search-feed`), decrypts with the room key in the browser, and stores searchable plaintext in IndexedDB (`ChatSearchIndex`) — Proton-style body keywords without server-side decrypt.
+**Today:** In-app notifications still show generic “Encrypted message” text — the server never sees plaintext. **Chat search is different:** header Search syncs a ciphertext feed (`messages.search-feed`), decrypts with the room key in the browser, and stores searchable plaintext in IndexedDB (`ChatSearchIndex`) — Proton-style body keywords without server-side decrypt. “All my chats” fans out local sync.
 
 **Fix (notifications):** Accept as E2EE tradeoff, or add client-only notification preview cache after decrypt. Do not decrypt on the server.
 
@@ -92,11 +78,11 @@ Until then: one browser profile per account for demos; warn users that clearing 
 
 ---
 
-## 9. Call media is not app-level E2EE
+## 9. Call media is not app-level E2EE on SFU
 
-**Today:** Browser WebRTC uses DTLS-SRTP between peers (transport encryption). There is no extra Insertable Streams / SFrame layer; an SFU in the middle could see media unless you add end-to-end media crypto.
+**Today:** Browser WebRTC uses DTLS-SRTP between peers (transport encryption) on mesh. LiveKit SFU can observe media unless you add Insertable Streams / SFrame / LiveKit E2EE.
 
-**Fix:** If you move to an SFU and need E2EE calls, use Insertable Streams / SFrame (or LiveKit E2EE) so the SFU relays opaque frames. Mesh STUN/TURN-only deployments already keep media peer-to-peer.
+**Fix:** Enable LiveKit E2EE or Insertable Streams so the SFU relays opaque frames. Mesh STUN/TURN-only deployments already keep media peer-to-peer.
 
 ---
 
@@ -108,19 +94,9 @@ Until then: one browser profile per account for demos; warn users that clearing 
 
 ---
 
-## 11. Simple edits still use full pages
+## 11. Dense editors stay on full pages
 
-**Today:** Live `workspace.updated` sync exists, but flows like rename group still navigate to dedicated pages.
-
-**Fix:** Convert low-density forms to Alpine modals that PATCH via fetch and rely on Reverb/poll sync to refresh lists — keep full pages for dense editors (roles, hierarchies).
-
----
-
-## 12. Search is per-chat
-
-**Today:** Header search picks one chat, indexes it, then queries locally.
-
-**Fix:** On open, sync all chats from `messages.chats` in the background (rate-limited), then query across `chatKey`s; show chat name on each hit.
+**Today:** Group create/rename, duo create, and merge-session create use Alpine modals. Tenant roles, hierarchies, and role-override permission pickers remain full pages (intentionally denser).
 
 ---
 
@@ -128,16 +104,16 @@ Until then: one browser profile per account for demos; warn users that clearing 
 
 | Caveat | Code touchpoints |
 |--------|------------------|
-| TURN | `chat-panel-script` `iceServers`; new env + optional controller |
-| Reverb for calls | `CallSignal`, `composer run serve`, `.env` broadcasting |
-| Secure context | Deploy TLS; demo on localhost |
-| Mesh → SFU | Replace mesh helpers; keep `CallController` or SFU webhook |
-| Thread calls | `messages/thread.blade.php` + shared partial |
-| Multi-device E2EE | `chat-crypto.blade.php` `localStorage`; new recovery/share APIs |
+| TURN | `config/webrtc.php`, `.env` `TURN_*`, `iceServers` in chat panel |
+| Reverb | `composer run serve`, `CallSignal`, Echo channels |
+| Secure context | Browser `isSecureContext`; HTTPS in prod |
+| Mesh → SFU | `LiveKitTokenService`, `CallController::sfuToken`, `chat-panel-script` SFU branch |
+| Thread calls | `messages/thread.blade.php` + `chat-call-ui` |
+| Multi-device E2EE | `chat-crypto.blade.php` `localStorage` + backup APIs |
 | Late key share | `ChatCryptoController` + membership hooks + broadcast |
 | Opaque notif previews | Notification classes; intentional |
 | Body search | `ChatSearchIndex`, `ChatBrowseController`, `chat-browse-ui` |
 | Encrypt search IDB | `chat-search-index.blade.php` |
-| Call E2EE | Insertable Streams if SFU |
+| Call E2EE | Insertable Streams / LiveKit E2EE if SFU |
 | Sidebar | `layouts/app.blade.php` |
-| Edit modals | group/edit views → shared modal + `WorkspaceSync` |
+| Create modals | `group-name-modal`, `duo-create-modal`, `merge-session-modal` |

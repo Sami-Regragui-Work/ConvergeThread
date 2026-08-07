@@ -32,11 +32,13 @@
 - Full-height chat layout (`fill-height`)
 - Multi-file attachments in one message (compose append across picks)
 - Typed file cards (PDF/PPT/docs) with size labels; image + video previews
-- Inline message edit for own messages
+- Inline message edit / soft-delete / hide-for-me
 - Confirm popups (replace browser `confirm`)
 - Mention pills: `@display name` with rounded highlight
 - Keep focus in composer after Enter/send
 - Header shows tenant name (app branding stays in sidebar)
+- Markdown compose mode + live preview; media trim/speed bake-before-send
+- Consistent input focus ring (`focus:ring-2 focus:ring-brand-500/50`)
 
 ### Thread reply attachments
 - File uploads on thread replies (same compose path as main chat)
@@ -59,18 +61,26 @@
 - Client-side Web Crypto E2EE for message text and attachments
 - Per-user ECDH identity keys (private key in browser) + per-chat AES room keys
 - Server stores ciphertext only; notifications show generic encrypted previews
+- Password-wrapped account backup restores identity keys on login
 - Fresh DB assumed — no plaintext→ciphertext migration
 
 ### Voice & video calls
-- WebRTC voice/video in chat (invite / join / offer / answer / ICE via Reverb)
-- Mesh between joined peers; mute / camera toggles; Google public STUN
+- WebRTC voice/video in chat and thread view (invite / join / offer / answer / ICE via Reverb)
+- Mesh + optional TURN for small/duo calls; mute / camera / screen share
+- Optional LiveKit SFU for group/merge calls (`LIVEKIT_*` env); Reverb still rings/joins
 
 ### Chat search & media browse
 - Header Search + Files (non-owner)
 - Proton-style body keyword search: server serves ciphertext feed; client decrypts into IndexedDB and queries locally
-- Filters: author id, has-file, date range
+- Filters: author id, has-file, date range; optional “all my chats”
 - Files panel grouped by root thread (root + reply attachments); Go to chat deep-link (`?message=`)
 - Deep-link scroll/highlight; replies redirect to thread view
+
+### Simple create/edit modals
+- Group create / rename modal
+- Duo create modal
+- Merge-session create modal
+- Dense editors stay on full pages (tenant roles, hierarchies, role-override permissions)
 
 ---
 
@@ -78,23 +88,20 @@
 
 How to fix each item: [known-limitations.md](./known-limitations.md).
 
-### TURN for restrictive NATs
-Calls use public STUN only; symmetric NAT / strict firewalls may get signaling but no media.
-
 ### Calls require Reverb
 Call invite/SDP/ICE are WebSocket-only; polling does not carry call signals. Production must keep Reverb up.
 
 ### Secure context for getUserMedia
 Mic/camera need HTTPS (or localhost). LAN `http://192.168…` demos will fail without TLS.
 
-### Mesh call scaling
-Full-mesh peer connections; fine for small chats, not for large group calls — needs an SFU later.
+### TURN still optional
+Without `TURN_*`, mesh/STUN-only peers behind symmetric NAT may fail. Configure coturn or a hosted TURN when needed.
 
-### Call UI on thread view
-Voice/video controls exist on main chat only; thread view has no call entry point.
+### LiveKit SFU optional ops
+SFU path needs a running LiveKit server + `LIVEKIT_*` env. Without it, group calls stay on mesh (fine for small rooms).
 
-### Multi-device E2EE / recovery
-Identity private key lives in `localStorage` only — second device or cleared site data cannot decrypt history without recovery or device linking. Local search index is per-browser too.
+### Multi-device E2EE / recovery hardening
+Account backup covers passphrase restore; device linking / multi-device public keys remain future work. Local search index is still per-browser.
 
 ### Late joiner room-key share
 New members wait until an existing member with the room key opens the chat (or shares keys); no proactive share-on-invite yet.
@@ -105,14 +112,8 @@ In-app notifications still cannot show plaintext bodies (server never sees them)
 ### Encrypt local search index at rest
 IndexedDB currently stores decrypted plaintext for speed (Proton encrypts the local index). Harden by wrapping index rows with a key derived from the identity private key / passphrase.
 
-### Cross-chat search in one query
-Search UI is per selected chat today; extend to fan-out sync + query across all indexed chats.
-
-### Convert simple edit pages to modals
-With live workspace sync, group rename and similar flows can be header/sidebar modals instead of full pages.
-
-### App-level call E2EE (if SFU)
-DTLS-SRTP protects peer-to-peer media today; an SFU path would need Insertable Streams / SFrame for true E2EE calls.
+### App-level call E2EE (SFU)
+DTLS-SRTP protects mesh media today; LiveKit SFU can see media unless Insertable Streams / SFrame / LiveKit E2EE is added.
 
 ### Sidebar UX
 Further polish for desktop toggle defaults on very small screens if needed.
