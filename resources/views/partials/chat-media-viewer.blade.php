@@ -1,6 +1,6 @@
 {{-- In-app media / document viewer --}}
 <div x-show="mediaViewer" x-cloak
-    class="fixed inset-0 z-[250] flex items-center justify-center p-3 sm:p-6"
+    class="fixed inset-0 z-250 flex items-center justify-center p-3 sm:p-6"
     @keydown.escape.window="if (mediaViewer) closeMediaViewer()">
     <div class="absolute inset-0 bg-black/85" @click="closeMediaViewer()"></div>
     <div class="relative w-full max-w-5xl max-h-[90vh] flex flex-col rounded-2xl border border-white/10 bg-surface-300 shadow-2xl overflow-hidden">
@@ -15,15 +15,28 @@
                 <button type="button" @click="closeMediaViewer()" class="px-2.5 py-1.5 rounded-lg border border-white/10 text-xs text-slate-300 hover:bg-white/5">Close</button>
             </div>
         </div>
-        <div class="flex-1 min-h-0 overflow-auto bg-black flex items-center justify-center p-2">
+        <div class="flex-1 min-h-0 overflow-auto bg-black flex items-center justify-center p-3">
             <img x-show="mediaViewer?.type === 'image'" x-cloak
                 :src="mediaViewer?.url" :alt="mediaViewer?.name"
                 class="max-w-full max-h-[75vh] object-contain">
-            <video x-show="mediaViewer?.type === 'video'" x-cloak
-                :src="mediaViewer?.url" controls playsinline
-                class="max-w-full max-h-[75vh]"></video>
-            <audio x-show="mediaViewer?.type === 'audio'" x-cloak
-                :src="mediaViewer?.url" controls class="w-full max-w-lg"></audio>
+
+            <div x-show="mediaViewer?.type === 'video' || mediaViewer?.type === 'audio'" x-cloak
+                class="w-full max-w-3xl"
+                x-data="ctMediaPlayer({ src: '', kind: 'audio' })"
+                x-effect="
+                    if (mediaViewer && (mediaViewer.type === 'video' || mediaViewer.type === 'audio')) {
+                        src = mediaViewer.url || '';
+                        kind = mediaViewer.type;
+                        rate = 1;
+                        showSpeed = false;
+                        current = 0;
+                        playing = false;
+                        $nextTick(() => bindMedia());
+                    }
+                ">
+                @include('partials.ct-media-player')
+            </div>
+
             <iframe x-show="mediaViewer?.type === 'pdf'" x-cloak
                 :src="mediaViewer?.url" class="w-full h-[75vh] bg-white rounded-lg" title="PDF"></iframe>
             <div x-show="mediaViewer?.type === 'file'" x-cloak class="text-center p-8 space-y-3">

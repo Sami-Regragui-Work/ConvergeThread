@@ -48,7 +48,11 @@
             <div>
                 <p class="text-white font-semibold"
                     x-text="callState === 'outgoing' ? ('Calling…') : (sharingScreen ? 'Sharing screen' : (callType === 'video' ? 'Video call' : 'Voice call'))"></p>
-                <p class="text-xs text-slate-500">{{ $chatLabel }}</p>
+                <p class="text-xs text-slate-500">
+                    {{ $chatLabel }}
+                    <span x-show="callMediaMode === 'sfu'" x-cloak>· SFU</span>
+                    <span x-show="callMediaMode === 'mesh'" x-cloak>· mesh</span>
+                </p>
             </div>
             <span class="text-[10px] uppercase tracking-wide px-2 py-1 rounded-lg border border-white/10 text-slate-400"
                 x-text="callState"></span>

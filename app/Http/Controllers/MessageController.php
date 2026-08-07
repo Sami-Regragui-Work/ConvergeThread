@@ -11,11 +11,13 @@ use App\Models\MergeSession;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\TenantRole;
+use App\Models\User;
 use App\Services\ChatParticipantService;
 use App\Services\MentionService;
 use App\Services\MessageService;
 use App\Services\NotificationStackService;
 use App\Support\MessageEncryption;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -51,6 +53,7 @@ class MessageController extends Controller
                 $ctx['roleColors'],
                 $ctx['usernameLabels'],
                 $ctx['mergeUserLabels'],
+                (bool) ($payload['is_markdown'] ?? false),
             );
         } else {
             $payload['content_html'] = null;
@@ -65,12 +68,23 @@ class MessageController extends Controller
 
         $viewer = $viewerId ? Auth::user() : null;
         $payload['can_edit'] = $viewer
+            && !($payload['is_deleted'] ?? false)
             && (int) $message->user_id === (int) $viewerId
             && Gate::forUser($viewer)->allows('update', $message);
-        $payload['can_delete'] = $viewer
+        $payload['can_delete_everyone'] = $viewer
+            && !($payload['is_deleted'] ?? false)
             && Gate::forUser($viewer)->allows('delete', $message);
+        $payload['can_delete_for_me'] = $viewer
+            && !($payload['is_deleted'] ?? false)
+            && Gate::forUser($viewer)->allows('hide', $message);
+        $payload['can_delete'] = $payload['can_delete_everyone'] || $payload['can_delete_for_me'];
 
         return $payload;
+    }
+
+    private function excludeHiddenFor(Builder $query, User $user): Builder
+    {
+        return $query->whereDoesntHave('hides', fn ($q) => $q->where('user_id', $user->id));
     }
 
     private function renderContextFor(Group|Duo|MergeSession $chatable, string $chatType, ?int $tenantId): array
@@ -192,10 +206,8 @@ class MessageController extends Controller
         $messages = Message::where('chatable_type', $chatable->getMorphClass())
             ->where('chatable_id', $chatable->id)
             ->whereNull('parent_id')
-            ->with(['user.tenantRole', 'attachments', 'replies'])
-            ->oldest()
-            ->limit(100)
-            ->get();
+            ->with(['user.tenantRole', 'attachments', 'replies', 'deletedBy']);
+        $messages = $this->excludeHiddenFor($messages, $user)->oldest()->limit(100)->get();
 
         $renderContext = $this->renderContextFor($chatable, $chatType, $user->tenant_id);
         $initialMessages = $messages->map(fn (Message $m) => $this->payload($m, $user->id, $renderContext, $chatType, $chatable))->values();
@@ -237,7 +249,7 @@ class MessageController extends Controller
         $query = Message::where('chatable_type', $chatable->getMorphClass())
             ->where('chatable_id', $chatable->id)
             ->where('id', '>', $afterId)
-            ->with(['user.tenantRole', 'attachments', 'replies']);
+            ->with(['user.tenantRole', 'attachments', 'replies', 'deletedBy']);
 
         if ($parentId !== null && $parentId !== '') {
             $query->where('parent_id', $parentId);
@@ -245,7 +257,7 @@ class MessageController extends Controller
             $query->whereNull('parent_id');
         }
 
-        $messages = $query->oldest()->get();
+        $messages = $this->excludeHiddenFor($query, $user)->oldest()->get();
         $renderContext = $this->renderContextFor($chatable, $chatType, $user->tenant_id);
 
         return response()->json([
@@ -285,6 +297,7 @@ class MessageController extends Controller
             $chatType,
             $mentionUserIds,
             $attachmentMeta,
+            (bool) ($credentials['is_markdown'] ?? $request->boolean('is_markdown')),
         );
 
         $renderContext = $this->renderContextFor($chatable, $chatType, $user->tenant_id);
@@ -308,6 +321,7 @@ class MessageController extends Controller
     {
         $credentials = $request->validated();
         Gate::authorize('update', $message);
+        abort_if($message->isDeleted(), 404);
 
         $message->loadMissing('chatable');
         $chatType = match ($message->chatable_type) {
@@ -317,12 +331,20 @@ class MessageController extends Controller
             default => 'group',
         };
 
+        $files = array_values(array_filter($request->file('files', []) ?? []));
+        $singleFile = $request->file('file');
+        if ($singleFile) {
+            $files[] = $singleFile;
+        }
+
         $this->messageService->update(
             $message,
             $credentials['content'] ?? null,
-            $request->file('file'),
-            $credentials['remove_file'] ?? false,
-            $credentials['empty_content'] ?? false
+            $files,
+            array_map('intval', $credentials['remove_attachment_ids'] ?? []),
+            (bool) ($credentials['empty_content'] ?? false),
+            (bool) ($credentials['remove_file'] ?? false),
+            $credentials['attachment_meta'] ?? null,
         );
 
         $user = Auth::user();
@@ -338,11 +360,33 @@ class MessageController extends Controller
             ->with('success', 'Message updated successfully.');
     }
 
-    public function destroy(\Illuminate\Http\Request $request, Message $message)
+    public function destroy(Request $request, Message $message)
     {
+        $message->loadMissing('chatable');
+        $scope = $request->input('scope', 'everyone');
+
+        // Own messages are always delete-for-everyone (never hide-only).
+        if ((int) $message->user_id === (int) Auth::id()) {
+            $scope = 'everyone';
+        }
+
+        if ($scope === 'me') {
+            Gate::authorize('hide', $message);
+            $this->messageService->hideForUser($message, Auth::user());
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'ok' => true,
+                    'id' => $message->id,
+                    'hidden' => true,
+                ]);
+            }
+
+            return redirect()->back()->with('success', 'Message removed from your view.');
+        }
+
         Gate::authorize('delete', $message);
 
-        $message->loadMissing('chatable');
         $chatType = match ($message->chatable_type) {
             'group' => 'group',
             'duo' => 'duo',
@@ -352,33 +396,45 @@ class MessageController extends Controller
         $chatId = $message->chatable_id;
         $wasRoot = $message->parent_id === null;
         $messageId = $message->id;
+        $user = Auth::user();
 
-        $this->messageService->delete($message);
+        $fresh = $this->messageService->softDeleteForEveryone($message, $user);
+        $renderContext = $this->renderContextFor($message->chatable, $chatType, $user->tenant_id);
 
         if ($request->wantsJson()) {
             return response()->json([
                 'ok' => true,
                 'id' => $messageId,
-                'redirect' => $wasRoot
-                    ? route('messages.index', [$chatType, $chatId])
-                    : null,
+                'hidden' => false,
+                'message' => $this->payload($fresh, $user->id, $renderContext, $chatType, $message->chatable),
+                // Soft-delete keeps the row (and replies); no forced redirect.
+                'redirect' => null,
             ]);
         }
 
         return redirect()
             ->back()
-            ->with('success', 'Message deleted successfully.');
+            ->with('success', 'Message deleted for everyone.');
     }
 
     public function thread(Message $message)
     {
         Gate::authorize('thread', $message);
 
+        $user = Auth::user();
+        abort_if(
+            \App\Models\MessageHide::query()
+                ->where('message_id', $message->id)
+                ->where('user_id', $user->id)
+                ->exists(),
+            404
+        );
+
         $message->load('chatable');
         $thread = $this->messageService->getThread($message);
 
-        $thread['message']->load(['user.tenantRole', 'parent', 'attachments']);
-        $thread['replies']->load(['user.tenantRole', 'attachments']);
+        $thread['message']->load(['user.tenantRole', 'parent', 'attachments', 'deletedBy']);
+        $thread['replies']->load(['user.tenantRole', 'attachments', 'deletedBy']);
 
         $chatType = match ($message->chatable_type) {
             'group' => 'group',
@@ -392,7 +448,18 @@ class MessageController extends Controller
         $participants = $this->mapParticipants($chatable);
         $renderContext = $this->renderContextFor($chatable, $chatType, $user->tenant_id);
 
-        $initialReplies = $thread['replies']->sortBy('id')->values()
+        $hiddenIds = \App\Models\MessageHide::query()
+            ->where('user_id', $user->id)
+            ->whereIn('message_id', $thread['replies']->pluck('id')->all())
+            ->pluck('message_id')
+            ->all();
+
+        $visibleReplies = $thread['replies']
+            ->reject(fn (Message $m) => in_array($m->id, $hiddenIds, true))
+            ->sortBy('id')
+            ->values();
+
+        $initialReplies = $visibleReplies
             ->map(fn (Message $m) => $this->payload($m, $user->id, $renderContext, $chatType, $chatable))->values();
 
         $mentionIds = $this->mentionService->unreadMessageIdsForUser($user, $chatable);
@@ -414,6 +481,7 @@ class MessageController extends Controller
     public function attachment(Message $message): BinaryFileResponse|StreamedResponse
     {
         Gate::authorize('view', $message);
+        abort_if($message->isDeleted(), 404);
 
         abort_unless($message->is_file && $message->file_path, 404);
         abort_unless(Storage::disk('public')->exists($message->file_path), 404);
@@ -428,6 +496,7 @@ class MessageController extends Controller
     public function downloadAttachment(Message $message, MessageAttachment $attachment): BinaryFileResponse|StreamedResponse
     {
         Gate::authorize('view', $message);
+        abort_if($message->isDeleted(), 404);
         abort_unless((int) $attachment->message_id === (int) $message->id, 404);
         abort_unless(Storage::disk('public')->exists($attachment->file_path), 404);
 

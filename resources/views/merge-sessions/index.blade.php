@@ -6,10 +6,10 @@
         <div class="flex items-center justify-between mb-6">
             <h1 class="text-xl font-bold text-white">Merge Sessions</h1>
             @can('create', App\Models\MergeSession::class)
-                <a href="{{ route('merge-sessions.create') }}"
+                <button type="button" onclick="window.__openMergeCreate && window.__openMergeCreate()"
                     class="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold px-4 py-2 rounded-xl transition">
                     + New Session
-                </a>
+                </button>
             @endcan
         </div>
 
@@ -41,4 +41,6 @@
             </div>
         @endif
     </div>
+
+    @include('partials.merge-session-modal')
 @endsection

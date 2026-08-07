@@ -33,6 +33,10 @@ class MessagePolicy
 
     public function update(User $editor, Message $message): bool
     {
+        if ($message->isDeleted()) {
+            return false;
+        }
+
         if ($message->user_id !== $editor->id) {
             return false;
         }
@@ -42,11 +46,29 @@ class MessagePolicy
 
     public function delete(User $deleter, Message $message): bool
     {
+        if ($message->isDeleted()) {
+            return false;
+        }
+
         if ($message->user_id === $deleter->id) {
             return $this->chatablePermissionService->hasPermission($message->chatable, $deleter, Permissions::MESSAGES_DELETE_OWN);
         }
 
         return $this->chatablePermissionService->hasPermission($message->chatable, $deleter, Permissions::MESSAGES_DELETE_ANY);
+    }
+
+    /** Hide another user's message from this viewer's side only. Never for own messages. */
+    public function hide(User $viewer, Message $message): bool
+    {
+        if ($message->isDeleted()) {
+            return false;
+        }
+
+        if ((int) $message->user_id === (int) $viewer->id) {
+            return false;
+        }
+
+        return $this->view($viewer, $message);
     }
 
     public function thread(User $viewer, Message $message): bool

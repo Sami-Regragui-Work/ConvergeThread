@@ -16,7 +16,7 @@
                     <div>
                         <label class="block text-sm text-slate-300 mb-1.5">Base tenant role</label>
                         <select name="tenant_role_id" required
-                            class="w-full bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm">
+                        class="w-full bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition">
                             <option value="">— Select role —</option>
                             @foreach($tenantRoles as $role)
                                 <option value="{{ $role->id }}" {{ old('tenant_role_id') == $role->id ? 'selected' : '' }}>

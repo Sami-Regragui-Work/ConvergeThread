@@ -23,10 +23,16 @@
             cryptoPublicKeyUrl: config.cryptoPublicKeyUrl ?? null,
             callSignalUrl: config.callSignalUrl ?? null,
             callActiveUrl: config.callActiveUrl ?? null,
+            sfuTokenUrl: config.sfuTokenUrl ?? null,
+            sfuEnabled: !!(config.sfuEnabled),
+            sfuUrl: config.sfuUrl ?? null,
+            preferredMediaMode: config.preferredMediaMode ?? 'mesh',
             currentUserName: config.currentUserName ?? 'You',
             parentMessage: config.parentMessage ?? null,
             activeCall: config.activeCall ?? null,
             draft: '',
+            draftFormat: 'plain',
+            showMarkdownGuide: (typeof localStorage !== 'undefined' && localStorage.getItem('ct_md_guide') !== '0'),
             files: [],
             filePreviews: [],
             sending: false,
@@ -42,6 +48,7 @@
             recordTimer: null,
             mediaViewer: null,
             _pdfjsLoading: null,
+            _jszipLoading: null,
             pollTimer: null,
             echoBound: false,
             e2eeReady: false,
@@ -58,11 +65,20 @@
             selectedSearch: '',
             editingId: null,
             editDraft: '',
+            editKeepAttachments: [],
+            editRemoveIds: [],
+            editFiles: [],
+            editFilePreviews: [],
+            editError: '',
+            hiddenMessageIds: [],
             showCallModal: false,
             callType: 'voice',
             callId: null,
             callState: 'idle',
             callError: '',
+            callMediaMode: 'mesh',
+            livekitRoom: null,
+            _livekitLoading: null,
             incomingCall: null,
             localStream: null,
             localMuted: false,
@@ -79,6 +95,8 @@
             ringtoneNodes: null,
             iceServers: config.iceServers ?? [{ urls: 'stun:stun.l.google.com:19302' }],
             focusMessageId: null,
+            relativeTimeTick: Date.now(),
+            relativeTimeTimer: null,
 
             async init() {
                 const params = new URLSearchParams(window.location.search);
@@ -98,6 +116,9 @@
                 this.setupRealtime();
                 this.pollTimer = setInterval(() => this.poll(), this.echoBound ? 15000 : 3000);
                 this.callPollTimer = setInterval(() => this.refreshActiveCall(), 8000);
+                this.relativeTimeTimer = setInterval(() => {
+                    this.relativeTimeTick = Date.now();
+                }, 30000);
                 await this.setupE2ee();
                 if (this.parentMessage) {
                     await this.decryptMessageInPlace(this.parentMessage);
@@ -117,6 +138,7 @@
                 if (this.pollTimer) clearInterval(this.pollTimer);
                 if (this.callPollTimer) clearInterval(this.callPollTimer);
                 if (this.callHeartbeatTimer) clearInterval(this.callHeartbeatTimer);
+                if (this.relativeTimeTimer) clearInterval(this.relativeTimeTimer);
                 if (this.recording) this.stopRecording();
                 this.stopRingtone();
                 this.closeMediaViewer();
@@ -149,6 +171,69 @@
 
             focusDraft() {
                 this.$refs.draftInput?.focus();
+            },
+
+            hasVideoStage() {
+                return (this.filePreviews || []).some((p) => p && p.isVideo);
+            },
+
+            autoResizeDraft() {
+                const el = this.$refs.draftInput;
+                if (!el) return;
+                el.style.height = 'auto';
+                el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+            },
+
+            draftMarkdownPreviewHtml() {
+                const raw = this.draft || '';
+                if (!raw.trim()) return '<p class="text-slate-500">Nothing to preview</p>';
+                return window.ctRenderMarkdown ? window.ctRenderMarkdown(raw) : this.escapeHtml(raw).replace(/\n/g, '<br>');
+            },
+
+            setDraftFormat(format) {
+                this.draftFormat = format === 'markdown' ? 'markdown' : 'plain';
+                if (this.draftFormat === 'markdown' && localStorage.getItem('ct_md_guide') !== '0') {
+                    this.showMarkdownGuide = true;
+                }
+            },
+
+            setMarkdownGuide(on) {
+                this.showMarkdownGuide = !!on;
+                try {
+                    localStorage.setItem('ct_md_guide', on ? '1' : '0');
+                } catch (e) {}
+            },
+
+            escapeHtml(str) {
+                return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;');
+            },
+
+            formatRelativeTime(iso, fallback = '') {
+                // relativeTimeTick keeps Alpine re-evaluating on an interval.
+                void this.relativeTimeTick;
+                if (!iso) return fallback || '';
+                const then = new Date(iso).getTime();
+                if (!Number.isFinite(then)) return fallback || '';
+                const diffSec = Math.round((then - Date.now()) / 1000);
+                const abs = Math.abs(diffSec);
+                const rtf = typeof Intl !== 'undefined' && Intl.RelativeTimeFormat
+                    ? new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
+                    : null;
+                const format = (value, unit) => (rtf
+                    ? rtf.format(value, unit)
+                    : (Math.abs(value) + ' ' + unit + (Math.abs(value) === 1 ? '' : 's') + (value < 0 ? ' ago' : '')));
+
+                if (abs < 45) return 'just now';
+                if (abs < 3600) return format(Math.round(diffSec / 60), 'minute');
+                if (abs < 86400) return format(Math.round(diffSec / 3600), 'hour');
+                if (abs < 604800) return format(Math.round(diffSec / 86400), 'day');
+                if (abs < 2629800) return format(Math.round(diffSec / 604800), 'week');
+                if (abs < 31557600) return format(Math.round(diffSec / 2629800), 'month');
+                return format(Math.round(diffSec / 31557600), 'year');
             },
 
             async setupE2ee() {
@@ -392,25 +477,191 @@
                 return this._pdfjsLoading;
             },
 
-            async enrichPdfPreview(attachment) {
-                if (!attachment || attachment.kind !== 'pdf' || attachment.thumb_url) return;
+            async loadJsZip() {
+                if (window.JSZip) return window.JSZip;
+                if (this._jszipLoading) return this._jszipLoading;
+                this._jszipLoading = new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+                    script.onload = () => window.JSZip ? resolve(window.JSZip) : reject(new Error('JSZip missing'));
+                    script.onerror = () => reject(new Error('JSZip failed to load'));
+                    document.head.appendChild(script);
+                });
+                return this._jszipLoading;
+            },
+
+            attachmentExt(attachment) {
+                const name = (attachment?.name || '').toLowerCase();
+                const fromName = name.includes('.') ? name.split('.').pop() : '';
+                return (fromName || (attachment?.ext || '')).toLowerCase();
+            },
+
+            async fetchAttachmentBlob(attachment) {
+                const url = this.attachmentDisplayUrl(attachment);
+                if (!url) return null;
+                if (String(url).startsWith('blob:')) {
+                    const res = await fetch(url);
+                    if (!res.ok) return null;
+                    return res.blob();
+                }
+                const res = await fetch(url, { credentials: 'same-origin' });
+                if (!res.ok) return null;
+                return res.blob();
+            },
+
+            async thumbFromPdf(url) {
+                const pdfjs = await this.loadPdfJs();
+                const doc = await pdfjs.getDocument(
+                    String(url).startsWith('blob:') ? url : { url, withCredentials: true }
+                ).promise;
+                const pageCount = doc.numPages || null;
+                const page = await doc.getPage(1);
+                const viewport = page.getViewport({ scale: 0.6 });
+                const canvas = document.createElement('canvas');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+                return {
+                    thumb_url: canvas.toDataURL('image/jpeg', 0.72),
+                    page_count: pageCount,
+                };
+            },
+
+            async thumbFromVideo(url) {
+                return new Promise((resolve) => {
+                    const video = document.createElement('video');
+                    video.muted = true;
+                    video.playsInline = true;
+                    video.preload = 'auto';
+                    video.src = url;
+                    const cleanup = () => {
+                        video.removeAttribute('src');
+                        video.load();
+                    };
+                    const fail = () => { cleanup(); resolve(null); };
+                    video.addEventListener('error', fail, { once: true });
+                    video.addEventListener('loadeddata', async () => {
+                        try {
+                            const seekTo = Math.min(0.25, (video.duration || 1) * 0.05);
+                            if (Number.isFinite(seekTo) && seekTo > 0) {
+                                video.currentTime = seekTo;
+                                await new Promise((r) => video.addEventListener('seeked', r, { once: true }));
+                            }
+                            const canvas = document.createElement('canvas');
+                            canvas.width = video.videoWidth || 320;
+                            canvas.height = video.videoHeight || 180;
+                            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+                            const thumb = canvas.toDataURL('image/jpeg', 0.7);
+                            cleanup();
+                            resolve(thumb);
+                        } catch (e) {
+                            fail();
+                        }
+                    }, { once: true });
+                });
+            },
+
+            async thumbFromText(blob) {
+                const text = await blob.text();
+                const sample = text.slice(0, 900).replace(/\t/g, '  ');
+                const canvas = document.createElement('canvas');
+                canvas.width = 420;
+                canvas.height = 280;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#0f172a';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#cbd5e1';
+                ctx.font = '12px ui-monospace, SFMono-Regular, Menlo, monospace';
+                const lineHeight = 16;
+                let y = 18;
+                for (const line of sample.split(/\r?\n/)) {
+                    const chunks = line.match(/.{1,52}/g) || [''];
+                    for (const chunk of chunks) {
+                        ctx.fillText(chunk, 12, y);
+                        y += lineHeight;
+                        if (y > canvas.height - 10) break;
+                    }
+                    if (y > canvas.height - 10) break;
+                }
+                return canvas.toDataURL('image/jpeg', 0.75);
+            },
+
+            async thumbFromOfficeZip(blob) {
+                const JSZip = await this.loadJsZip();
+                const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+                const candidates = [
+                    'docProps/thumbnail.jpeg',
+                    'docProps/thumbnail.jpg',
+                    'docProps/thumbnail.png',
+                    'Thumbnails/thumbnail.png',
+                    'Thumbnails/thumbnail.jpg',
+                    'META-INF/thumbnail.png',
+                ];
+                for (const path of candidates) {
+                    const entry = zip.file(path);
+                    if (!entry) continue;
+                    const bytes = await entry.async('uint8array');
+                    const lower = path.toLowerCase();
+                    const mime = lower.endsWith('.png') ? 'image/png' : 'image/jpeg';
+                    return URL.createObjectURL(new Blob([bytes], { type: mime }));
+                }
+                return null;
+            },
+
+            async enrichAttachmentThumb(attachment) {
+                if (!attachment || attachment.thumb_url || attachment._thumbTried) return;
+                attachment._thumbTried = true;
+
+                // Images already display as media tiles; still set thumb for consistency.
+                if (attachment.is_image) {
+                    const url = this.attachmentDisplayUrl(attachment);
+                    if (url) attachment.thumb_url = url;
+                    return;
+                }
+
                 const url = this.attachmentDisplayUrl(attachment);
                 if (!url) return;
+
+                const ext = this.attachmentExt(attachment);
+                const mime = (attachment.mime_type || '').toLowerCase();
+                const kind = attachment.kind || '';
+
                 try {
-                    const pdfjs = await this.loadPdfJs();
-                    const doc = await pdfjs.getDocument(
-                        String(url).startsWith('blob:') ? url : { url, withCredentials: true }
-                    ).promise;
-                    attachment.page_count = doc.numPages || null;
-                    const page = await doc.getPage(1);
-                    const viewport = page.getViewport({ scale: 0.6 });
-                    const canvas = document.createElement('canvas');
-                    canvas.width = viewport.width;
-                    canvas.height = viewport.height;
-                    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-                    attachment.thumb_url = canvas.toDataURL('image/jpeg', 0.72);
+                    if (kind === 'pdf' || mime.includes('pdf') || ext === 'pdf') {
+                        const result = await this.thumbFromPdf(url);
+                        if (result?.thumb_url) {
+                            attachment.thumb_url = result.thumb_url;
+                            if (result.page_count) attachment.page_count = result.page_count;
+                        }
+                        return;
+                    }
+
+                    if (attachment.is_video || kind === 'video' || mime.startsWith('video/')) {
+                        const thumb = await this.thumbFromVideo(url);
+                        if (thumb) attachment.thumb_url = thumb;
+                        return;
+                    }
+
+                    const officeExts = ['docx', 'pptx', 'xlsx', 'odt', 'odp', 'ods'];
+                    if (['doc', 'ppt', 'sheet'].includes(kind) || officeExts.includes(ext)) {
+                        const blob = await this.fetchAttachmentBlob(attachment);
+                        if (blob) {
+                            const thumb = await this.thumbFromOfficeZip(blob);
+                            if (thumb) attachment.thumb_url = thumb;
+                        }
+                        return;
+                    }
+
+                    const textExts = ['txt', 'md', 'csv', 'json', 'xml', 'html', 'htm', 'log', 'yml', 'yaml', 'ini', 'css', 'js', 'ts', 'php', 'py', 'rb', 'go', 'rs', 'java', 'c', 'cpp', 'h', 'sql', 'sh'];
+                    if (mime.startsWith('text/') || textExts.includes(ext)) {
+                        const blob = await this.fetchAttachmentBlob(attachment);
+                        if (blob) {
+                            const thumb = await this.thumbFromText(blob);
+                            if (thumb) attachment.thumb_url = thumb;
+                        }
+                    }
                 } catch (e) {
-                    // Preview remains icon-only when PDF.js can't render (e.g. encrypted blob quirks).
+                    // Keep icon fallback when a format can't be rendered client-side.
                 }
             },
 
@@ -423,7 +674,7 @@
             },
 
             async decryptMessageInPlace(message) {
-                if (!message) return message;
+                if (!message || message.is_deleted) return message;
 
                 if (this.roomKey && (message.is_encrypted || window.ChatCrypto?.isEncrypted(message.content))) {
                     try {
@@ -436,6 +687,13 @@
                         message.content = '[Unable to decrypt]';
                         message.content_html = null;
                     }
+                }
+
+                if (message.is_markdown && message.content && !message.content_html
+                    && message.content !== '[Unable to decrypt]') {
+                    message.content_html = window.ctRenderMarkdown
+                        ? window.ctRenderMarkdown(message.content)
+                        : null;
                 }
 
                 if (this.roomKey && Array.isArray(message.attachments)) {
@@ -461,9 +719,7 @@
 
                 if (Array.isArray(message.attachments)) {
                     for (const attachment of message.attachments) {
-                        if (attachment.kind === 'pdf') {
-                            await this.enrichPdfPreview(attachment);
-                        }
+                        await this.enrichAttachmentThumb(attachment);
                     }
                 }
 
@@ -702,37 +958,146 @@
             },
 
             onDraftKeydown(event) {
-                if (!this.showMentionMenu) return;
+                if (this.showMentionMenu) {
+                    if (event.key === 'ArrowDown') {
+                        event.preventDefault();
+                        this.mentionNav(1);
+                        return;
+                    }
 
-                if (event.key === 'ArrowDown') {
+                    if (event.key === 'ArrowUp') {
+                        event.preventDefault();
+                        this.mentionNav(-1);
+                        return;
+                    }
+
+                    if (event.key === 'Tab') {
+                        if (!this.filteredSuggestions().length) return;
+                        event.preventDefault();
+                        this.acceptActiveMention();
+                        return;
+                    }
+
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        this.closeMentionMenu();
+                        return;
+                    }
+
+                    if (event.key === 'Enter' && this.activeMentionIndex >= 0) {
+                        event.preventDefault();
+                        this.acceptActiveMention();
+                        return;
+                    }
+                }
+
+                if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
                     event.preventDefault();
-                    this.mentionNav(1);
+                    if (!this.sending && !this.recording && (this.draft.trim() || this.files.length)) {
+                        this.sendMessage();
+                    }
                     return;
                 }
 
-                if (event.key === 'ArrowUp') {
+                if (event.key !== 'Enter') return;
+
+                // Enter always sends (both modes). Shift+Enter = newline / markdown continue.
+                if (!event.shiftKey) {
                     event.preventDefault();
-                    this.mentionNav(-1);
+                    if (!this.sending && !this.recording && (this.draft.trim() || this.files.length)) {
+                        this.sendMessage();
+                    }
                     return;
                 }
 
-                if (event.key === 'Tab') {
-                    if (!this.filteredSuggestions().length) return;
+                if (this.draftFormat === 'markdown') {
+                    this.handleMarkdownEnter(event);
+                }
+            },
+
+            handleMarkdownEnter(event) {
+                const el = this.$refs.draftInput;
+                if (!el) return false;
+
+                const value = el.value;
+                const start = el.selectionStart ?? 0;
+                const end = el.selectionEnd ?? 0;
+                if (start !== end) return false;
+
+                const before = value.slice(0, start);
+                const after = value.slice(end);
+                const lineStart = before.lastIndexOf('\n') + 1;
+                const line = before.slice(lineStart);
+
+                // Inside fenced code block: let Shift+Enter insert a normal newline.
+                const fenceCount = (before.match(/```/g) || []).length;
+                if (fenceCount % 2 === 1) return false;
+
+                const ul = line.match(/^(\s*)([-*+])\s+(.*)$/);
+                if (ul) {
                     event.preventDefault();
-                    this.acceptActiveMention();
-                    return;
+                    if (ul[3] === '') {
+                        // Empty bullet → exit list.
+                        const next = value.slice(0, lineStart) + after;
+                        this.draft = next;
+                        this.$nextTick(() => {
+                            el.selectionStart = el.selectionEnd = lineStart;
+                            this.autoResizeDraft();
+                        });
+                        return true;
+                    }
+                    const insert = '\n' + ul[1] + ul[2] + ' ';
+                    this.draft = before + insert + after;
+                    const caret = start + insert.length;
+                    this.$nextTick(() => {
+                        el.selectionStart = el.selectionEnd = caret;
+                        this.autoResizeDraft();
+                    });
+                    return true;
                 }
 
-                if (event.key === 'Escape') {
+                const ol = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
+                if (ol) {
                     event.preventDefault();
-                    this.closeMentionMenu();
-                    return;
+                    if (ol[3] === '') {
+                        const next = value.slice(0, lineStart) + after;
+                        this.draft = next;
+                        this.$nextTick(() => {
+                            el.selectionStart = el.selectionEnd = lineStart;
+                            this.autoResizeDraft();
+                        });
+                        return true;
+                    }
+                    const n = Number(ol[2]) + 1;
+                    const insert = '\n' + ol[1] + n + '. ';
+                    this.draft = before + insert + after;
+                    const caret = start + insert.length;
+                    this.$nextTick(() => {
+                        el.selectionStart = el.selectionEnd = caret;
+                        this.autoResizeDraft();
+                    });
+                    return true;
                 }
 
-                if (event.key === 'Enter' && this.activeMentionIndex >= 0) {
+                // Table row: continue with same number of cells.
+                if (/^\s*\|?.+\|.+\|?\s*$/.test(line) && !/^\s*\|?[\s:|-]+\|[\s:|-]*\|?\s*$/.test(line)) {
                     event.preventDefault();
-                    this.acceptActiveMention();
+                    let t = line.trim();
+                    if (t.startsWith('|')) t = t.slice(1);
+                    if (t.endsWith('|')) t = t.slice(0, -1);
+                    const cols = t.split('|').length;
+                    const cells = Array.from({ length: cols }, () => ' ');
+                    const insert = '\n| ' + cells.join(' | ') + ' |';
+                    this.draft = before + insert + after;
+                    const caret = start + 3; // after "| "
+                    this.$nextTick(() => {
+                        el.selectionStart = el.selectionEnd = caret;
+                        this.autoResizeDraft();
+                    });
+                    return true;
                 }
+
+                return false;
             },
 
             insertMention(token) {
@@ -847,12 +1212,18 @@
             appendMessages(incoming) {
                 const existing = new Set(this.messages.map(m => m.id));
                 let added = false;
+                const hidden = new Set(this.hiddenMessageIds || []);
 
                 for (const message of incoming) {
+                    if (hidden.has(message.id)) continue;
                     this.decryptMessageInPlace(message).then((decoded) => {
+                        if (decoded.is_deleted) {
+                            // Tombstones need no decrypt work beyond payload.
+                        }
                         const idx = this.messages.findIndex(m => m.id === decoded.id);
                         if (idx >= 0) {
                             this.messages[idx] = decoded;
+                            this.messages = [...this.messages];
                         } else {
                             this.messages.push(decoded);
                             this.scrollToBottom();
@@ -924,12 +1295,99 @@
                     key: this.fileKey(file),
                     name: file.name,
                     url: (isImage || isVideo || isAudio) ? URL.createObjectURL(file) : null,
+                    sourceFile: file,
                     isImage,
                     isVideo,
                     isAudio,
                     sizeLabel: this.formatBytes(file.size),
                     ext: (file.name.split('.').pop() || 'file').slice(0, 5).toUpperCase(),
+                    rate: 1,
+                    trimStart: 0,
+                    trimEnd: null,
+                    duration: null,
+                    revision: 0,
                 };
+            },
+
+            onMediaEditChange(detail) {
+                const index = detail?.index;
+                const preview = this.filePreviews[index];
+                if (!preview) return;
+                preview.rate = detail.rate ?? 1;
+                preview.trimStart = detail.trimStart ?? 0;
+                preview.trimEnd = detail.trimEnd;
+                if (detail.duration != null) preview.duration = detail.duration;
+            },
+
+            stagedMediaIsDirty(preview) {
+                if (!preview || (!preview.isAudio && !preview.isVideo)) return false;
+                if (Math.abs((preview.rate || 1) - 1) > 0.001) return true;
+                if ((preview.trimStart || 0) > 0.02) return true;
+                if (preview.trimEnd != null && preview.duration != null
+                    && Number(preview.trimEnd) < Number(preview.duration) - 0.05) {
+                    return true;
+                }
+                return false;
+            },
+
+            async applyStagedMediaEdit({ index, rate, trimStart, trimEnd }) {
+                if (!window.CtMediaExport) {
+                    throw new Error('Media export is unavailable.');
+                }
+                const preview = this.filePreviews[index];
+                const source = preview?.sourceFile || this.files[index];
+                if (!preview || !source) throw new Error('Staged file not found.');
+
+                const out = await window.CtMediaExport.processFile(source, {
+                    rate,
+                    trimStart,
+                    trimEnd,
+                });
+
+                if (out.size > this.maxFileBytes) {
+                    throw new Error(`Edited file exceeds 50 MB (${this.formatBytes(out.size)}).`);
+                }
+
+                if (preview.url) URL.revokeObjectURL(preview.url);
+                const url = URL.createObjectURL(out);
+                this.files[index] = out;
+                preview.sourceFile = out;
+                preview.url = url;
+                preview.name = out.name;
+                preview.key = this.fileKey(out);
+                preview.sizeLabel = this.formatBytes(out.size);
+                preview.isImage = (out.type || '').startsWith('image/');
+                preview.isVideo = (out.type || '').startsWith('video/');
+                preview.isAudio = (out.type || '').startsWith('audio/');
+                preview.ext = (out.name.split('.').pop() || 'file').slice(0, 5).toUpperCase();
+                preview.rate = 1;
+                preview.trimStart = 0;
+                preview.trimEnd = null;
+                preview.duration = null;
+                preview.revision = (preview.revision || 0) + 1;
+                return out;
+            },
+
+            async bakeStagedMediaEdits() {
+                for (let i = 0; i < this.filePreviews.length; i++) {
+                    const preview = this.filePreviews[i];
+                    if (!this.stagedMediaIsDirty(preview)) continue;
+                    await this.applyStagedMediaEdit({
+                        index: i,
+                        rate: preview.rate || 1,
+                        trimStart: preview.trimStart || 0,
+                        trimEnd: preview.trimEnd,
+                    });
+                }
+            },
+
+            assertFilesWithinLimit(fileList) {
+                const files = [...(fileList || [])];
+                for (const file of files) {
+                    if (file && file.size > this.maxFileBytes) {
+                        throw new Error(`"${file.name || 'File'}" is larger than 50 MB after edits (${this.formatBytes(file.size)}). Trim or speed it up, then try again.`);
+                    }
+                }
             },
 
             addFiles(incoming) {
@@ -944,10 +1402,6 @@
                     if (this.files.length + accepted.length >= this.maxFilesPerMessage) {
                         this.sendError = 'You can attach at most 20 files per message.';
                         break;
-                    }
-                    if (file.size > this.maxFileBytes) {
-                        this.sendError = `"${file.name || 'File'}" is larger than 50 MB.`;
-                        continue;
                     }
                     let named = file;
                     if (!file.name || file.name === 'image.png' || file.name === 'blob') {
@@ -1063,83 +1517,240 @@
             },
 
             startEdit(message) {
+                this.cancelEdit();
                 this.editingId = message.id;
                 this.editDraft = message.content || '';
+                this.editKeepAttachments = [...(message.attachments || [])].map((a) => ({ ...a }));
+                this.editRemoveIds = [];
+                this.editFiles = [];
+                this.editFilePreviews = [];
+                this.editError = '';
             },
 
             cancelEdit() {
+                for (const preview of this.editFilePreviews || []) {
+                    if (preview.url) URL.revokeObjectURL(preview.url);
+                }
                 this.editingId = null;
                 this.editDraft = '';
+                this.editKeepAttachments = [];
+                this.editRemoveIds = [];
+                this.editFiles = [];
+                this.editFilePreviews = [];
+                this.editError = '';
+                if (this.$refs.editFileInput) this.$refs.editFileInput.value = '';
+            },
+
+            canSaveEdit() {
+                return !!(this.editDraft.trim() || this.editKeepAttachments.length || this.editFiles.length);
+            },
+
+            removeEditAttachment(index) {
+                const attachment = this.editKeepAttachments[index];
+                if (!attachment) return;
+                if (attachment.id) this.editRemoveIds.push(Number(attachment.id));
+                this.editKeepAttachments.splice(index, 1);
+            },
+
+            removeEditFile(index) {
+                if (this.editFilePreviews[index]?.url) {
+                    URL.revokeObjectURL(this.editFilePreviews[index].url);
+                }
+                this.editFiles.splice(index, 1);
+                this.editFilePreviews.splice(index, 1);
+                if (this.$refs.editFileInput) this.$refs.editFileInput.value = '';
+            },
+
+            onEditFilesChange(event) {
+                const incoming = [...(event.target.files || [])];
+                if (this.$refs.editFileInput) this.$refs.editFileInput.value = '';
+                if (!incoming.length) return;
+
+                this.editError = '';
+                const existing = new Set(this.editFiles.map((f) => this.fileKey(f)));
+
+                for (const file of incoming) {
+                    if (this.editKeepAttachments.length + this.editFiles.length >= this.maxFilesPerMessage) {
+                        this.editError = 'You can attach at most 20 files per message.';
+                        break;
+                    }
+                    const key = this.fileKey(file);
+                    if (existing.has(key)) continue;
+                    existing.add(key);
+                    this.editFiles.push(file);
+                    this.editFilePreviews.push(this.buildPreview(file));
+                }
             },
 
             askDelete(message) {
-                if (!message?.can_delete) return;
-                const hasReplies = (message.reply_count || 0) > 0
-                    || (this.parentMessage && this.parentMessage.id === message.id && this.messages.length > 0);
-                const text = hasReplies
-                    ? 'Delete this message and all its replies? This cannot be undone.'
-                    : 'Delete this message? This cannot be undone.';
+                if (!message || message.is_deleted) return;
+                const canEveryone = !!message.can_delete_everyone;
+                const canForMe = !!message.can_delete_for_me;
+                if (!canEveryone && !canForMe) return;
+
+                // Own message: always delete for everyone (never "for me").
+                if (Number(message.user_id) === Number(this.currentUserId) || (canEveryone && !canForMe)) {
+                    this.$dispatch('confirm-action', {
+                        title: 'Delete message',
+                        message: 'Delete this message for everyone? Others will see “Deleted by …”',
+                        confirmLabel: 'Delete',
+                        onConfirm: () => this.deleteMessage(message, 'everyone'),
+                    });
+                    return;
+                }
+
+                // Others' message: for-me and/or for-everyone depending on permission.
+                const actions = [];
+                if (canForMe) {
+                    actions.push({
+                        label: 'Delete for me',
+                        secondary: true,
+                        onClick: () => this.deleteMessage(message, 'me'),
+                    });
+                }
+                if (canEveryone) {
+                    actions.push({
+                        label: 'Delete for everyone',
+                        danger: true,
+                        onClick: () => this.deleteMessage(message, 'everyone'),
+                    });
+                }
                 this.$dispatch('confirm-action', {
-                    message: text,
-                    onConfirm: () => this.deleteMessage(message),
+                    title: 'Delete message',
+                    message: canEveryone
+                        ? 'Remove it only for you, or delete it for everyone (shows as deleted).'
+                        : 'Remove this message from your view only.',
+                    actions,
                 });
             },
 
-            async deleteMessage(message) {
+            async deleteMessage(message, scope = 'everyone') {
                 if (!message?.id || !this.destroyUrlTemplate) return;
                 try {
                     const response = await fetch(this.destroyUrl(message.id), {
                         method: 'DELETE',
                         headers: {
                             'Accept': 'application/json',
+                            'Content-Type': 'application/json',
                             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
                         },
                         credentials: 'same-origin',
+                        body: JSON.stringify({ scope }),
                     });
                     if (!response.ok) return;
                     const data = await response.json().catch(() => ({}));
 
-                    if (this.parentMessage && this.parentMessage.id === message.id) {
-                        window.location.href = data.redirect
-                            || ('/messages/' + this.chatType + '/' + this.chatId);
+                    if (data.hidden) {
+                        this.hiddenMessageIds = [...(this.hiddenMessageIds || []), message.id];
+                        if (this.parentMessage && this.parentMessage.id === message.id) {
+                            window.location.href = '/messages/' + this.chatType + '/' + this.chatId;
+                            return;
+                        }
+                        this.messages = this.messages.filter((m) => m.id !== message.id);
+                        if (this.editingId === message.id) this.cancelEdit();
+                        this.mentionQueue = this.mentionQueue.filter((id) => id !== message.id);
                         return;
                     }
 
-                    this.messages = this.messages.filter((m) => m.id !== message.id);
+                    if (data.message) {
+                        const decoded = await this.decryptMessageInPlace(data.message);
+                        if (this.parentMessage && this.parentMessage.id === message.id) {
+                            this.parentMessage = decoded;
+                        }
+                        const idx = this.messages.findIndex((m) => m.id === message.id);
+                        if (idx >= 0) {
+                            this.messages[idx] = decoded;
+                            this.messages = [...this.messages];
+                        }
+                    } else {
+                        this.messages = this.messages.filter((m) => m.id !== message.id);
+                    }
+
                     if (this.editingId === message.id) this.cancelEdit();
                     this.mentionQueue = this.mentionQueue.filter((id) => id !== message.id);
                 } catch (e) {}
             },
 
             async saveEdit(messageId) {
-                if (!this.editDraft.trim()) return;
+                if (!this.canSaveEdit()) {
+                    this.editError = 'Message must have text or at least one file.';
+                    return;
+                }
 
                 try {
-                    let content = this.editDraft.trim();
-                    if (this.e2eeReady && this.roomKey) {
-                        content = await window.ChatCrypto.encryptText(this.roomKey, content);
+                    this.editError = '';
+                    const formData = new FormData();
+                    const plain = this.editDraft.trim();
+
+                    this.assertFilesWithinLimit(this.editFiles);
+
+                    if (plain) {
+                        let content = plain;
+                        if (this.e2eeReady && this.roomKey) {
+                            content = await window.ChatCrypto.encryptText(this.roomKey, content);
+                        }
+                        formData.append('content', content);
+                    } else {
+                        formData.append('empty_content', '1');
                     }
 
+                    for (const id of this.editRemoveIds) {
+                        formData.append('remove_attachment_ids[]', id);
+                    }
+
+                    if (this.e2eeReady && this.roomKey && this.editFiles.length) {
+                        for (let i = 0; i < this.editFiles.length; i++) {
+                            const file = this.editFiles[i];
+                            const bytes = await file.arrayBuffer();
+                            const encrypted = await window.ChatCrypto.encryptBytes(this.roomKey, bytes);
+                            const blob = new Blob([encrypted.cipher], { type: 'application/octet-stream' });
+                            formData.append('files[]', blob, file.name + '.enc');
+                            formData.append(`attachment_meta[${i}][name]`, file.name);
+                            formData.append(`attachment_meta[${i}][mime]`, file.type || 'application/octet-stream');
+                            formData.append(`attachment_meta[${i}][iv]`, encrypted.iv);
+                        }
+                    } else {
+                        for (const file of this.editFiles) {
+                            formData.append('files[]', file);
+                        }
+                    }
+
+                    formData.append('_method', 'PATCH');
+
                     const response = await fetch(this.updateUrl(messageId), {
-                        method: 'PATCH',
+                        method: 'POST',
                         headers: {
                             'Accept': 'application/json',
-                            'Content-Type': 'application/json',
                             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
                         },
                         credentials: 'same-origin',
-                        body: JSON.stringify({ content }),
+                        body: formData,
                     });
 
-                    if (!response.ok) return;
+                    if (!response.ok) {
+                        let message = 'Could not update message.';
+                        try {
+                            const err = await response.json();
+                            const first = err.message || Object.values(err.errors || {}).flat()[0];
+                            if (first) message = first;
+                        } catch (e) {}
+                        this.editError = message;
+                        return;
+                    }
 
                     const data = await response.json();
-                    const idx = this.messages.findIndex(m => m.id === messageId);
+                    const idx = this.messages.findIndex((m) => m.id === messageId);
                     if (idx >= 0 && data.message) {
                         this.messages[idx] = await this.decryptMessageInPlace(data.message);
+                        this.messages = [...this.messages];
+                    }
+                    if (this.parentMessage?.id === messageId && data.message) {
+                        this.parentMessage = await this.decryptMessageInPlace(data.message);
                     }
                     this.cancelEdit();
-                } catch (error) {}
+                } catch (error) {
+                    this.editError = error?.message || 'Could not update message.';
+                }
             },
 
             openCall(type) {
@@ -1165,10 +1776,126 @@
                         this.callError = msg;
                         return { ok: false, ...data };
                     }
+                    if (data.media_mode) this.callMediaMode = data.media_mode;
                     return data;
                 } catch (e) {
                     return null;
                 }
+            },
+
+            resolveCallMediaMode(hint) {
+                if (hint === 'sfu' || hint === 'mesh') return hint;
+                if (this.preferredMediaMode === 'sfu' && this.sfuEnabled) return 'sfu';
+                return 'mesh';
+            },
+
+            async loadLiveKit() {
+                if (window.LivekitClient) return window.LivekitClient;
+                if (this._livekitLoading) return this._livekitLoading;
+                this._livekitLoading = new Promise((resolve, reject) => {
+                    const existing = document.querySelector('script[data-ct-livekit]');
+                    if (existing) {
+                        existing.addEventListener('load', () => resolve(window.LivekitClient));
+                        existing.addEventListener('error', reject);
+                        return;
+                    }
+                    const s = document.createElement('script');
+                    s.src = 'https://cdn.jsdelivr.net/npm/livekit-client@2.9.8/dist/livekit-client.umd.min.js';
+                    s.async = true;
+                    s.dataset.ctLivekit = '1';
+                    s.onload = () => resolve(window.LivekitClient);
+                    s.onerror = () => reject(new Error('Failed to load LiveKit client'));
+                    document.head.appendChild(s);
+                });
+                try {
+                    return await this._livekitLoading;
+                } finally {
+                    this._livekitLoading = null;
+                }
+            },
+
+            async connectSfu() {
+                if (!this.sfuTokenUrl || !this.callId) {
+                    throw new Error('SFU is not configured.');
+                }
+                const LK = await this.loadLiveKit();
+                if (!LK?.Room) throw new Error('LiveKit client unavailable.');
+
+                const res = await fetch(this.sfuTokenUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        call_id: this.callId,
+                        call_type: this.callType || 'voice',
+                    }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.token || !data.url) {
+                    throw new Error(data.message || 'Could not get SFU token.');
+                }
+
+                const room = new LK.Room({
+                    adaptiveStream: true,
+                    dynacast: true,
+                });
+                this.livekitRoom = room;
+
+                const attachParticipant = (participant) => {
+                    const userId = Number(participant.identity);
+                    if (!userId || userId === Number(this.currentUserId)) return;
+                    const stream = new MediaStream();
+                    participant.trackPublications.forEach((pub) => {
+                        if (pub.track) stream.addTrack(pub.track.mediaStreamTrack);
+                    });
+                    this.upsertPeer(userId, participant.name || ('User #' + userId), stream.getTracks().length ? stream : null);
+                };
+
+                room.on(LK.RoomEvent.TrackSubscribed, (track, _pub, participant) => {
+                    const userId = Number(participant.identity);
+                    if (!userId || userId === Number(this.currentUserId)) return;
+                    let peer = this.peers.find((p) => Number(p.userId) === userId);
+                    const stream = peer?.stream ? peer.stream : new MediaStream();
+                    stream.addTrack(track.mediaStreamTrack);
+                    this.upsertPeer(userId, participant.name || ('User #' + userId), stream);
+                });
+                room.on(LK.RoomEvent.TrackUnsubscribed, (track, _pub, participant) => {
+                    const userId = Number(participant.identity);
+                    const peer = this.peers.find((p) => Number(p.userId) === userId);
+                    if (!peer?.stream) return;
+                    peer.stream.getTracks().forEach((t) => {
+                        if (t.id === track.mediaStreamTrack.id) peer.stream.removeTrack(t);
+                    });
+                    this.peers = [...this.peers];
+                });
+                room.on(LK.RoomEvent.ParticipantConnected, (participant) => attachParticipant(participant));
+                room.on(LK.RoomEvent.ParticipantDisconnected, (participant) => {
+                    this.removePeer(Number(participant.identity));
+                });
+
+                await room.connect(data.url, data.token);
+
+                if (this.localStream) {
+                    const audio = this.localStream.getAudioTracks()[0];
+                    const video = this.localStream.getVideoTracks()[0];
+                    if (audio) await room.localParticipant.publishTrack(audio);
+                    if (video && this.callType === 'video') await room.localParticipant.publishTrack(video);
+                }
+
+                room.remoteParticipants.forEach((p) => attachParticipant(p));
+            },
+
+            async disconnectSfu() {
+                const room = this.livekitRoom;
+                this.livekitRoom = null;
+                if (!room) return;
+                try {
+                    await room.disconnect();
+                } catch (e) {}
             },
 
             async ensureLocalMedia(type) {
@@ -1218,6 +1945,7 @@
                     this.callType = type;
                     this.callId = 'call_' + this.currentUserId + '_' + Date.now();
                     this.callState = 'outgoing';
+                    this.callMediaMode = this.resolveCallMediaMode(this.preferredMediaMode);
                     this.callError = this.callError || '';
                     this.showCallModal = true;
                     this.peers = [];
@@ -1233,9 +1961,16 @@
                     if (res && res.ok === false) {
                         this.teardownCall();
                         this.showCallModal = true;
+                        return;
+                    }
+                    if ((res?.media_mode || this.callMediaMode) === 'sfu') {
+                        this.callMediaMode = 'sfu';
+                        await this.connectSfu();
+                    } else {
+                        this.callMediaMode = 'mesh';
                     }
                 } catch (e) {
-                    this.callError = 'Microphone/camera permission denied or unavailable.';
+                    this.callError = e?.message || 'Microphone/camera permission denied or unavailable.';
                     this.teardownCall();
                     this.showCallModal = true;
                 }
@@ -1251,6 +1986,7 @@
                 try {
                     this.callId = this.incomingCall.call_id;
                     this.callType = this.incomingCall.call_type;
+                    this.callMediaMode = this.resolveCallMediaMode(this.incomingCall.media_mode);
                     this.callState = 'active';
                     this.callError = '';
                     this.showCallModal = true;
@@ -1268,9 +2004,16 @@
                     if (res && res.ok === false) {
                         this.teardownCall();
                         this.showCallModal = true;
+                        return;
+                    }
+                    if ((res?.media_mode || this.callMediaMode) === 'sfu') {
+                        this.callMediaMode = 'sfu';
+                        await this.connectSfu();
+                    } else {
+                        this.callMediaMode = 'mesh';
                     }
                 } catch (e) {
-                    this.callError = 'Could not access microphone/camera.';
+                    this.callError = e?.message || 'Could not access microphone/camera.';
                     this.incomingCall = null;
                     this.teardownCall();
                 }
@@ -1308,6 +2051,7 @@
                 window.__ctSetInCall?.(false);
                 Object.values(this.peerDisconnectTimers || {}).forEach((t) => clearTimeout(t));
                 this.peerDisconnectTimers = {};
+                this.disconnectSfu();
                 Object.values(this.peerConnections).forEach((pc) => {
                     try { pc.close(); } catch (e) {}
                 });
@@ -1325,21 +2069,32 @@
                 }
                 this.callId = null;
                 this.callState = 'idle';
+                this.callMediaMode = 'mesh';
                 this.showCallModal = false;
                 this.incomingCall = null;
                 this.callError = '';
             },
 
-            toggleMute() {
+            async toggleMute() {
                 if (!this.localStream) return;
                 this.localMuted = !this.localMuted;
                 this.localStream.getAudioTracks().forEach((t) => { t.enabled = !this.localMuted; });
+                if (this.livekitRoom?.localParticipant?.setMicrophoneEnabled) {
+                    try {
+                        await this.livekitRoom.localParticipant.setMicrophoneEnabled(!this.localMuted);
+                    } catch (e) {}
+                }
             },
 
-            toggleVideo() {
+            async toggleVideo() {
                 if (!this.localStream || this.callType !== 'video' || this.sharingScreen) return;
                 this.localVideoOff = !this.localVideoOff;
                 this.localStream.getVideoTracks().forEach((t) => { t.enabled = !this.localVideoOff; });
+                if (this.livekitRoom?.localParticipant?.setCameraEnabled) {
+                    try {
+                        await this.livekitRoom.localParticipant.setCameraEnabled(!this.localVideoOff);
+                    } catch (e) {}
+                }
             },
 
             localShowsVideo() {
@@ -1421,6 +2176,15 @@
                     return;
                 }
                 try {
+                    if (this.callMediaMode === 'sfu' && this.livekitRoom?.localParticipant?.setScreenShareEnabled) {
+                        await this.livekitRoom.localParticipant.setScreenShareEnabled(true);
+                        this.sharingScreen = true;
+                        this.localVideoOff = false;
+                        this.bindLocalPreview();
+                        this.peers = [...this.peers];
+                        return;
+                    }
+
                     const screenStream = await navigator.mediaDevices.getDisplayMedia({
                         video: { frameRate: 15 },
                         audio: false,
@@ -1456,6 +2220,16 @@
             },
 
             async stopScreenShare() {
+                if (this.callMediaMode === 'sfu' && this.livekitRoom?.localParticipant?.setScreenShareEnabled) {
+                    try {
+                        await this.livekitRoom.localParticipant.setScreenShareEnabled(false);
+                    } catch (e) {}
+                    this.sharingScreen = false;
+                    this.bindLocalPreview();
+                    this.peers = [...this.peers];
+                    return;
+                }
+
                 const screen = this.screenTrack;
                 this.screenTrack = null;
                 this.sharingScreen = false;
@@ -1594,12 +2368,14 @@
                     this.incomingCall = {
                         call_id: payload.call_id,
                         call_type: payload.call_type,
+                        media_mode: payload.media_mode || this.preferredMediaMode,
                         from_user_id: payload.from_user_id,
                         from_user_name: payload.from_user_name,
                     };
                     this.activeCall = {
                         call_id: payload.call_id,
                         call_type: payload.call_type,
+                        media_mode: payload.media_mode || this.preferredMediaMode,
                         from_user_id: payload.from_user_id,
                         from_user_name: payload.from_user_name,
                     };
@@ -1635,12 +2411,14 @@
                 if (action === 'join') {
                     if (!this.callId || payload.call_id !== this.callId) return;
                     if (this.callState === 'outgoing') this.callState = 'active';
+                    if (this.callMediaMode === 'sfu') return;
                     if (!this.localStream) return;
                     await this.createOfferFor(payload.from_user_id, payload.from_user_name);
                     return;
                 }
 
                 if (action === 'offer') {
+                    if (this.callMediaMode === 'sfu') return;
                     if (!this.callId || payload.call_id !== this.callId || !payload.sdp) return;
                     if (this.callState === 'outgoing') this.callState = 'active';
                     const pc = this.createPeerConnection(payload.from_user_id, payload.from_user_name);
@@ -1666,6 +2444,7 @@
                 }
 
                 if (action === 'answer') {
+                    if (this.callMediaMode === 'sfu') return;
                     if (!this.callId || payload.call_id !== this.callId || !payload.sdp) return;
                     const pc = this.peerConnections[payload.from_user_id];
                     if (!pc) return;
@@ -1679,6 +2458,7 @@
                 }
 
                 if (action === 'ice') {
+                    if (this.callMediaMode === 'sfu') return;
                     if (!this.callId || payload.call_id !== this.callId || !payload.candidate) return;
                     const pc = this.peerConnections[payload.from_user_id] || this.createPeerConnection(payload.from_user_id, payload.from_user_name);
                     try {
@@ -1698,12 +2478,18 @@
                 const mentionIds = this.resolveMentionUserIds(plain);
 
                 try {
+                    await this.bakeStagedMediaEdits();
+                    this.assertFilesWithinLimit(this.files);
+
                     if (plain) {
                         let content = plain;
                         if (this.e2eeReady && this.roomKey) {
                             content = await window.ChatCrypto.encryptText(this.roomKey, plain);
                         }
                         formData.append('content', content);
+                        if (this.draftFormat === 'markdown') {
+                            formData.append('is_markdown', '1');
+                        }
                     }
 
                     if (this.e2eeReady && this.roomKey && this.files.length) {
@@ -1758,12 +2544,13 @@
                         this.appendMessages([data.message]);
                     }
                     this.draft = '';
+                    this.$nextTick(() => this.autoResizeDraft());
                     this.revokeFilePreviews();
                     this.files = [];
                     this.selectedUserIds = [];
                     if (this.$refs.fileInput) this.$refs.fileInput.value = '';
                 } catch (error) {
-                    this.sendError = 'Network error while sending. Try again.';
+                    this.sendError = error?.message || 'Network error while sending. Try again.';
                 } finally {
                     this.sending = false;
                     this.$nextTick(() => this.focusDraft());

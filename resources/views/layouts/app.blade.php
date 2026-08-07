@@ -18,6 +18,7 @@
                     },
                     zIndex: {
                         200: '200',
+                        250: '250',
                         300: '300',
                     },
                 }
@@ -80,6 +81,56 @@
             color: #ede9fe;
             box-decoration-break: clone;
             -webkit-box-decoration-break: clone;
+        }
+
+        .ct-md-body p { margin: 0.35em 0; }
+        .ct-md-body p:first-child { margin-top: 0; }
+        .ct-md-body p:last-child { margin-bottom: 0; }
+        .ct-md-body .ct-md-h { font-weight: 700; margin: 0.5em 0 0.25em; line-height: 1.25; }
+        .ct-md-body h1.ct-md-h { font-size: 1.15em; }
+        .ct-md-body h2.ct-md-h { font-size: 1.05em; }
+        .ct-md-body h3.ct-md-h { font-size: 1em; }
+        .ct-md-body .ct-md-list { margin: 0.35em 0; padding-left: 1.25em; list-style: disc; }
+        .ct-md-body ol.ct-md-list { list-style: decimal; }
+        .ct-md-body .ct-md-code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 0.85em;
+            padding: 0.1em 0.35em;
+            border-radius: 0.3rem;
+            background: rgba(15, 23, 42, 0.55);
+        }
+        .ct-md-body .ct-md-codeblock { margin: 0.45em 0; }
+        .ct-md-body .ct-md-lang {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #94a3b8;
+            margin-bottom: 0.2rem;
+        }
+        .ct-md-body .ct-md-pre {
+            margin: 0;
+            padding: 0.6em 0.75em;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            background: rgba(15, 23, 42, 0.65);
+            font-size: 0.8em;
+        }
+        .ct-md-body .ct-md-link { color: #a5b4fc; text-decoration: underline; }
+        .ct-md-body .ct-md-table-wrap { overflow-x: auto; margin: 0.5em 0; }
+        .ct-md-body .ct-md-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85em;
+        }
+        .ct-md-body .ct-md-table th,
+        .ct-md-body .ct-md-table td {
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            padding: 0.35em 0.55em;
+            text-align: left;
+        }
+        .ct-md-body .ct-md-table th {
+            background: rgba(15, 23, 42, 0.55);
+            font-weight: 600;
         }
 
         .msg-focus-pulse {
@@ -358,7 +409,7 @@
                         @if(auth()->user()->isOwner())
                             <div class="hidden md:block">
                                 <input type="search" x-model="ownerSearch" placeholder="Search tenants, users…"
-                                    class="bg-surface-200 border border-white/10 text-white text-xs rounded-lg px-3 py-1.5 w-48 focus:outline-none focus:ring-1 focus:ring-brand-500/50"
+                                    class="bg-surface-200 border border-white/10 text-white text-xs rounded-lg px-3 py-1.5 w-48 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition"
                                     @keydown.enter.prevent>
                             </div>
                         @elseif($showChatBrowse)
@@ -445,6 +496,9 @@
             @include('partials.global-call-ring')
             @include('partials.chat-search-index')
             @include('partials.chat-browse-ui')
+            @include('partials.ct-markdown-script')
+            @include('partials.ct-media-export-script')
+            @include('partials.ct-media-player-script')
         @endunless
     @endauth
 

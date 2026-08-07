@@ -3,52 +3,18 @@
 
 @section('content')
     <div class="max-w-3xl mx-auto space-y-6">
-        <div class="flex items-center gap-3">
-            <h1 class="text-xl font-bold text-white">Duos</h1>
-            <span class="text-xs text-slate-500">{{ $group->name }}</span>
-        </div>
-
-        @can('create', [App\Models\Duo::class, $group])
-            <div class="bg-surface-200 border border-white/5 rounded-2xl px-6 py-5">
-                <h2 class="text-sm font-semibold text-white mb-4">Create duo</h2>
-                <form method="POST" action="{{ route('groups.duos.store', $group) }}" class="space-y-4">
-                    @csrf
-                    <div>
-                        <label class="block text-sm text-slate-300 mb-1.5">Name</label>
-                        <input type="text" name="name" value="{{ old('name') }}" required
-                            class="w-full bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm"
-                            placeholder="e.g. Design sync">
-                        @error('name')<p class="mt-1 text-xs text-red-400">{{ $message }}</p>@enderror
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm text-slate-300 mb-1.5">User 1</label>
-                            <select name="user1_id" required class="w-full bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm">
-                                <option value="">— Select —</option>
-                                @foreach($members as $member)
-                                    <option value="{{ $member->id }}">{{ $member->display_name ?? $member->email }}</option>
-                                @endforeach
-                            </select>
-                            @error('user1_id')<p class="mt-1 text-xs text-red-400">{{ $message }}</p>@enderror
-                        </div>
-                        <div>
-                            <label class="block text-sm text-slate-300 mb-1.5">User 2</label>
-                            <select name="user2_id" required class="w-full bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm">
-                                <option value="">— Select —</option>
-                                @foreach($members as $member)
-                                    <option value="{{ $member->id }}">{{ $member->display_name ?? $member->email }}</option>
-                                @endforeach
-                            </select>
-                            @error('user2_id')<p class="mt-1 text-xs text-red-400">{{ $message }}</p>@enderror
-                        </div>
-                    </div>
-                    <button type="submit"
-                        class="bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold px-4 py-2 rounded-xl transition">
-                        Create duo
-                    </button>
-                </form>
+        <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3 min-w-0">
+                <h1 class="text-xl font-bold text-white">Duos</h1>
+                <span class="text-xs text-slate-500 truncate">{{ $group->name }}</span>
             </div>
-        @endcan
+            @can('create', [App\Models\Duo::class, $group])
+                <button type="button" onclick="window.__openDuoCreate && window.__openDuoCreate()"
+                    class="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold px-4 py-2 rounded-xl transition shrink-0">
+                    + New duo
+                </button>
+            @endcan
+        </div>
 
         <div class="bg-surface-200 border border-white/5 rounded-2xl overflow-hidden">
             <div class="divide-y divide-white/5">
@@ -91,4 +57,6 @@
             </div>
         </div>
     </div>
+
+    @include('partials.duo-create-modal')
 @endsection

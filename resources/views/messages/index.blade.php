@@ -26,6 +26,14 @@
             cryptoPublicKeyUrl: @js(route('messages.crypto.public-key')),
             callSignalUrl: @js(route('messages.call.signal', [$chatType, $chatId])),
             callActiveUrl: @js(route('messages.call.active', [$chatType, $chatId])),
+            sfuTokenUrl: @js(route('messages.call.sfu-token', [$chatType, $chatId])),
+            sfuEnabled: @js((bool) config('webrtc.sfu.enabled')),
+            sfuUrl: @js(config('webrtc.sfu.url')),
+            preferredMediaMode: @js(
+                config('webrtc.sfu.enabled') && (
+                    config('webrtc.sfu.force_all') || in_array($chatType, ['group', 'merge'], true)
+                ) ? 'sfu' : 'mesh'
+            ),
             currentUserName: @js(auth()->user()->displayLabel()),
             activeCall: @js($activeCall),
             iceServers: @js(config('webrtc.ice_servers')),
@@ -48,7 +56,7 @@
                     class="hidden sm:inline-flex items-center px-2 py-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-[10px] uppercase tracking-wide text-emerald-300"
                     title="Messages and attachments are end-to-end encrypted in this chat">E2EE</span>
                 <span x-show="e2eeError" x-cloak
-                    class="hidden sm:inline-flex max-w-[14rem] items-center px-2 py-1 rounded-lg border border-amber-500/30 bg-amber-500/10 text-[10px] text-amber-300 truncate"
+                    class="hidden sm:inline-flex max-w-56 items-center px-2 py-1 rounded-lg border border-amber-500/30 bg-amber-500/10 text-[10px] text-amber-300 truncate"
                     :title="e2eeError"
                     x-text="e2eeError"></span>
                 <form method="POST" action="{{ route('messages.mute', [$chatType, $chatId]) }}">
@@ -90,7 +98,8 @@
             </button>
         </div>
 
-        <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pr-1" x-ref="messagesContainer">
+        <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pr-1" x-ref="messagesContainer"
+            x-show="!hasVideoStage()">
                 <div class="min-h-full flex flex-col">
                 <template x-if="messages.length === 0">
                     <div class="flex flex-1 items-center justify-center py-16">
@@ -116,31 +125,26 @@
                                 :class="!message.user_role_color ? 'text-slate-500' : ''"
                                 x-text="message.user_name"></p>
                             <div class="relative group/msg">
-                                <template x-if="editingId === message.id">
-                                    <div class="space-y-2">
-                                        <input type="text" x-model="editDraft"
-                                            class="w-full bg-surface-200 border border-white/10 text-white rounded-xl px-3 py-2 text-sm">
-                                        <div class="flex gap-2 justify-end">
-                                            <button type="button" @click="cancelEdit()"
-                                                class="text-xs text-slate-400 hover:text-white px-2 py-1">Cancel</button>
-                                            <button type="button" @click="saveEdit(message.id)"
-                                                class="text-xs bg-brand-500 hover:bg-brand-600 text-white px-3 py-1 rounded-lg">Save</button>
-                                        </div>
-                                    </div>
+                                <template x-if="editingId === message.id && !message.is_deleted">
+                                    @include('partials.chat-message-edit')
                                 </template>
-                                <div x-show="editingId !== message.id" class="px-4 py-2.5 rounded-2xl text-sm wrap-break-word transition-shadow"
+                                <div x-show="editingId !== message.id && message.is_deleted" x-cloak
+                                    class="px-4 py-2.5 rounded-2xl text-sm italic border border-white/10 bg-surface-200/80 text-slate-400">
+                                    <span x-text="'Deleted by ' + (message.deleted_by_name || 'someone')"></span>
+                                </div>
+                                <div x-show="editingId !== message.id && !message.is_deleted" class="px-4 py-2.5 rounded-2xl text-sm wrap-break-word transition-shadow"
                                     :class="message.user_id === currentUserId ? 'bg-brand-500 text-white rounded-tr-sm' : 'bg-surface-100 text-slate-200 rounded-tl-sm'">
                                     @include('partials.chat-attachments')
                                     <template x-if="message.content_html">
-                                        <div class="whitespace-pre-wrap" x-html="message.content_html"></div>
+                                        <div :class="message.is_markdown ? 'ct-md-body' : 'whitespace-pre-wrap'" x-html="message.content_html"></div>
                                     </template>
                                     <template x-if="message.content && !message.content_html">
-                                        <span x-text="message.content"></span>
+                                        <span class="whitespace-pre-wrap" x-text="message.content"></span>
                                     </template>
                                 </div>
                                 <div class="absolute -top-2 flex gap-1 opacity-0 group-hover/msg:opacity-100 transition"
                                     :class="message.user_id === currentUserId ? '-left-2' : '-right-2'"
-                                    x-show="editingId !== message.id && (message.can_edit || message.can_delete)" x-cloak>
+                                    x-show="editingId !== message.id && !message.is_deleted && (message.can_edit || message.can_delete)" x-cloak>
                                     <button type="button" x-show="message.can_edit" @click="startEdit(message)"
                                         class="text-[10px] px-1.5 py-0.5 rounded bg-surface-300 border border-white/10 text-slate-400 hover:text-white">Edit</button>
                                     <button type="button" x-show="message.can_delete" @click="askDelete(message)"
@@ -155,8 +159,8 @@
                                 </template>
                             </div>
                             <span class="text-xs text-slate-600">
-                                <span x-text="message.created_at"></span>
-                                <span x-show="message.updated_at" x-cloak class="text-slate-700"> · edited <span x-text="message.updated_at"></span></span>
+                                <span x-text="formatRelativeTime(message.created_at_iso, message.created_at)"></span>
+                                <span x-show="message.is_edited || message.updated_at" x-cloak class="text-slate-500"> · edited</span>
                             </span>
                         </div>
                     </div>
@@ -174,14 +178,20 @@
                     x-text="mentionCount()"></span>
             </button>
 
-        <div class="pt-3 border-t border-white/5 shrink-0 relative">
-            <template x-if="canSend">
-                <form @submit.prevent="sendMessage" enctype="multipart/form-data" class="space-y-3"
-                    @paste="onComposerPaste($event)"
-                    @dragover.prevent="dragOverComposer = true"
-                    @dragleave.prevent="dragOverComposer = false"
-                    @drop.prevent="onComposerDrop($event)"
-                    :class="dragOverComposer ? 'rounded-xl ring-2 ring-brand-500/40 p-1' : ''">
+        <div class="pt-3 border-t border-white/5 relative min-h-0 flex flex-col"
+            :class="hasVideoStage() ? 'flex-1 min-h-0' : 'shrink-0'"
+            :style="hasVideoStage() ? 'flex: 1 1 0%' : null">
+            <form x-show="canSend" x-cloak @submit.prevent="sendMessage" enctype="multipart/form-data"
+                class="flex flex-col gap-3 min-h-0 h-full"
+                @paste="onComposerPaste($event)"
+                @dragover.prevent="dragOverComposer = true"
+                @dragleave.prevent="dragOverComposer = false"
+                @drop.prevent="onComposerDrop($event)"
+                :class="[
+                    hasVideoStage() ? 'flex-1' : '',
+                    dragOverComposer ? 'rounded-xl ring-2 ring-brand-500/40 p-1' : '',
+                ]"
+                :style="hasVideoStage() ? 'flex: 1 1 0%; min-height: 0' : null">
                     <div x-show="showSelectedPicker" x-cloak
                         class="absolute bottom-full left-0 right-0 mb-2 rounded-xl border border-white/10 bg-surface-300 shadow-xl p-4 space-y-3 z-50 max-h-64 flex flex-col">
                         <div class="flex items-center justify-between gap-2">
@@ -213,7 +223,7 @@
                         </button>
                     </div>
 
-                    <div x-show="selectedUserIds.length" x-cloak class="flex flex-wrap gap-1.5">
+                    <div x-show="selectedUserIds.length" x-cloak class="flex flex-wrap gap-1.5 shrink-0">
                         <template x-for="id in selectedUserIds" :key="'sel-' + id">
                             <span
                                 class="inline-flex items-center text-[10px] uppercase tracking-wide text-brand-300/90 bg-brand-500/10 px-1.5 py-0.5 rounded"
@@ -225,11 +235,8 @@
                         'composerPlaceholder' => 'Message… paste or drop files',
                         'composerSubmitLabel' => 'Send',
                     ])
-                </form>
-            </template>
-            <template x-if="!canSend">
-                <p class="text-sm text-slate-500 text-center">You don't have permission to send messages here.</p>
-            </template>
+            </form>
+            <p x-show="!canSend" x-cloak class="text-sm text-slate-500 text-center">You don't have permission to send messages here.</p>
         </div>
 
         {{-- Incoming / active call UI --}}

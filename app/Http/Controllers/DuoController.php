@@ -41,7 +41,18 @@ class DuoController extends Controller
         $user1 = User::where('tenant_id', $group->tenant_id)->findOrFail($credentials['user1_id']);
         $user2 = User::where('tenant_id', $group->tenant_id)->findOrFail($credentials['user2_id']);
 
-        $this->duoService->create($group, $user1, $user2, $credentials['name']);
+        $duo = $this->duoService->create($group, $user1, $user2, $credentials['name']);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'ok' => true,
+                'duo' => [
+                    'id' => $duo->id,
+                    'name' => $duo->name,
+                    'url' => route('messages.index', ['duo', $duo->id]),
+                ],
+            ]);
+        }
 
         return redirect()
             ->route('groups.duos.index', $group)

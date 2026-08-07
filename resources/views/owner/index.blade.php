@@ -14,7 +14,7 @@
                 </div>
                 <div class="md:hidden">
                     <input type="search" x-model="ownerSearch" placeholder="Search tenants, users…"
-                        class="w-full bg-surface-200 border border-white/10 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-brand-500/50"
+                        class="w-full bg-surface-200 border border-white/10 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition"
                         @keydown.enter.prevent>
                 </div>
             </div>
@@ -70,7 +70,7 @@
                                 type="email"
                                 value="{{ old('email') }}"
                                 required
-                                class="w-full rounded-xl border border-white/10 bg-surface-300 px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-brand-500/50 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+                                class="w-full rounded-xl border border-white/10 bg-surface-300 px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition"
                                 placeholder="admin@example.com"
                             >
                         </div>

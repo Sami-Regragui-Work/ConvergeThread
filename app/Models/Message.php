@@ -17,9 +17,13 @@ class Message extends Model
         'user_id',
         'content',
         'is_encrypted',
+        'is_markdown',
         'is_file',
         'file_path',
         'parent_id',
+        'edited_at',
+        'deleted_at',
+        'deleted_by_id',
     ];
 
     protected function casts(): array
@@ -27,8 +31,11 @@ class Message extends Model
         return [
             'is_file' => 'boolean',
             'is_encrypted' => 'boolean',
+            'is_markdown' => 'boolean',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
+            'edited_at' => 'datetime',
+            'deleted_at' => 'datetime',
         ];
     }
 
@@ -62,9 +69,58 @@ class Message extends Model
         return $this->hasMany(MessageAttachment::class)->orderBy('sort');
     }
 
+    public function deletedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'deleted_by_id');
+    }
+
+    public function hides(): HasMany
+    {
+        return $this->hasMany(MessageHide::class);
+    }
+
+    public function isDeleted(): bool
+    {
+        return $this->deleted_at !== null;
+    }
+
     public function toChatPayload(?int $viewerId = null): array
     {
-        $this->loadMissing(['user.tenantRole', 'attachments']);
+        $this->loadMissing(['user.tenantRole', 'attachments', 'deletedBy']);
+
+        if ($this->isDeleted()) {
+            $deletedBy = $this->deletedBy;
+            $deletedByName = $deletedBy
+                ? ($deletedBy->display_name ?? $deletedBy->email)
+                : 'Someone';
+
+            return [
+                'id' => $this->id,
+                'user_id' => $this->user_id,
+                'user_name' => $this->user->display_name ?? $this->user->email,
+                'user_role_color' => $this->user->tenantRole?->color,
+                'user_initial' => strtoupper(substr($this->user->display_name ?? $this->user->email, 0, 1)),
+                'content' => null,
+                'content_html' => null,
+                'is_encrypted' => false,
+                'is_markdown' => false,
+                'is_file' => false,
+                'file_url' => null,
+                'file_preview_url' => null,
+                'attachments' => [],
+                'parent_id' => $this->parent_id,
+                'created_at' => $this->created_at?->diffForHumans(),
+                'created_at_iso' => $this->created_at?->toIso8601String(),
+                'updated_at' => null,
+                'is_edited' => false,
+                'is_deleted' => true,
+                'deleted_by_id' => $this->deleted_by_id,
+                'deleted_by_name' => $deletedByName,
+                'deleted_at' => $this->deleted_at?->diffForHumans(),
+                'reply_count' => $this->relationLoaded('replies') ? $this->replies->count() : 0,
+                'mentions_you' => false,
+            ];
+        }
 
         $legacyFileUrl = $this->is_file && $this->file_path
             ? route('messages.attachment', $this)
@@ -109,6 +165,8 @@ class Message extends Model
         }
 
         $firstAttachment = $attachmentPayload[0] ?? null;
+        $isEdited = $this->edited_at !== null
+            || ($this->updated_at && $this->created_at && $this->updated_at->gt($this->created_at->copy()->addSecond()));
 
         return [
             'id' => $this->id,
@@ -118,6 +176,7 @@ class Message extends Model
             'user_initial' => strtoupper(substr($this->user->display_name ?? $this->user->email, 0, 1)),
             'content' => $this->content,
             'is_encrypted' => (bool) $this->is_encrypted,
+            'is_markdown' => (bool) $this->is_markdown,
             'is_file' => $this->is_file || count($attachmentPayload) > 0,
             'file_url' => $firstAttachment['url'] ?? $legacyFileUrl,
             'file_preview_url' => $firstAttachment['preview_url'] ?? ($legacyIsImage ? $legacyFileUrl : null),
@@ -125,9 +184,12 @@ class Message extends Model
             'parent_id' => $this->parent_id,
             'created_at' => $this->created_at?->diffForHumans(),
             'created_at_iso' => $this->created_at?->toIso8601String(),
-            'updated_at' => $this->updated_at?->gt($this->created_at)
-                ? $this->updated_at->diffForHumans()
-                : null,
+            'updated_at' => $isEdited ? ($this->edited_at ?? $this->updated_at)?->diffForHumans() : null,
+            'is_edited' => $isEdited,
+            'is_deleted' => false,
+            'deleted_by_id' => null,
+            'deleted_by_name' => null,
+            'deleted_at' => null,
             'reply_count' => $this->relationLoaded('replies') ? $this->replies->count() : 0,
             'mentions_you' => $viewerId
                 ? $this->mentions()->where('user_id', $viewerId)->whereNull('read_at')->exists()

@@ -260,7 +260,12 @@ class MentionService
         array $roleColors = [],
         array $usernameLabels = [],
         array $mergeUserLabels = [],
+        bool $asMarkdown = false,
     ): string {
+        if ($asMarkdown) {
+            return $this->renderMarkdownContentHtml($content, $roleColors, $usernameLabels, $mergeUserLabels);
+        }
+
         $escaped = e($content);
         $placeholders = [];
 
@@ -337,6 +342,97 @@ class MentionService
         ) ?? $escaped;
 
         return strtr($escaped, $placeholders);
+    }
+
+    /**
+     * @param  array<string, string|null>  $roleColors
+     * @param  array<string, string>  $usernameLabels
+     * @param  array<string, string>  $mergeUserLabels
+     */
+    private function renderMarkdownContentHtml(
+        string $content,
+        array $roleColors = [],
+        array $usernameLabels = [],
+        array $mergeUserLabels = [],
+    ): string {
+        $placeholders = [];
+
+        $protect = function (string $html) use (&$placeholders): string {
+            $key = 'CTMDMENTION'.count($placeholders).'ZZ';
+            $placeholders[$key] = $html;
+
+            return $key;
+        };
+
+        $work = $content;
+
+        $work = preg_replace_callback(
+            '/@(all|selected)\b/i',
+            fn (array $m) => $protect('<span class="mention-pill">@'.strtolower($m[1]).'</span>'),
+            $work,
+        ) ?? $work;
+
+        $work = preg_replace_callback(
+            '/@role[:.]([A-Za-z0-9_-]+)/i',
+            function (array $matches) use ($roleColors, $protect) {
+                $roleName = $matches[1];
+                $color = $roleColors[$roleName] ?? null;
+                $style = $color ? ' style="color: '.e($color).'"' : '';
+
+                return $protect(
+                    '<span class="mention-pill"'.$style.'>@role:'.e($roleName).'</span>'
+                );
+            },
+            $work,
+        ) ?? $work;
+
+        $work = preg_replace_callback(
+            '/@group[:.]([A-Za-z0-9_-]+)/i',
+            function (array $matches) use ($protect) {
+                return $protect('<span class="mention-pill">@group:'.e($matches[1]).'</span>');
+            },
+            $work,
+        ) ?? $work;
+
+        $work = preg_replace_callback(
+            '/@([A-Za-z0-9_-]+)\.([A-Za-z0-9_]+)/',
+            function (array $matches) use ($mergeUserLabels, $protect) {
+                $key = strtolower($matches[1].'.'.$matches[2]);
+                $label = $mergeUserLabels[$key] ?? null;
+                if (!$label) {
+                    return $matches[0];
+                }
+
+                return $protect('<span class="mention-pill">@'.e($label).'</span>');
+            },
+            $work,
+        ) ?? $work;
+
+        $work = preg_replace_callback(
+            '/@([A-Za-z0-9_]+)/',
+            function (array $matches) use ($usernameLabels, $roleColors, $protect) {
+                $token = $matches[1];
+                $label = $usernameLabels[strtolower($token)] ?? null;
+                if (!$label) {
+                    return $matches[0];
+                }
+
+                $color = $roleColors['_user_'.strtolower($token)] ?? null;
+                $style = $color ? ' style="color: '.e($color).'"' : '';
+
+                return $protect(
+                    '<span class="mention-pill"'.$style.'>@'.e($label).'</span>'
+                );
+            },
+            $work,
+        ) ?? $work;
+
+        $html = \Illuminate\Support\Str::markdown($work, [
+            'html_input' => 'strip',
+            'allow_unsafe_links' => false,
+        ]);
+
+        return strtr($html, $placeholders);
     }
 
     /**

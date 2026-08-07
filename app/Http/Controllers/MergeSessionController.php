@@ -24,8 +24,11 @@ class MergeSessionController extends Controller
         Gate::authorize('viewAny', MergeSession::class);
 
         $sessions = $this->mergeService->getActiveForTenant(Auth::user()->tenant_id);
+        $groups = Group::where('tenant_id', Auth::user()->tenant_id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
-        return view('merge-sessions.index', compact('sessions'));
+        return view('merge-sessions.index', compact('sessions', 'groups'));
     }
 
     /**
@@ -60,12 +63,26 @@ class MergeSessionController extends Controller
 
         $session = $this->mergeService->start($group1, $group2);
 
+        $chatUrl = route('messages.index', ['merge', $session->id]);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'ok' => true,
+                'session' => [
+                    'id' => $session->id,
+                    'name' => $session->name,
+                    'url' => route('merge-sessions.show', $session),
+                    'chat_url' => $chatUrl,
+                ],
+            ]);
+        }
+
         return Flash::to(
             'merge-sessions.show',
             'Merge session created. Share the chat link with members of both groups.',
             [[
                 'label' => 'Merged chat link',
-                'url' => route('messages.index', ['merge', $session->id]),
+                'url' => $chatUrl,
             ]],
             $session,
         );

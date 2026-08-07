@@ -12,7 +12,7 @@
                 <div>
                     <label class="block text-[11px] text-slate-500 mb-1">Name</label>
                     <input type="text" x-model="name" @keydown.enter.prevent="submit()" maxlength="255"
-                        class="w-full bg-surface-200 border border-white/10 text-white text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-brand-500/50"
+                        class="w-full bg-surface-200 border border-white/10 text-white text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition"
                         placeholder="Group name" x-ref="nameInput">
                     <p x-show="error" x-cloak class="text-xs text-red-400 mt-2" x-text="error"></p>
                 </div>

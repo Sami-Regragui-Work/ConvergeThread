@@ -140,4 +140,67 @@ class CallSignalTest extends TestCase
             'call_type' => 'voice',
         ])->assertStatus(422);
     }
+
+    public function test_sfu_token_requires_livekit_config(): void
+    {
+        config([
+            'webrtc.sfu.url' => '',
+            'webrtc.sfu.api_key' => '',
+            'webrtc.sfu.api_secret' => '',
+            'webrtc.sfu.enabled' => false,
+        ]);
+
+        $tenant = Tenant::create(['slug' => 'acme_corp', 'admin_email' => 'admin@acme.com']);
+        $adminRoleId = TenantRole::where('is_system', true)->where('name', 'Admin')->value('id');
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'tenant_role_id' => $adminRoleId,
+        ]);
+
+        $this->actingAs($user);
+        $group = app(GroupService::class)->create('Calls', $user);
+
+        $this->postJson(route('messages.call.sfu-token', ['chatType' => 'group', 'chatId' => $group->id]), [
+            'call_id' => 'call_sfu',
+            'call_type' => 'voice',
+        ])->assertNotFound();
+    }
+
+    public function test_group_invite_uses_sfu_media_mode_when_livekit_configured(): void
+    {
+        Event::fake([CallSignal::class]);
+
+        config([
+            'webrtc.sfu.url' => 'ws://127.0.0.1:7880',
+            'webrtc.sfu.api_key' => 'devkey',
+            'webrtc.sfu.api_secret' => 'secret',
+            'webrtc.sfu.enabled' => true,
+            'webrtc.sfu.force_all' => false,
+        ]);
+
+        $tenant = Tenant::create(['slug' => 'acme_corp', 'admin_email' => 'admin@acme.com']);
+        $adminRoleId = TenantRole::where('is_system', true)->where('name', 'Admin')->value('id');
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'tenant_role_id' => $adminRoleId,
+        ]);
+
+        $this->actingAs($user);
+        $group = app(GroupService::class)->create('Calls', $user);
+
+        $this->postJson(route('messages.call.signal', ['chatType' => 'group', 'chatId' => $group->id]), [
+            'action' => 'invite',
+            'call_id' => 'call_sfu',
+            'call_type' => 'voice',
+        ])
+            ->assertOk()
+            ->assertJsonPath('media_mode', 'sfu');
+
+        $this->postJson(route('messages.call.sfu-token', ['chatType' => 'group', 'chatId' => $group->id]), [
+            'call_id' => 'call_sfu',
+            'call_type' => 'voice',
+        ])
+            ->assertOk()
+            ->assertJsonStructure(['ok', 'url', 'token', 'room']);
+    }
 }

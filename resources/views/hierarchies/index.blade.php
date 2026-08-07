@@ -11,7 +11,7 @@
             <form method="POST" action="{{ route('hierarchies.store') }}" class="flex gap-2">
                 @csrf
                 <input type="text" name="name" required placeholder="New hierarchy name"
-                    class="bg-surface-200 border border-white/10 text-white rounded-xl px-4 py-2 text-sm min-w-48">
+                    class="bg-surface-200 border border-white/10 text-white rounded-xl px-4 py-2 text-sm min-w-48 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition">
                 <button type="submit" class="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-xl text-sm font-semibold">Create</button>
             </form>
         </div>

@@ -85,6 +85,7 @@ class CallSessionService
         Cache::put($this->cacheKey($chatType, $chatId), [
             'call_id' => $payload['call_id'],
             'call_type' => $payload['call_type'],
+            'media_mode' => $payload['media_mode'] ?? 'mesh',
             'from_user_id' => $fromId,
             'from_user_name' => $payload['from_user_name'],
             'started_at' => now()->toIso8601String(),

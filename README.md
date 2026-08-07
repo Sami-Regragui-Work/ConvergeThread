@@ -59,6 +59,15 @@ Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
 
 Optional TURN (restrictive NATs): set `TURN_URLS`, `TURN_USERNAME`, `TURN_CREDENTIAL` in `.env` (see `config/webrtc.php`).
 
+Optional LiveKit SFU (large group/merge calls): set `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`. Duos stay on mesh unless `LIVEKIT_FORCE_ALL=true`. Local demo:
+
+```bash
+docker run --rm -p 7880:7880 \
+  -e LIVEKIT_KEYS="devkey: secret" \
+  livekit/livekit-server --dev
+# then LIVEKIT_URL=ws://127.0.0.1:7880 LIVEKIT_API_KEY=devkey LIVEKIT_API_SECRET=secret
+```
+
 After seeding, sign in with the owner account from `database/seeders/Permanents/OwnerSeeder.php` (check that file for the seeded email/password), or register into the default workspace tenant.
 
 For message attachments, ensure `storage/app/public` is writable and the `public/storage` link exists (`php artisan storage:link`).
@@ -76,8 +85,10 @@ php artisan test
 - Session authentication (`web` guard)
 - Laravel Reverb WebSockets for chat, workspace sync, and WebRTC call signaling
 - Client-side E2EE for chat text and attachments (Web Crypto; private keys stay in the browser; password-wrapped account backup restores keys automatically on login)
-- WebRTC voice/video calls in chat and threads (STUN + optional TURN; mesh peers)
+- WebRTC voice/video calls (mesh + optional TURN for small/duo calls; optional LiveKit SFU for group/merge)
+- Markdown compose mode, media trim/speed before send, in-app media viewer
 - Header chat search (local encrypted IndexedDB index; per-chat or all my chats) and files-by-thread browse
+- Alpine modals for group create/rename, duo create, and merge-session create (classic pages remain as fallback)
 
 ## Documentation
 
@@ -95,5 +106,6 @@ Feature work uses `feature/*` branches merged into `main`. See `references/branc
 
 See `references/todo.md` and `references/known-limitations.md` (docs branch). Remaining highlights:
 
-- SFU for large group calls (mesh + TURN covers small calls today)
-- Further modal conversions beyond group create/rename
+- App-level call E2EE if using SFU (Insertable Streams / SFrame)
+- Dense editors still on full pages (tenant roles, hierarchies, role-override permissions)
+- Sidebar UX polish on very small screens

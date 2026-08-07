@@ -8,6 +8,7 @@ use App\Models\Group;
 use App\Models\MergeSession;
 use App\Models\Message;
 use App\Models\MessageAttachment;
+use App\Models\MessageHide;
 use App\Models\User;
 use App\Support\MessageEncryption;
 use Illuminate\Http\UploadedFile;
@@ -24,7 +25,7 @@ class MessageService
     }
 
     /**
-     * @param  \Illuminate\Http\UploadedFile|list<\Illuminate\Http\UploadedFile>|null  $file
+     * @param  UploadedFile|list<UploadedFile>|null  $file
      * @param  list<array{name?:string,mime?:string,iv?:string}>|null  $attachmentMeta
      */
     public function create(
@@ -36,6 +37,7 @@ class MessageService
         string $chatType = 'group',
         ?array $mentionUserIds = null,
         ?array $attachmentMeta = null,
+        bool $isMarkdown = false,
     ): Message {
         $files = match (true) {
             $file instanceof UploadedFile => [$file],
@@ -51,6 +53,7 @@ class MessageService
             'user_id' => $user->id,
             'content' => $content,
             'is_encrypted' => $encrypted,
+            'is_markdown' => $isMarkdown,
             'parent_id' => $parent?->id,
             'is_file' => count($files) > 0,
         ];
@@ -145,76 +148,147 @@ class MessageService
         ];
     }
 
+    /**
+     * @param  list<UploadedFile>  $files
+     * @param  list<int>  $removeAttachmentIds
+     * @param  list<array{name?:string,mime?:string,iv?:string}>|null  $attachmentMeta
+     */
     public function update(
         Message $message,
         ?string $content = null,
-        ?UploadedFile $file = null,
-        bool $removeFile = false,
-        bool $emptyContent = false
+        array $files = [],
+        array $removeAttachmentIds = [],
+        bool $emptyContent = false,
+        bool $removeAllFiles = false,
+        ?array $attachmentMeta = null,
     ): Message {
         $data = [];
 
         if ($emptyContent) {
             $data['content'] = null;
+            $data['is_encrypted'] = false;
         } elseif ($content !== null) {
             $data['content'] = $content;
             $data['is_encrypted'] = MessageEncryption::isEncrypted($content);
         }
 
-        if ($removeFile) {
+        $message->loadMissing('attachments');
+
+        if ($removeAllFiles) {
             foreach ($message->attachments as $attachment) {
                 Storage::disk('public')->delete($attachment->file_path);
                 $attachment->delete();
             }
-
             if ($message->file_path) {
                 Storage::disk('public')->delete($message->file_path);
             }
-
-            $data['is_file'] = false;
             $data['file_path'] = null;
+        } elseif ($removeAttachmentIds !== []) {
+            $ids = array_map('intval', $removeAttachmentIds);
+            $toRemove = $message->attachments->whereIn('id', $ids);
+            foreach ($toRemove as $attachment) {
+                Storage::disk('public')->delete($attachment->file_path);
+                $attachment->delete();
+            }
         }
 
-        if ($file) {
-            foreach ($message->attachments as $attachment) {
-                Storage::disk('public')->delete($attachment->file_path);
-                $attachment->delete();
-            }
+        $message->load('attachments');
+        $nextSort = (int) ($message->attachments->max('sort') ?? -1) + 1;
 
-            if ($message->file_path) {
-                Storage::disk('public')->delete($message->file_path);
+        foreach ($files as $index => $uploaded) {
+            if (! $uploaded instanceof UploadedFile) {
+                continue;
             }
-
-            $path = $file->store('messages', 'public');
-            $data['is_file'] = true;
-            $data['file_path'] = $path;
+            $meta = is_array($attachmentMeta[$index] ?? null) ? $attachmentMeta[$index] : [];
+            $iv = $meta['iv'] ?? null;
+            $isFileEncrypted = is_string($iv) && $iv !== '';
+            $path = $uploaded->store('messages', 'public');
 
             MessageAttachment::create([
                 'message_id' => $message->id,
                 'file_path' => $path,
-                'original_name' => $file->getClientOriginalName(),
-                'sort' => 0,
+                'original_name' => $meta['name'] ?? $uploaded->getClientOriginalName(),
+                'is_encrypted' => $isFileEncrypted,
+                'encryption_iv' => $isFileEncrypted ? $iv : null,
+                'mime_type' => $meta['mime'] ?? $uploaded->getMimeType(),
+                'sort' => $nextSort + $index,
             ]);
         }
+
+        $message->load('attachments');
 
         $finalContent = array_key_exists('content', $data)
             ? $data['content']
             : $message->content;
 
-        $message->load('attachments');
+        $hasAttachments = $message->attachments->isNotEmpty();
+        $data['is_file'] = $hasAttachments;
+        if (! $hasAttachments) {
+            $data['file_path'] = null;
+        }
 
-        $willHaveAttachments = $file !== null
-            || (!$removeFile && ($message->attachments->isNotEmpty() || $message->file_path));
-
-        if (blank($finalContent) && !$willHaveAttachments) {
+        if (blank($finalContent) && ! $hasAttachments) {
             throw ValidationException::withMessages([
-                'content' => ['Message must have content or file.'],
+                'content' => ['Message must have content or a file.'],
             ]);
         }
 
+        if ($hasAttachments && $message->attachments->contains(fn ($a) => $a->is_encrypted)) {
+            $data['is_encrypted'] = true;
+        }
+
+        if ($message->attachments->count() > 20) {
+            throw ValidationException::withMessages([
+                'files' => ['You can attach at most 20 files per message.'],
+            ]);
+        }
+
+        $data['edited_at'] = now();
         $message->update($data);
 
         return $message->fresh(['user.tenantRole', 'attachments']);
+    }
+
+    public function hideForUser(Message $message, User $user): void
+    {
+        if ((int) $message->user_id === (int) $user->id) {
+            throw ValidationException::withMessages([
+                'message' => ['You cannot hide your own message. Delete it instead.'],
+            ]);
+        }
+
+        MessageHide::query()->firstOrCreate([
+            'message_id' => $message->id,
+            'user_id' => $user->id,
+        ]);
+    }
+
+    public function softDeleteForEveryone(Message $message, User $deleter): Message
+    {
+        $message->loadMissing('attachments');
+
+        foreach ($message->attachments as $attachment) {
+            Storage::disk('public')->delete($attachment->file_path);
+            $attachment->delete();
+        }
+
+        if ($message->file_path) {
+            Storage::disk('public')->delete($message->file_path);
+        }
+
+        $message->update([
+            'content' => null,
+            'is_encrypted' => false,
+            'is_file' => false,
+            'file_path' => null,
+            'deleted_at' => now(),
+            'deleted_by_id' => $deleter->id,
+        ]);
+
+        $fresh = $message->fresh(['user.tenantRole', 'attachments', 'deletedBy', 'replies']);
+        MessageSent::dispatch($fresh);
+
+        return $fresh;
     }
 
     public function delete(Message $message): bool

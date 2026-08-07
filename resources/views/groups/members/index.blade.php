@@ -17,7 +17,7 @@
                     <input type="hidden" name="tenant_id" value="{{ $group->tenant_id }}">
                     <input type="hidden" name="group_id" value="{{ $group->id }}">
                     <input type="email" name="email" placeholder="colleague@example.com" required
-                        class="flex-1 min-w-0 bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 placeholder-slate-500">
+                        class="flex-1 min-w-0 bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition placeholder-slate-500">
                     <select name="tenant_role_id"
                         class="bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm min-w-40">
                         <option value="">Member (default)</option>

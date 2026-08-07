@@ -1,14 +1,48 @@
 {{-- Chat search + media (scoped pages only). Proton-style local decrypt index. --}}
 @php
+    use App\Models\Duo;
+    use App\Models\Group;
+    use App\Models\MergeSession;
+    use App\Models\Message;
+
     $browseChatType = request()->route('chatType');
     $browseChatId = request()->route('chatId') ? (int) request()->route('chatId') : null;
-    if (!$browseChatType && request()->routeIs('groups.show') && request()->route('group')) {
-        $browseChatType = 'group';
-        $browseChatId = (int) request()->route('group')->id;
+
+    // Thread view: /messages/{message}/thread — chat lives on the parent message.
+    if ((! $browseChatType || ! $browseChatId) && request()->routeIs('messages.thread', 'messages.thread.mute')) {
+        $threadMessage = request()->route('message');
+        if ($threadMessage instanceof Message) {
+            $browseChatType = match ($threadMessage->chatable_type) {
+                'group', Group::class => 'group',
+                'duo', Duo::class => 'duo',
+                'merge', MergeSession::class => 'merge',
+                default => is_string($threadMessage->chatable_type) ? $threadMessage->chatable_type : null,
+            };
+            $browseChatId = (int) $threadMessage->chatable_id;
+        }
     }
-    if (!$browseChatType && request()->routeIs('merge-sessions.show') && request()->route('mergeSession')) {
+
+    // Any group-scoped page (show, members, duos, role-overrides, edit, …).
+    if ((! $browseChatType || ! $browseChatId) && request()->route('group')) {
+        $group = request()->route('group');
+        $browseChatType = 'group';
+        $browseChatId = (int) ($group instanceof Group ? $group->id : $group);
+    }
+
+    // Duo resource nested under a group still implies that group's chat context,
+    // unless we already resolved a duo chat from messages routes.
+    if ((! $browseChatType || ! $browseChatId) && request()->route('duo')) {
+        $duo = request()->route('duo');
+        if ($duo instanceof Duo) {
+            $browseChatType = 'duo';
+            $browseChatId = (int) $duo->id;
+        }
+    }
+
+    if ((! $browseChatType || ! $browseChatId) && request()->routeIs('merge-sessions.*') && request()->route('mergeSession')) {
+        $merge = request()->route('mergeSession');
         $browseChatType = 'merge';
-        $browseChatId = (int) request()->route('mergeSession')->id;
+        $browseChatId = (int) ($merge instanceof MergeSession ? $merge->id : $merge);
     }
 @endphp
 <script>
@@ -447,7 +481,7 @@
         <div>
         <div x-show="$store.chatBrowse.showSearch" x-cloak
             x-transition.opacity
-            class="fixed inset-0 z-[200] flex items-start justify-center p-4 sm:p-8"
+            class="fixed inset-0 z-200 flex items-start justify-center p-4 sm:p-8"
             @keydown.escape.window="if ($store.chatBrowse.showSearch) $store.chatBrowse.showSearch = false">
             <div class="absolute inset-0 bg-black/70" @click="$store.chatBrowse.showSearch = false"></div>
             <div class="relative w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl border border-white/10 bg-surface-300 shadow-2xl overflow-hidden"
@@ -464,7 +498,7 @@
                         <label class="block text-[11px] text-slate-500 mb-1">Chat</label>
                         <select data-chat-browse-select data-allow-all="1"
                             @change="$store.chatBrowse.selectedChatKey = $event.target.value; $store.chatBrowse.onChatPicked()"
-                            class="w-full bg-surface-200 border border-white/10 text-white text-sm rounded-lg px-3 py-2">
+                            class="w-full bg-surface-200 border border-white/10 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition">
                             <option value="">Select a chat…</option>
                             <option value="__all__">All my chats</option>
                         </select>
@@ -476,7 +510,7 @@
                             @keydown.enter.prevent="$store.chatBrowse.runSearch()"
                             :disabled="!$store.chatBrowse.selectedChatKey"
                             placeholder="Search message body…"
-                            class="w-full bg-surface-200 border border-white/10 text-white text-sm rounded-lg px-3 py-2 disabled:opacity-40">
+                            class="w-full bg-surface-200 border border-white/10 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition disabled:opacity-40">
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div class="relative">
@@ -487,7 +521,7 @@
                                     @input="$store.chatBrowse.showAuthorMenu = true; $store.chatBrowse.filterUserId = null"
                                     :disabled="!$store.chatBrowse.selectedChatKey"
                                     placeholder="@username"
-                                    class="flex-1 bg-surface-200 border border-white/10 text-white text-sm rounded-lg px-3 py-2 disabled:opacity-40">
+                                    class="flex-1 bg-surface-200 border border-white/10 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition disabled:opacity-40">
                                 <button type="button" x-show="$store.chatBrowse.filterUserId" x-cloak
                                     @click="$store.chatBrowse.clearAuthor()"
                                     class="px-2 rounded-lg border border-white/10 text-slate-400 text-xs">Clear</button>
@@ -508,7 +542,7 @@
                             <label class="block text-[11px] text-slate-500 mb-1">Attachments</label>
                             <select x-model="$store.chatBrowse.filterAttachments"
                                 :disabled="!$store.chatBrowse.selectedChatKey"
-                                class="w-full bg-surface-200 border border-white/10 text-white text-sm rounded-lg px-3 py-2 disabled:opacity-40">
+                                class="w-full bg-surface-200 border border-white/10 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition disabled:opacity-40">
                                 <option value="">Any</option>
                                 <option value="1">Has files</option>
                                 <option value="0">No files</option>
@@ -520,13 +554,13 @@
                             <label class="block text-[11px] text-slate-500 mb-1">From date</label>
                             <input type="date" x-model="$store.chatBrowse.filterFrom"
                                 :disabled="!$store.chatBrowse.selectedChatKey"
-                                class="w-full bg-surface-200 border border-white/10 text-white text-sm rounded-lg px-3 py-2 disabled:opacity-40">
+                                class="w-full bg-surface-200 border border-white/10 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition disabled:opacity-40">
                         </div>
                         <div>
                             <label class="block text-[11px] text-slate-500 mb-1">To date</label>
                             <input type="date" x-model="$store.chatBrowse.filterTo"
                                 :disabled="!$store.chatBrowse.selectedChatKey"
-                                class="w-full bg-surface-200 border border-white/10 text-white text-sm rounded-lg px-3 py-2 disabled:opacity-40">
+                                class="w-full bg-surface-200 border border-white/10 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition disabled:opacity-40">
                         </div>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
@@ -565,7 +599,7 @@
 
         <div x-show="$store.chatBrowse.showMedia" x-cloak
             x-transition.opacity
-            class="fixed inset-0 z-[200] flex items-start justify-center p-4 sm:p-8"
+            class="fixed inset-0 z-200 flex items-start justify-center p-4 sm:p-8"
             @keydown.escape.window="if ($store.chatBrowse.showMedia) $store.chatBrowse.showMedia = false">
             <div class="absolute inset-0 bg-black/70" @click="$store.chatBrowse.showMedia = false"></div>
             <div class="relative w-full max-w-3xl max-h-[85vh] flex flex-col rounded-2xl border border-white/10 bg-surface-300 shadow-2xl overflow-hidden">
@@ -581,7 +615,7 @@
                     <div class="flex flex-col sm:flex-row gap-2">
                         <select data-chat-browse-select
                             @change="$store.chatBrowse.selectedChatKey = $event.target.value; $store.chatBrowse.loadMedia()"
-                            class="flex-1 bg-surface-200 border border-white/10 text-white text-sm rounded-lg px-3 py-2">
+                            class="flex-1 bg-surface-200 border border-white/10 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition">
                             <option value="">Select a chat…</option>
                         </select>
                         <button type="button" @click="$store.chatBrowse.loadMedia()"

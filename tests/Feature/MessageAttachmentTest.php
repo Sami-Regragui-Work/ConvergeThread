@@ -66,4 +66,84 @@ class MessageAttachmentTest extends TestCase
 
         $response->assertRedirect(route('auth.login'));
     }
+
+    public function test_author_can_add_and_remove_attachments_on_edit(): void
+    {
+        $tenant = Tenant::create(['slug' => 'acme_corp', 'admin_email' => 'admin@acme.com']);
+        $adminRoleId = TenantRole::where('is_system', true)->where('name', 'Admin')->value('id');
+
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'tenant_role_id' => $adminRoleId,
+        ]);
+
+        $group = app(GroupService::class)->create('General', $user);
+
+        $oldPath = UploadedFile::fake()->create('old.txt', 5, 'text/plain')->store('messages', 'public');
+        $message = Message::create([
+            'chatable_type' => 'group',
+            'chatable_id' => $group->id,
+            'user_id' => $user->id,
+            'content' => 'With file',
+            'is_file' => true,
+        ]);
+        $old = $message->attachments()->create([
+            'file_path' => $oldPath,
+            'original_name' => 'old.txt',
+            'mime_type' => 'text/plain',
+            'sort' => 0,
+        ]);
+
+        $newFile = UploadedFile::fake()->create('new.txt', 8, 'text/plain');
+
+        $this->actingAs($user)
+            ->post(route('messages.update', $message), [
+                '_method' => 'PATCH',
+                'content' => 'Updated text',
+                'remove_attachment_ids' => [$old->id],
+                'files' => [$newFile],
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('message.content', 'Updated text');
+
+        $message->refresh()->load('attachments');
+        $this->assertCount(1, $message->attachments);
+        $this->assertSame('new.txt', $message->attachments->first()->original_name);
+        $this->assertDatabaseMissing('message_attachments', ['id' => $old->id]);
+    }
+
+    public function test_edit_cannot_leave_message_empty(): void
+    {
+        $tenant = Tenant::create(['slug' => 'acme_two', 'admin_email' => 'admin2@acme.com']);
+        $adminRoleId = TenantRole::where('is_system', true)->where('name', 'Admin')->value('id');
+
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'tenant_role_id' => $adminRoleId,
+        ]);
+
+        $group = app(GroupService::class)->create('General', $user);
+        $path = UploadedFile::fake()->create('only.txt', 5, 'text/plain')->store('messages', 'public');
+        $message = Message::create([
+            'chatable_type' => 'group',
+            'chatable_id' => $group->id,
+            'user_id' => $user->id,
+            'content' => null,
+            'is_file' => true,
+        ]);
+        $attachment = $message->attachments()->create([
+            'file_path' => $path,
+            'original_name' => 'only.txt',
+            'mime_type' => 'text/plain',
+            'sort' => 0,
+        ]);
+
+        $this->actingAs($user)
+            ->postJson(route('messages.update', $message), [
+                '_method' => 'PATCH',
+                'empty_content' => true,
+                'remove_attachment_ids' => [$attachment->id],
+            ])
+            ->assertStatus(422);
+    }
 }
