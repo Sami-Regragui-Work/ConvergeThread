@@ -17,6 +17,7 @@ class WorkspaceSyncController extends Controller
 {
     public function poll()
     {
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
         if ($user->isOwner()) {

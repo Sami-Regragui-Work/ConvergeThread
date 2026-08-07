@@ -130,10 +130,18 @@
                     class="px-2 py-1 rounded-md transition"
                     :class="draftFormat === 'markdown' ? 'bg-brand-500 text-white' : 'text-slate-400 hover:text-white'">Markdown</button>
             </div>
-            <button type="button" x-show="draftFormat === 'markdown'" x-cloak
-                @click="setMarkdownGuide(!showMarkdownGuide)"
-                class="text-[10px] font-semibold px-2 py-1 rounded-lg border border-white/10 text-slate-300 hover:bg-white/5 transition"
-                x-text="showMarkdownGuide ? 'Hide guide' : 'Show guide'"></button>
+            <div class="flex items-center gap-2">
+                <button type="button" x-show="draftFormat === 'markdown' && showCodeEditorButton && !monacoFenceActive" x-cloak
+                    @click="openCodeEditor()"
+                    class="text-[10px] font-semibold px-2 py-1 rounded-lg border border-brand-500/40 text-brand-300 hover:bg-brand-500/10 transition"
+                    title="Open the code editor for this ```lang block (Ctrl+Space)">
+                    <span class="font-mono">```</span> Code editor
+                </button>
+                <button type="button" x-show="draftFormat === 'markdown'" x-cloak
+                    @click="setMarkdownGuide(!showMarkdownGuide)"
+                    class="text-[10px] font-semibold px-2 py-1 rounded-lg border border-white/10 text-slate-300 hover:bg-white/5 transition"
+                    x-text="showMarkdownGuide ? 'Hide guide' : 'Show guide'"></button>
+            </div>
         </div>
 
         <div x-show="draftFormat === 'markdown' && draft.trim()" x-cloak
@@ -157,7 +165,7 @@
                     title="Close code editor (Esc)">Done</button>
             </div>
             <p x-show="monacoFenceError" x-cloak class="px-3 py-2 text-[11px] text-amber-300/90" x-text="monacoFenceError"></p>
-            <div x-ref="monacoFenceHost" class="h-52 w-full"
+            <div x-ref="monacoFenceHost" class="w-full"
                 :class="(monacoFenceActive && !monacoFenceError) ? '' : 'hidden'"></div>
         </div>
 

@@ -9,7 +9,10 @@ class NotificationController extends Controller
 {
     public function index(Request $request)
     {
-        $notifications = Auth::user()
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+
+        $notifications = $user
             ->notifications()
             ->latest()
             ->paginate(30);
@@ -34,7 +37,10 @@ class NotificationController extends Controller
 
     public function markRead(string $notification)
     {
-        $record = Auth::user()->notifications()->where('id', $notification)->firstOrFail();
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+
+        $record = $user->notifications()->where('id', $notification)->firstOrFail();
         $record->markAsRead();
 
         $data = $record->data;
@@ -55,7 +61,10 @@ class NotificationController extends Controller
 
     public function markAllRead()
     {
-        Auth::user()->unreadNotifications->markAsRead();
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+
+        $user->unreadNotifications->markAsRead();
 
         return back()->with('success', 'All notifications marked as read.');
     }

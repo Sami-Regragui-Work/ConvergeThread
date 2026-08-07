@@ -69,10 +69,13 @@
             monacoFenceLang: '',
             monacoFenceLoading: false,
             monacoFenceError: '',
+            showCodeEditorButton: false,
             _monacoEditor: null,
             _monacoFenceRange: null,
             _monacoWakeTimer: null,
             _monacoSyncing: false,
+            _monacoSyncRaf: 0,
+            _monacoResizeObserver: null,
             _monacoDisposed: true,
             _monacoFailed: false,
             _monacoWaking: false,
@@ -1592,29 +1595,43 @@
                 if (this._monacoSyncing || this._monacoFailed || this._monacoWaking) return;
                 // While Monaco owns the fence, ignore textarea caret — overwriting the
                 // range from the textarea was corrupting ```js → ```j and crashing getPositionAt.
-                if (this.monacoFenceActive && this._monacoEditor) return;
+                if (this.monacoFenceActive && this._monacoEditor) {
+                    this.showCodeEditorButton = false;
+                    return;
+                }
                 if (this.draftFormat !== 'markdown' || !window.ctMonacoFence?.preferMonaco?.()) {
                     if (this.monacoFenceActive) this.sleepMonacoFence(false);
+                    this.showCodeEditorButton = false;
                     return;
                 }
                 const el = this.$refs.draftInput;
                 const caret = el?.selectionStart ?? this.draft.length;
-                const range = this.getCodeFenceRange(this.draft, caret);
-                if (!range) {
-                    if (this.monacoFenceActive) this.sleepMonacoFence(false);
-                    return;
+                const inFence = !!this.getCodeFenceRange(this.draft, caret);
+                this.showCodeEditorButton = inFence && !this._monacoFailed;
+                if (!inFence && this.monacoFenceActive) {
+                    this.sleepMonacoFence(false);
                 }
-                clearTimeout(this._monacoWakeTimer);
-                this._monacoWakeTimer = setTimeout(() => {
-                    this.wakeMonacoFence(range);
-                }, 280);
+            },
+
+            openCodeEditor() {
+                if (this._monacoFailed || this.monacoFenceActive) return;
+                const el = this.$refs.draftInput;
+                const caret = el?.selectionStart ?? this.draft.length;
+                const range = this.getCodeFenceRange(this.draft, caret);
+                if (!range) return;
+                this.wakeMonacoFence(range);
             },
 
             replaceFenceBody(bodyText, range) {
                 const r = range || this._monacoFenceRange;
                 if (!r) return;
-                const before = this.draft.slice(0, r.bodyStart);
-                const after = this.draft.slice(r.bodyEnd);
+                // Re-derive from the current draft so offsets never go stale (a stale
+                // bodyStart/bodyEnd was the source of the piece-tree crash in Monaco).
+                const caret = Math.max(0, Math.min(r.bodyStart, this.draft.length));
+                const live = this.getCodeFenceRange(this.draft, caret);
+                if (!live) return;
+                const before = this.draft.slice(0, live.bodyStart);
+                const after = this.draft.slice(live.bodyEnd);
                 // Refuse sync that would eat into the opening fence marker.
                 if (!/(^|\n)```[^\n]*\n$/.test(before) && !/(^|\n)```[^\n]*$/.test(before)) {
                     console.warn('[monaco] refused fence sync — bodyStart looks wrong');
@@ -1623,8 +1640,8 @@
                 const body = String(bodyText ?? '');
                 this._monacoSyncing = true;
                 this.draft = before + body + after;
-                const nextEnd = r.bodyStart + body.length;
-                this._monacoFenceRange = { ...r, bodyEnd: nextEnd };
+                const nextEnd = live.bodyStart + body.length;
+                this._monacoFenceRange = { ...live, bodyEnd: nextEnd };
                 this.$nextTick(() => {
                     this._monacoSyncing = false;
                     this.autoResizeDraft();
@@ -1642,15 +1659,13 @@
                 this.closeMentionMenu();
 
                 if (this.monacoFenceActive && this._monacoEditor && this._monacoFenceRange?.openStart === range.openStart) {
+                    try { this._monacoEditor.focus(); } catch (e) {}
                     return;
                 }
 
                 this._monacoWaking = true;
                 try {
-                    if (this._monacoEditor) {
-                        try { this._monacoEditor.dispose(); } catch (e) {}
-                        this._monacoEditor = null;
-                    }
+                    this.disposeMonacoEditor();
 
                     this.monacoFenceActive = true;
                     this.monacoFenceLoading = true;
@@ -1662,14 +1677,18 @@
                     await this.$nextTick();
                     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-                    const host = this.$refs.monacoFenceHost;
-                    if (!host || this._monacoDisposed) {
+                    const wrapper = this.$refs.monacoFenceHost;
+                    if (!wrapper || this._monacoDisposed) {
                         this.monacoFenceLoading = false;
                         return;
                     }
-                    // Clear prior Monaco DOM/context on this host.
-                    host.innerHTML = '';
-                    host.classList.remove('hidden');
+                    // Fresh container every mount — clears Monaco's data-mp context so we
+                    // never double-mount onto a poisoned host ("Element already has context").
+                    wrapper.replaceChildren();
+                    const host = document.createElement('div');
+                    host.className = 'h-52 w-full';
+                    wrapper.appendChild(host);
+                    wrapper.classList.remove('hidden');
 
                     const monaco = await window.ctMonacoFence.loadMonaco();
                     if (this._monacoDisposed || !this.$refs.monacoFenceHost) {
@@ -1687,7 +1706,7 @@
                         value: body,
                         language,
                         theme: 'vs-dark',
-                        automaticLayout: true,
+                        automaticLayout: false,
                         minimap: { enabled: false },
                         fontSize: 13,
                         lineNumbers: 'on',
@@ -1698,18 +1717,25 @@
                         renderLineHighlight: 'line',
                         padding: { top: 8, bottom: 8 },
                         overviewRulerLanes: 0,
-                        folding: true,
-                        quickSuggestions: true,
-                        suggestOnTriggerCharacters: true,
-                        wordBasedSuggestions: 'currentDocument',
-                        snippetSuggestions: 'inline',
+                        folding: false,
+                        quickSuggestions: false,
+                        suggestOnTriggerCharacters: false,
+                        wordBasedSuggestions: false,
+                        snippetSuggestions: 'none',
+                        ariaLabel: 'Code editor',
                     });
+
+                    this.installMonacoResizeObserver();
+
                     this._monacoEditor.onDidChangeModelContent(() => {
                         if (!this._monacoEditor || this._monacoDisposed) return;
-                        this.replaceFenceBody(this._monacoEditor.getValue(), this._monacoFenceRange);
+                        this.syncMonacoToDraft();
                     });
                     this._monacoEditor.addCommand(monaco.KeyCode.Escape, () => {
                         this.sleepMonacoFence(true);
+                    });
+                    this._monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+                        this.sleepMonacoFence(false);
                     });
 
                     try {
@@ -1735,15 +1761,10 @@
                     });
                 } catch (e) {
                     console.error('[monaco]', e);
-                    this._monacoFailed = false;
+                    this._monacoFailed = true;
                     this.monacoFenceLoading = false;
-                    this.monacoFenceError = 'Code editor failed to load — using text suggestions instead.';
-                    if (this._monacoEditor) {
-                        try { this._monacoEditor.dispose(); } catch (err) {}
-                    }
-                    this._monacoEditor = null;
-                    this._monacoFenceRange = null;
-                    this.monacoFenceActive = false;
+                    this.monacoFenceError = 'Code editor unavailable — using text suggestions instead.';
+                    this.sleepMonacoFence(false);
                     setTimeout(() => {
                         if (!this.monacoFenceActive) this.monacoFenceError = '';
                     }, 4000);
@@ -1752,9 +1773,51 @@
                 }
             },
 
+            /** Coalesce rapid Monaco keystrokes into one draft update. */
+            syncMonacoToDraft() {
+                if (this._monacoSyncRaf) cancelAnimationFrame(this._monacoSyncRaf);
+                this._monacoSyncRaf = requestAnimationFrame(() => {
+                    this._monacoSyncRaf = 0;
+                    if (!this._monacoEditor || this._monacoDisposed) return;
+                    this.replaceFenceBody(this._monacoEditor.getValue(), this._monacoFenceRange);
+                });
+            },
+
+            disposeMonacoEditor() {
+                this._monacoDisposed = true;
+                if (this._monacoResizeObserver) {
+                    try { this._monacoResizeObserver.disconnect(); } catch (e) {}
+                    this._monacoResizeObserver = null;
+                }
+                if (this._monacoSyncRaf) {
+                    cancelAnimationFrame(this._monacoSyncRaf);
+                    this._monacoSyncRaf = 0;
+                }
+                if (this._monacoEditor) {
+                    try { this._monacoEditor.dispose(); } catch (e) {}
+                    this._monacoEditor = null;
+                }
+                const wrapper = this.$refs.monacoFenceHost;
+                if (wrapper) {
+                    try { wrapper.replaceChildren(); } catch (e) {}
+                }
+            },
+
+            installMonacoResizeObserver() {
+                const wrapper = this.$refs.monacoFenceHost;
+                if (!wrapper || typeof ResizeObserver === 'undefined') return;
+                this._monacoResizeObserver = new ResizeObserver(() => {
+                    if (this._monacoEditor && !this._monacoDisposed) {
+                        requestAnimationFrame(() => {
+                            try { this._monacoEditor?.layout?.(); } catch (e) {}
+                        });
+                    }
+                });
+                this._monacoResizeObserver.observe(wrapper);
+            },
+
             sleepMonacoFence(focusTextarea = false) {
                 clearTimeout(this._monacoWakeTimer);
-                this._monacoDisposed = true;
                 let caretInBody = null;
                 if (this._monacoEditor && this._monacoFenceRange) {
                     try {
@@ -1766,20 +1829,18 @@
                         }
                         this.replaceFenceBody(value, this._monacoFenceRange);
                     } catch (e) {}
-                    try {
-                        this._monacoEditor.dispose();
-                    } catch (e) {}
                 }
                 const range = this._monacoFenceRange;
-                this._monacoEditor = null;
+                this.disposeMonacoEditor();
                 this._monacoFenceRange = null;
                 this.monacoFenceActive = false;
                 this.monacoFenceLoading = false;
                 this.monacoFenceLang = '';
                 this.monacoFenceError = '';
+                this.showCodeEditorButton = false;
                 const host = this.$refs.monacoFenceHost;
                 if (host) {
-                    host.innerHTML = '';
+                    try { host.replaceChildren(); } catch (e) {}
                     host.classList.add('hidden');
                 }
                 if (focusTextarea) {
@@ -1900,7 +1961,7 @@
                         const range = this.getCodeFenceRange(this.draft, caret);
                         if (range) {
                             event.preventDefault();
-                            if (window.ctMonacoFence?.preferMonaco?.() && !this.monacoFenceActive) {
+                            if (window.ctMonacoFence?.preferMonaco?.() && !this.monacoFenceActive && !this._monacoFailed) {
                                 this.wakeMonacoFence(range);
                             } else if (!this.monacoFenceActive) {
                                 this.updateCodeSuggest(true);

@@ -70,7 +70,7 @@
             const timeout = setTimeout(() => {
                 loadPromise = null;
                 reject(new Error('Monaco load timed out'));
-            }, 20000);
+            }, 6000);
 
             const done = (err, monaco) => {
                 clearTimeout(timeout);
