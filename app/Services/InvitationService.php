@@ -234,6 +234,7 @@ class InvitationService
             ->where('expires_at', '>', now())
             ->update([
                 'expires_at' => now(),
+                'revoked_at' => now(),
             ]);
     }
 
@@ -263,6 +264,12 @@ class InvitationService
         $invitation = Invitation::where('token', $token)
             ->with(['tenant', 'group', 'tenantRole', 'invitedBy'])
             ->firstOrFail();
+
+        if ($invitation->revoked_at) {
+            throw ValidationException::withMessages([
+                'token' => 'Invitation was cancelled.',
+            ]);
+        }
 
         if ($invitation->accepted_at) {
             throw ValidationException::withMessages([

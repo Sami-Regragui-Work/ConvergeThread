@@ -11,6 +11,7 @@ use App\Models\Tenant;
 use App\Models\TenantRole;
 use App\Services\InvitationService;
 use App\Support\Flash;
+use App\Support\WorkspaceSync;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 
@@ -21,17 +22,17 @@ class InvitationController extends Controller
     ) {
     }
 
-    public function index()
+    public function manage()
     {
         Gate::authorize('createMember', Invitation::class);
+        $user = Auth::user();
 
         $invitations = Invitation::query()
-            ->where('invited_by_id', Auth::id())
-            ->whereNull('accepted_at')
-            ->where('expires_at', '>', now())
-            ->with(['tenant', 'group', 'tenantRole'])
+            ->when(!$user->isOwner(), fn ($query) => $query->where('tenant_id', $user->tenant_id))
+            ->with(['tenant', 'group', 'tenantRole', 'invitedBy'])
             ->latest()
-            ->get();
+            ->get()
+            ->groupBy(fn (Invitation $invitation) => $invitation->status());
 
         return view('invitations.index', compact('invitations'));
     }
@@ -47,9 +48,33 @@ class InvitationController extends Controller
         );
         abort_if($invitation->accepted_at !== null, 404);
 
-        $invitation->update(['expires_at' => now()]);
+        $invitation->update(['expires_at' => now(), 'revoked_at' => now()]);
+
+        WorkspaceSync::bump($user->tenant_id, ['invitations']);
 
         return back()->with('success', 'Invitation revoked.');
+    }
+
+    public function clearClosed()
+    {
+        Gate::authorize('createMember', Invitation::class);
+        $user = Auth::user();
+
+        $query = Invitation::query()
+            ->when(!$user->isOwner(), fn ($query) => $query->where('tenant_id', $user->tenant_id))
+            ->where(fn ($query) => $query
+                ->whereNotNull('accepted_at')
+                ->orWhereNotNull('revoked_at')
+                ->orWhere('expires_at', '<', now()));
+
+        $count = $query->count();
+        $query->delete();
+
+        if ($count > 0) {
+            WorkspaceSync::bump($user->tenant_id, ['invitations']);
+        }
+
+        return back()->with('success', "Cleared {$count} closed invitation" . ($count === 1 ? '' : 's') . '.');
     }
 
     public function createAdminInvitation(CreateAdminInvitationRequest $request)

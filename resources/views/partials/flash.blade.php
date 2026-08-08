@@ -17,7 +17,7 @@
 @if ($flashMessage || $hasLinks)
     @if ($hasLinks)
         <div x-data="{ show: true }" x-show="show" x-cloak
-            class="border-b border-white/5 bg-surface-300/95 backdrop-blur shrink-0">
+            class="border-b border-white/5 bg-surface-400 shrink-0">
             <div class="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 sm:px-6 lg:px-8">
                 <div @class([
                     'rounded-2xl border px-4 py-4 shadow-xl',

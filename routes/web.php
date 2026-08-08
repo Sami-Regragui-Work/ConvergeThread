@@ -33,6 +33,13 @@ Route::middleware('guest')->prefix('auth')->name('auth.')->group(function () {
     Route::post('login', [AuthController::class, 'login'])->name('login.store');
 });
 
+Route::middleware('guest')->prefix('auth')->group(function () {
+    Route::get('forgot-password', [AuthController::class, 'showForgotPassword'])->name('password.request');
+    Route::post('forgot-password', [AuthController::class, 'sendResetLink'])->name('password.email');
+    Route::get('reset-password/{token}', [AuthController::class, 'showResetPassword'])->name('password.reset');
+    Route::post('reset-password', [AuthController::class, 'resetPassword'])->name('password.update');
+});
+
 Route::prefix('invitations')->name('invitations.')->group(function () {
     Route::post('owner', [InvitationController::class, 'createAdminInvitation'])
         ->middleware('auth')
@@ -62,6 +69,8 @@ Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
 
     Route::get('workspace/members', [WorkspaceMemberController::class, 'index'])->name('workspace.members.index');
     Route::patch('workspace/members/{member}/role', [WorkspaceMemberController::class, 'updateRole'])->name('workspace.members.role');
+    Route::get('workspace/invitations', [InvitationController::class, 'manage'])->name('invitations.manage.index');
+    Route::delete('workspace/invitations/closed', [InvitationController::class, 'clearClosed'])->name('invitations.manage.clear');
     Route::delete('workspace/invitations/{invitation}', [InvitationController::class, 'revoke'])->name('invitations.manage.revoke');
 
     Route::get('workspace/sync', [WorkspaceSyncController::class, 'poll'])->name('workspace.sync');

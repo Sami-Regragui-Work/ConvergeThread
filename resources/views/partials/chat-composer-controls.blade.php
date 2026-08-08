@@ -131,7 +131,7 @@
                     :class="draftFormat === 'markdown' ? 'bg-brand-500 text-white' : 'text-slate-400 hover:text-white'">Markdown</button>
             </div>
             <div class="flex items-center gap-2">
-                <button type="button" x-show="draftFormat === 'markdown' && showCodeEditorButton && !monacoFenceActive" x-cloak
+                <button type="button" x-show="draftFormat === 'markdown' && showCodeEditorButton && !fenceEditorActive" x-cloak
                     @click="openCodeEditor()"
                     class="text-[10px] font-semibold px-2 py-1 rounded-lg border border-brand-500/40 text-brand-300 hover:bg-brand-500/10 transition"
                     title="Open the code editor for this ```lang block (Ctrl+Space)">
@@ -144,29 +144,56 @@
             </div>
         </div>
 
-        <div x-show="draftFormat === 'markdown' && draft.trim()" x-cloak
+        <div x-show="draftFormat === 'markdown' && draft.trim() && !fenceEditorActive" x-cloak
             class="max-h-40 overflow-y-auto overscroll-contain rounded-xl border border-brand-500/20 bg-surface-300/80 px-4 py-2.5 text-sm text-slate-200 ct-md-body"
             x-html="draftMarkdownPreviewHtml()"></div>
     </div>
 
     <div class="shrink-0 space-y-2 pt-2 border-t border-white/5 mt-1">
-        <div x-show="monacoFenceActive || monacoFenceError" x-cloak
+        <div x-show="fenceEditorActive || fenceEditorError" x-cloak
             class="rounded-xl border border-brand-500/30 bg-zinc-950/90 overflow-hidden">
             <div class="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-white/10">
-                <p class="text-[11px] text-slate-300 truncate">
+                <p class="flex items-center gap-2 text-[11px] text-slate-300 truncate">
                     <span class="font-semibold text-brand-300">Code editor</span>
-                    <span class="text-slate-500"> · </span>
-                    <span class="font-mono text-slate-400" x-text="monacoFenceLang || 'plain'"></span>
-                    <span x-show="monacoFenceLoading" class="text-slate-500"> · loading…</span>
+                    <span class="text-slate-500">·</span>
+                    <input type="text" list="ct-fence-langs" x-model="fenceEditorLang"
+                        @change="onFenceLangChange()"
+                        class="w-24 bg-transparent font-mono text-slate-200 text-[11px] border border-white/10 rounded px-1.5 py-0.5 focus:outline-none focus:border-brand-500/50"
+                        title="Language for highlighting (type or pick)">
+                    <span x-show="fenceEditorLoading" class="text-slate-500"> · loading…</span>
                 </p>
                 <button type="button"
                     class="shrink-0 rounded-md border border-white/10 px-2 py-0.5 text-[10px] font-semibold text-slate-300 hover:bg-white/5"
-                    @click="sleepMonacoFence(true)"
+                    @click="sleepFenceEditor(true)"
                     title="Close code editor (Esc)">Done</button>
             </div>
-            <p x-show="monacoFenceError" x-cloak class="px-3 py-2 text-[11px] text-amber-300/90" x-text="monacoFenceError"></p>
-            <div x-ref="monacoFenceHost" class="w-full"
-                :class="(monacoFenceActive && !monacoFenceError) ? '' : 'hidden'"></div>
+            <datalist id="ct-fence-langs">
+                <option value="php"></option>
+                <option value="javascript"></option>
+                <option value="typescript"></option>
+                <option value="python"></option>
+                <option value="ruby"></option>
+                <option value="go"></option>
+                <option value="rust"></option>
+                <option value="java"></option>
+                <option value="csharp"></option>
+                <option value="c"></option>
+                <option value="cpp"></option>
+                <option value="kotlin"></option>
+                <option value="swift"></option>
+                <option value="sql"></option>
+                <option value="html"></option>
+                <option value="css"></option>
+                <option value="bash"></option>
+                <option value="json"></option>
+                <option value="yaml"></option>
+                <option value="markdown"></option>
+                <option value="xml"></option>
+                <option value="plain"></option>
+            </datalist>
+            <p x-show="fenceEditorError" x-cloak class="px-3 py-2 text-[11px] text-amber-300/90" x-text="fenceEditorError"></p>
+            <div x-ref="fenceEditorHost" class="w-full"
+                :class="(fenceEditorActive && !fenceEditorError) ? '' : 'hidden'"></div>
         </div>
 
         <div class="flex items-end gap-2 flex-wrap sm:flex-nowrap">

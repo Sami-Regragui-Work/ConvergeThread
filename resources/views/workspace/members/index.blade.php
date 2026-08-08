@@ -16,8 +16,9 @@
 
         @if($canManage && $pendingInvitations->isNotEmpty())
             <div class="bg-surface-200 border border-white/5 rounded-2xl overflow-hidden">
-                <div class="px-5 py-4 border-b border-white/5">
+                <div class="px-5 py-4 border-b border-white/5 flex items-center justify-between">
                     <h2 class="text-sm font-semibold text-white">Pending invitations</h2>
+                    <a href="{{ route('invitations.manage.index') }}" class="text-xs text-brand-400 hover:text-brand-300">View all</a>
                 </div>
                 <div class="divide-y divide-white/5">
                     @foreach($pendingInvitations as $invitation)

@@ -17,6 +17,7 @@ class Invitation extends Model
         'token',
         'expires_at',
         'accepted_at',
+        'revoked_at',
     ];
 
     protected function casts(): array
@@ -24,8 +25,26 @@ class Invitation extends Model
         return [
             'expires_at' => 'datetime',
             'accepted_at' => 'datetime',
+            'revoked_at' => 'datetime',
             'created_at' => 'datetime',
         ];
+    }
+
+    public function status(): string
+    {
+        if ($this->accepted_at !== null) {
+            return 'accepted';
+        }
+
+        if ($this->revoked_at !== null) {
+            return 'cancelled';
+        }
+
+        if ($this->expires_at !== null && $this->expires_at->isPast()) {
+            return 'expired';
+        }
+
+        return 'pending';
     }
 
     public function tenant(): BelongsTo

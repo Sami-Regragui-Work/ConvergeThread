@@ -245,6 +245,7 @@
     </div>
 
     @push('scripts')
+        @vite(['resources/js/fence-editor.js'])
         @include('partials.chat-panel-script')
     @endpush
 @endsection

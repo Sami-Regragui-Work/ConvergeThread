@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Support\DisplayName;
 use Database\Factories\UserFactory;
+use Illuminate\Auth\Passwords\CanResetPassword;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,7 +16,7 @@ use Illuminate\Notifications\Notifiable;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, CanResetPassword;
 
     /**
      * The attributes that are mass assignable.

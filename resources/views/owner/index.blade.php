@@ -54,9 +54,15 @@
 
         <section class="space-y-6">
             <div class="rounded-2xl border border-white/5 bg-surface-200 p-6 shadow-xl shadow-black/10">
-                    <div class="mb-5">
-                        <h2 class="text-lg font-semibold text-white">Invite Tenant Admin</h2>
-                        <p class="mt-1 text-sm text-slate-400">This uses the existing owner invitation flow.</p>
+                    <div class="mb-5 flex items-start justify-between gap-3">
+                        <div>
+                            <h2 class="text-lg font-semibold text-white">Invite Tenant Admin</h2>
+                            <p class="mt-1 text-sm text-slate-400">This uses the existing owner invitation flow.</p>
+                        </div>
+                        <a href="{{ route('invitations.manage.index') }}"
+                            class="shrink-0 text-xs text-brand-400 hover:text-brand-300 border border-white/10 rounded-lg px-3 py-2 transition">
+                            View all invitations
+                        </a>
                     </div>
 
                     <form method="POST" action="{{ route('invitations.owner.store') }}" class="space-y-4">

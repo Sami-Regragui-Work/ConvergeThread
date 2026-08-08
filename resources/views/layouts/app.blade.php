@@ -472,6 +472,11 @@
                             class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white text-sm transition {{ request()->is('owner*') ? 'bg-brand-500/10 text-brand-400' : '' }}">
                             Dashboard
                         </a>
+
+                        <a href="{{ route('invitations.manage.index') }}"
+                            class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white text-sm transition {{ request()->is('workspace/invitations*') ? 'bg-brand-500/10 text-brand-400' : '' }}">
+                            Invitations
+                        </a>
                     @else
                         <p class="text-xs text-slate-500 uppercase tracking-widest px-2 mb-2">Workspace</p>
 
@@ -502,6 +507,12 @@
                                 Workspace Members
                             </a>
                         @endif
+                        @can('createMember', App\Models\Invitation::class)
+                            <a href="{{ route('invitations.manage.index') }}"
+                                class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white text-sm transition {{ request()->is('workspace/invitations*') ? 'bg-brand-500/10 text-brand-400' : '' }}">
+                                Invitations
+                            </a>
+                        @endcan
                         @can('viewAny', App\Models\TenantRole::class)
                             <a href="{{ route('hierarchies.index') }}"
                                 class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white text-sm transition {{ request()->is('hierarchies*') ? 'bg-brand-500/10 text-brand-400' : '' }}">
@@ -679,7 +690,6 @@
             @include('partials.chat-browse-ui')
             @include('partials.ct-markdown-script')
             @include('partials.ct-code-suggest')
-            @include('partials.ct-monaco-fence')
             @include('partials.ct-media-export-script')
             @include('partials.ct-media-player-script')
         @endunless

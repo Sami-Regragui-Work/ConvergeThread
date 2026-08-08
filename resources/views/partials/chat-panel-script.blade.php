@@ -1,6 +1,12 @@
 @verbatim
 <script>
     function chatPanel(config) {
+        // CodeMirror editor handles must NOT live in Alpine's reactive data: Vue's
+        // reactive() proxies any object read through it, and calls on the proxied
+        // editor/view hang the main thread. Keep them in closure variables and
+        // reach them through method calls (method return values are never proxied).
+        let _cmEditor = null;
+        let _cmFenceRange = null;
         return {
             messages: config.messages ?? config.replies ?? [],
             participants: config.participants ?? [],
@@ -65,20 +71,22 @@
             codeSuggestPrefix: '',
             codeSuggestStart: 0,
             activeCodeSuggestIndex: -1,
-            monacoFenceActive: false,
-            monacoFenceLang: '',
-            monacoFenceLoading: false,
-            monacoFenceError: '',
+            fenceEditorActive: false,
+            fenceEditorLang: '',
+            fenceEditorLoading: false,
+            fenceEditorError: '',
             showCodeEditorButton: false,
-            _monacoEditor: null,
-            _monacoFenceRange: null,
-            _monacoWakeTimer: null,
-            _monacoSyncing: false,
-            _monacoSyncRaf: 0,
-            _monacoResizeObserver: null,
-            _monacoDisposed: true,
-            _monacoFailed: false,
-            _monacoWaking: false,
+            _cmEditorRef() { return _cmEditor; },
+            _cmEditorSet(v) { _cmEditor = v; },
+            _cmFenceRangeRef() { return _cmFenceRange; },
+            _cmFenceRangeSet(v) { _cmFenceRange = v; },
+            _fenceWakeTimer: null,
+            _fenceSyncing: false,
+            _fenceLangWatch: null,
+            _fenceSyncRaf: 0,
+            _fenceDisposed: true,
+            _fenceFailed: false,
+            _fenceWaking: false,
             showSelectedPicker: false,
             mentionFilter: '',
             activeMentionIndex: -1,
@@ -235,7 +243,7 @@
             setDraftFormat(format) {
                 this.draftFormat = format === 'markdown' ? 'markdown' : 'plain';
                 if (this.draftFormat !== 'markdown') {
-                    this.sleepMonacoFence(false);
+                    this.sleepFenceEditor(false);
                     this.closeCodeSuggest();
                 }
                 if (this.draftFormat === 'markdown' && localStorage.getItem('ct_md_guide') !== '0') {
@@ -1586,48 +1594,49 @@
             },
 
             onDraftCaret() {
-                this.syncMonacoFencePresence();
-                if (!this.monacoFenceActive) {
+                this.syncFenceEditorPresence();
+                if (!this.fenceEditorActive) {
                     this.onDraftInput();
                 }
             },
 
-            syncMonacoFencePresence() {
-                if (this._monacoSyncing || this._monacoFailed || this._monacoWaking) return;
-                // While Monaco owns the fence, ignore textarea caret — overwriting the
-                // range from the textarea was corrupting ```js → ```j and crashing getPositionAt.
-                if (this.monacoFenceActive && this._monacoEditor) {
+            syncFenceEditorPresence() {
+                if (this._fenceSyncing || this._fenceFailed || this._fenceWaking) return;
+                // While the CodeMirror fence editor owns the fence, ignore textarea
+                // caret — overwriting the range from the textarea was corrupting
+                // ```js → ```j and crashing the editor.
+                if (this.fenceEditorActive && this._cmEditorRef()) {
                     this.showCodeEditorButton = false;
                     return;
                 }
-                if (this.draftFormat !== 'markdown' || !window.ctMonacoFence?.preferMonaco?.()) {
-                    if (this.monacoFenceActive) this.sleepMonacoFence(false);
+                if (this.draftFormat !== 'markdown') {
+                    if (this.fenceEditorActive) this.sleepFenceEditor(false);
                     this.showCodeEditorButton = false;
                     return;
                 }
                 const el = this.$refs.draftInput;
                 const caret = el?.selectionStart ?? this.draft.length;
                 const inFence = !!this.getCodeFenceRange(this.draft, caret);
-                this.showCodeEditorButton = inFence && !this._monacoFailed;
-                if (!inFence && this.monacoFenceActive) {
-                    this.sleepMonacoFence(false);
+                this.showCodeEditorButton = inFence && !this._fenceFailed;
+                if (!inFence && this.fenceEditorActive) {
+                    this.sleepFenceEditor(false);
                 }
             },
 
             openCodeEditor() {
-                if (this._monacoFailed || this.monacoFenceActive) return;
+                if (this._fenceFailed || this.fenceEditorActive) return;
                 const el = this.$refs.draftInput;
                 const caret = el?.selectionStart ?? this.draft.length;
                 const range = this.getCodeFenceRange(this.draft, caret);
                 if (!range) return;
-                this.wakeMonacoFence(range);
+                this.wakeFenceEditor(range);
             },
 
             replaceFenceBody(bodyText, range) {
-                const r = range || this._monacoFenceRange;
+                const r = range || this._cmFenceRangeRef();
                 if (!r) return;
                 // Re-derive from the current draft so offsets never go stale (a stale
-                // bodyStart/bodyEnd was the source of the piece-tree crash in Monaco).
+                // bodyStart/bodyEnd was the source of a piece-tree crash in the old editor).
                 const caret = Math.max(0, Math.min(r.bodyStart, this.draft.length));
                 const live = this.getCodeFenceRange(this.draft, caret);
                 if (!live) return;
@@ -1635,211 +1644,191 @@
                 const after = this.draft.slice(live.bodyEnd);
                 // Refuse sync that would eat into the opening fence marker.
                 if (!/(^|\n)```[^\n]*\n$/.test(before) && !/(^|\n)```[^\n]*$/.test(before)) {
-                    console.warn('[monaco] refused fence sync — bodyStart looks wrong');
+                    console.warn('[ct-fence] refused fence sync — bodyStart looks wrong');
                     return;
                 }
                 const body = String(bodyText ?? '');
-                this._monacoSyncing = true;
+                this._fenceSyncing = true;
                 this.draft = before + body + after;
                 const nextEnd = live.bodyStart + body.length;
-                this._monacoFenceRange = { ...live, bodyEnd: nextEnd };
+                this._cmFenceRangeSet({ ...live, bodyEnd: nextEnd });
                 this.$nextTick(() => {
-                    this._monacoSyncing = false;
+                    this._fenceSyncing = false;
                     this.autoResizeDraft();
                 });
             },
 
-            async wakeMonacoFence(range) {
+            async wakeFenceEditor(range) {
                 if (!range || this.draftFormat !== 'markdown') return;
-                if (!window.ctMonacoFence?.preferMonaco?.()) return;
-                if (!window.ctMonacoFence?.loadMonaco) return;
-                if (this._monacoWaking) return;
+                if (!window.ctFenceEditor?.create) return;
+                if (this._fenceWaking) return;
 
-                clearTimeout(this._monacoWakeTimer);
+                clearTimeout(this._fenceWakeTimer);
                 this.closeCodeSuggest();
                 this.closeMentionMenu();
 
-                if (this.monacoFenceActive && this._monacoEditor && this._monacoFenceRange?.openStart === range.openStart) {
-                    try { this._monacoEditor.focus(); } catch (e) {}
+                if (this.fenceEditorActive && this._cmEditorRef() && this._cmFenceRangeRef()?.openStart === range.openStart) {
+                    try { this._cmEditorRef().focus(); } catch (e) {}
                     return;
                 }
 
-                this._monacoWaking = true;
+                this._fenceWaking = true;
                 try {
-                    this.disposeMonacoEditor();
+                    this.disposeFenceEditor();
 
-                    this.monacoFenceActive = true;
-                    this.monacoFenceLoading = true;
-                    this.monacoFenceError = '';
-                    this.monacoFenceLang = range.lang || 'plain';
-                    this._monacoFenceRange = { ...range };
-                    this._monacoDisposed = false;
+                    this.fenceEditorActive = true;
+                    this.fenceEditorLoading = true;
+                    this.fenceEditorError = '';
+                    this.fenceEditorLang = range.lang || 'plain';
+                    this._cmFenceRangeSet({ ...range });
+                    this._fenceDisposed = false;
 
                     await this.$nextTick();
                     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-                    const wrapper = this.$refs.monacoFenceHost;
-                    if (!wrapper || this._monacoDisposed) {
-                        this.monacoFenceLoading = false;
+                    const wrapper = this.$refs.fenceEditorHost;
+                    if (!wrapper || this._fenceDisposed) {
+                        this.fenceEditorLoading = false;
                         return;
                     }
-                    // Fresh container every mount — clears Monaco's data-mp context so we
-                    // never double-mount onto a poisoned host ("Element already has context").
+                    // Fresh container every mount so we never double-mount onto a
+                    // poisoned host.
                     wrapper.replaceChildren();
                     const host = document.createElement('div');
                     host.className = 'h-52 w-full';
                     wrapper.appendChild(host);
                     wrapper.classList.remove('hidden');
 
-                    const monaco = await window.ctMonacoFence.loadMonaco();
-                    if (this._monacoDisposed || !this.$refs.monacoFenceHost) {
-                        this.monacoFenceLoading = false;
+                    // Re-read range from current draft in case it changed while waking.
+                    const live = this.getCodeFenceRange(this.draft, range.bodyStart) || range;
+                    this._cmFenceRangeSet({ ...live });
+                    const body = this.draft.slice(live.bodyStart, live.bodyEnd);
+                    const el = this.$refs.draftInput;
+                    const caret = el?.selectionStart ?? live.bodyStart;
+                    const offset = Math.max(0, Math.min(caret - live.bodyStart, body.length));
+
+                    const view = await window.ctFenceEditor.create({
+                        host,
+                        value: body,
+                        language: live.lang,
+                        onChange: (value) => this.syncFenceEditorToDraft(value),
+                        onEscape: () => this.sleepFenceEditor(true),
+                        onDone: () => this.sleepFenceEditor(false),
+                    });
+                    if (this._fenceDisposed || !this.$refs.fenceEditorHost) {
+                        try { view.destroy(); } catch (e) {}
+                        this.fenceEditorLoading = false;
                         return;
                     }
-
-                    // Re-read range from current draft in case it changed while loading.
-                    const live = this.getCodeFenceRange(this.draft, range.bodyStart) || range;
-                    this._monacoFenceRange = { ...live };
-                    const body = this.draft.slice(live.bodyStart, live.bodyEnd);
-                    const language = window.ctMonacoFence.monacoLanguage(live.lang);
-
-                    this._monacoEditor = monaco.editor.create(host, {
-                        value: body,
-                        language,
-                        theme: 'vs-dark',
-                        automaticLayout: false,
-                        minimap: { enabled: false },
-                        fontSize: 13,
-                        lineNumbers: 'on',
-                        scrollBeyondLastLine: false,
-                        wordWrap: 'on',
-                        tabSize: 4,
-                        insertSpaces: true,
-                        renderLineHighlight: 'line',
-                        padding: { top: 8, bottom: 8 },
-                        overviewRulerLanes: 0,
-                        folding: false,
-                        quickSuggestions: false,
-                        suggestOnTriggerCharacters: false,
-                        wordBasedSuggestions: false,
-                        snippetSuggestions: 'none',
-                        ariaLabel: 'Code editor',
-                    });
-
-                    this.installMonacoResizeObserver();
-
-                    this._monacoEditor.onDidChangeModelContent(() => {
-                        if (!this._monacoEditor || this._monacoDisposed) return;
-                        this.syncMonacoToDraft();
-                    });
-                    this._monacoEditor.addCommand(monaco.KeyCode.Escape, () => {
-                        this.sleepMonacoFence(true);
-                    });
-                    this._monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
-                        this.sleepMonacoFence(false);
-                    });
+                    this._cmEditorSet(view);
 
                     try {
-                        const model = this._monacoEditor.getModel();
-                        if (model) {
-                            const max = model.getValueLength();
-                            const el = this.$refs.draftInput;
-                            const caret = el?.selectionStart ?? live.bodyStart;
-                            const offset = Math.max(0, Math.min(caret - live.bodyStart, max));
-                            if (max > 0 || offset === 0) {
-                                this._monacoEditor.setPosition(model.getPositionAt(offset));
-                            }
-                            this._monacoEditor.focus();
-                        }
-                    } catch (posErr) {
-                        console.warn('[monaco] setPosition skipped', posErr);
-                        try { this._monacoEditor.focus(); } catch (e) {}
-                    }
+                        view.dispatch({ selection: { anchor: offset }, scrollIntoView: true });
+                    } catch (e) {}
+                    view.focus();
 
-                    this.monacoFenceLoading = false;
-                    this.$nextTick(() => {
-                        try { this._monacoEditor?.layout?.(); } catch (e) {}
-                    });
+                    if (this._fenceLangWatch) { this._fenceLangWatch(); }
+                    this._fenceLangWatch = this.$watch('draft', () => this.syncFenceEditorLanguage());
+
+                    this.fenceEditorLoading = false;
                 } catch (e) {
-                    console.error('[monaco]', e);
-                    this._monacoFailed = true;
-                    this.monacoFenceLoading = false;
-                    this.monacoFenceError = 'Code editor unavailable — using text suggestions instead.';
-                    this.sleepMonacoFence(false);
+                    console.error('[ct-fence]', e);
+                    this._fenceFailed = true;
+                    this.fenceEditorLoading = false;
+                    this.fenceEditorError = 'Code editor unavailable — using text suggestions instead.';
+                    this.sleepFenceEditor(false);
                     setTimeout(() => {
-                        if (!this.monacoFenceActive) this.monacoFenceError = '';
+                        this._fenceFailed = false;
+                        if (!this.fenceEditorActive) this.fenceEditorError = '';
                     }, 4000);
                 } finally {
-                    this._monacoWaking = false;
+                    this._fenceWaking = false;
                 }
             },
 
-            /** Coalesce rapid Monaco keystrokes into one draft update. */
-            syncMonacoToDraft() {
-                if (this._monacoSyncRaf) cancelAnimationFrame(this._monacoSyncRaf);
-                this._monacoSyncRaf = requestAnimationFrame(() => {
-                    this._monacoSyncRaf = 0;
-                    if (!this._monacoEditor || this._monacoDisposed) return;
-                    this.replaceFenceBody(this._monacoEditor.getValue(), this._monacoFenceRange);
+            /** Recoalesce rapid CodeMirror changes into one draft update. */
+            syncFenceEditorToDraft(value) {
+                if (this._fenceSyncRaf) cancelAnimationFrame(this._fenceSyncRaf);
+                this._fenceSyncRaf = requestAnimationFrame(() => {
+                    this._fenceSyncRaf = 0;
+                    const view = this._cmEditorRef();
+                    if (!view || this._fenceDisposed) return;
+                    this.replaceFenceBody(value, this._cmFenceRangeRef());
                 });
             },
 
-            disposeMonacoEditor() {
-                this._monacoDisposed = true;
-                if (this._monacoResizeObserver) {
-                    try { this._monacoResizeObserver.disconnect(); } catch (e) {}
-                    this._monacoResizeObserver = null;
+            /** While the editor is open, react to the user editing the fence opener
+             *  (e.g. ```php → ```js) by reconfiguring the CodeMirror language live. */
+            syncFenceEditorLanguage() {
+                const view = this._cmEditorRef();
+                const rng = this._cmFenceRangeRef();
+                if (!view || !rng || this._fenceDisposed) return;
+                const live = this.getCodeFenceRange(this.draft, rng.bodyStart);
+                if (!live || !live.lang) return;
+                if (live.lang === this.fenceEditorLang) return;
+                this.fenceEditorLang = live.lang;
+                if (!window.ctFenceEditor?.setLanguage) return;
+                window.ctFenceEditor.setLanguage(view, live.lang).catch((e) => console.error('[ct-fence]', e));
+            },
+
+            onFenceLangChange() {
+                const raw = String(this.fenceEditorLang ?? '').trim();
+                const lang = (window.ctCodeSuggest?.normalizeLang?.(raw) || raw || 'plain');
+                this.fenceEditorLang = lang;
+                const view = this._cmEditorRef();
+                const rng = this._cmFenceRangeRef();
+                if (!view || !rng || this._fenceDisposed || lang === rng.lang) return;
+                const before = this.draft.slice(0, rng.openStart);
+                const after = this.draft.slice(rng.openStart);
+                const nl = after.indexOf('\n');
+                const rest = nl === -1 ? '' : after.slice(nl + 1);
+                this.draft = before + '```' + lang + '\n' + rest;
+                const live = this.getCodeFenceRange(this.draft, rng.openStart + lang.length + 4);
+                if (live) this._cmFenceRangeSet({ ...live });
+                window.ctFenceEditor.setLanguage(view, lang).catch((e) => console.error('[ct-fence]', e));
+            },
+
+            disposeFenceEditor() {
+                this._fenceDisposed = true;
+                if (this._fenceLangWatch) {
+                    this._fenceLangWatch();
+                    this._fenceLangWatch = null;
                 }
-                if (this._monacoSyncRaf) {
-                    cancelAnimationFrame(this._monacoSyncRaf);
-                    this._monacoSyncRaf = 0;
+                if (this._fenceSyncRaf) {
+                    cancelAnimationFrame(this._fenceSyncRaf);
+                    this._fenceSyncRaf = 0;
                 }
-                if (this._monacoEditor) {
-                    try { this._monacoEditor.dispose(); } catch (e) {}
-                    this._monacoEditor = null;
+                const view = this._cmEditorRef();
+                if (view) {
+                    try { view.destroy(); } catch (e) {}
+                    this._cmEditorSet(null);
                 }
-                const wrapper = this.$refs.monacoFenceHost;
+                const wrapper = this.$refs.fenceEditorHost;
                 if (wrapper) {
                     try { wrapper.replaceChildren(); } catch (e) {}
                 }
             },
 
-            installMonacoResizeObserver() {
-                const wrapper = this.$refs.monacoFenceHost;
-                if (!wrapper || typeof ResizeObserver === 'undefined') return;
-                this._monacoResizeObserver = new ResizeObserver(() => {
-                    if (this._monacoEditor && !this._monacoDisposed) {
-                        requestAnimationFrame(() => {
-                            try { this._monacoEditor?.layout?.(); } catch (e) {}
-                        });
-                    }
-                });
-                this._monacoResizeObserver.observe(wrapper);
-            },
-
-            sleepMonacoFence(focusTextarea = false) {
-                clearTimeout(this._monacoWakeTimer);
+            sleepFenceEditor(focusTextarea = false) {
+                clearTimeout(this._fenceWakeTimer);
                 let caretInBody = null;
-                if (this._monacoEditor && this._monacoFenceRange) {
+                const view = this._cmEditorRef();
+                const fenceRange = this._cmFenceRangeRef();
+                if (view && fenceRange) {
                     try {
-                        const value = this._monacoEditor.getValue();
-                        const pos = this._monacoEditor.getPosition();
-                        const model = this._monacoEditor.getModel();
-                        if (model && pos) {
-                            caretInBody = model.getOffsetAt(pos);
-                        }
-                        this.replaceFenceBody(value, this._monacoFenceRange);
+                        caretInBody = view.state.selection.main.head;
+                        this.replaceFenceBody(view.state.doc.toString(), fenceRange);
                     } catch (e) {}
                 }
-                const range = this._monacoFenceRange;
-                this.disposeMonacoEditor();
-                this._monacoFenceRange = null;
-                this.monacoFenceActive = false;
-                this.monacoFenceLoading = false;
-                this.monacoFenceLang = '';
-                this.monacoFenceError = '';
+                const range = this._cmFenceRangeRef();
+                this.disposeFenceEditor();
+                this._cmFenceRangeSet(null);
+                this.fenceEditorActive = false;
+                this.fenceEditorLoading = false;
+                this.fenceEditorLang = '';
+                this.fenceEditorError = '';
                 this.showCodeEditorButton = false;
-                const host = this.$refs.monacoFenceHost;
+                const host = this.$refs.fenceEditorHost;
                 if (host) {
                     try { host.replaceChildren(); } catch (e) {}
                     host.classList.add('hidden');
@@ -1864,7 +1853,7 @@
             },
 
             updateCodeSuggest(force = false) {
-                if (this.monacoFenceActive) {
+                if (this.fenceEditorActive) {
                     this.closeCodeSuggest();
                     return;
                 }
@@ -1962,9 +1951,9 @@
                         const range = this.getCodeFenceRange(this.draft, caret);
                         if (range) {
                             event.preventDefault();
-                            if (window.ctMonacoFence?.preferMonaco?.() && !this.monacoFenceActive && !this._monacoFailed) {
-                                this.wakeMonacoFence(range);
-                            } else if (!this.monacoFenceActive) {
+                            if (window.ctFenceEditor?.create && !this.fenceEditorActive && !this._fenceFailed) {
+                                this.wakeFenceEditor(range);
+                            } else if (!this.fenceEditorActive) {
                                 this.updateCodeSuggest(true);
                             }
                             return;
@@ -1972,9 +1961,9 @@
                     }
                 }
 
-                if (this.monacoFenceActive && event.key === 'Escape') {
+                if (this.fenceEditorActive && event.key === 'Escape') {
                     event.preventDefault();
-                    this.sleepMonacoFence(true);
+                    this.sleepFenceEditor(true);
                     return;
                 }
 
@@ -2416,8 +2405,8 @@
             },
 
             onDraftInput() {
-                this.syncMonacoFencePresence();
-                if (this.monacoFenceActive) {
+                this.syncFenceEditorPresence();
+                if (this.fenceEditorActive) {
                     this.closeCodeSuggest();
                     this.closeMentionMenu();
                     return;
@@ -3997,7 +3986,7 @@
 
             async sendMessage() {
                 if (this.sending) return;
-                this.sleepMonacoFence(false);
+                this.sleepFenceEditor(false);
                 if (!this.draft.trim() && !this.files.length) return;
 
                 this.sending = true;
