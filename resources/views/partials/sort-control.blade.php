@@ -14,7 +14,7 @@
         <span class="text-xs text-slate-500 whitespace-nowrap">{{ $label }}</span>
     @endif
     <select
-        class="bg-surface-300 border border-white/10 text-white text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition"
+        class="max-w-full min-w-0 bg-surface-300 border border-white/10 text-white text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition"
         @change="(() => {
             const url = new URL(window.location.href);
             if ($el.value === '') {

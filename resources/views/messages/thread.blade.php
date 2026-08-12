@@ -94,8 +94,8 @@
                     :style="parentMessage?.user_avatar_color ? 'background-color:' + parentMessage.user_avatar_color : ''"
                     :class="!parentMessage?.user_avatar_color ? 'bg-brand-500/10 text-brand-400' : ''"
                     x-text="parentMessage?.user_initial"></div>
-                <span class="text-sm text-slate-300" x-text="parentMessage?.user_name"></span>
-                <span class="text-xs text-slate-600">
+                <span class="text-sm text-slate-300 truncate min-w-0" x-text="parentMessage?.user_name"></span>
+                <span class="text-xs text-slate-600 shrink-0">
                     <span x-text="formatRelativeTime(parentMessage?.created_at_iso, parentMessage?.created_at)"></span>
                     <span x-show="parentMessage?.is_edited || parentMessage?.updated_at" x-cloak> · edited</span>
                 </span>
@@ -160,7 +160,7 @@
                                 class="px-4 py-2.5 rounded-2xl text-sm italic border border-white/10 bg-surface-200/80 text-slate-400">
                                 <span x-text="'Deleted by ' + (message.deleted_by_name || 'someone')"></span>
                             </div>
-                            <div x-show="editingId !== message.id && !message.is_deleted" class="px-4 py-2.5 rounded-2xl text-sm wrap-break-word transition-shadow"
+                            <div x-show="editingId !== message.id && !message.is_deleted" class="px-4 py-2.5 rounded-2xl text-sm break-words transition-shadow"
                                 :class="message.user_id === currentUserId ? 'bg-brand-500 text-white rounded-tr-sm' : 'bg-surface-100 text-slate-200 rounded-tl-sm'">
                                 @include('partials.chat-attachments')
                                 <template x-if="message.content_html">

@@ -19,7 +19,7 @@
                 <template x-if="mode === 'edit'">
                     <div>
                         <label class="block text-[11px] text-slate-500 mb-1.5">Accent color</label>
-                        <div class="flex items-center gap-3">
+                        <div class="flex flex-wrap items-center gap-3">
                             <label class="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
                                 <input type="checkbox" x-model="autoColor"
                                     class="rounded border-white/20 bg-surface-400 text-brand-500 focus:ring-brand-500/50">

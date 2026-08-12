@@ -104,7 +104,7 @@
                         @if($canManage && $member->id !== auth()->id() && $roles->isNotEmpty())
                             <form method="POST" action="{{ route('workspace.members.role', $member) }}" class="flex items-center gap-2">
                                 @csrf @method('PATCH')
-                                <select name="tenant_role_id" required class="bg-surface-300 border border-white/10 text-white text-xs rounded-lg px-2 py-1.5 min-w-36">
+                                <select name="tenant_role_id" required class="bg-surface-300 border border-white/10 text-white text-xs rounded-lg px-2 py-1.5 min-w-36 max-w-36 truncate">
                                     @foreach($roles as $role)
                                         <option value="{{ $role->id }}" @selected($member->tenant_role_id == $role->id)>{{ $role->name }}</option>
                                     @endforeach

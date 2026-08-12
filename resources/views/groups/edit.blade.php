@@ -19,7 +19,7 @@
                 <div x-data="{ autoColor: @js(empty($group->accent_color)), color: @js($group->accentColor()) }">
                     <label class="block text-sm font-medium text-slate-300 mb-1.5">Accent color</label>
                     <input type="hidden" name="accent_color" :value="autoColor ? '' : color">
-                    <div class="flex items-center gap-3">
+                    <div class="flex flex-wrap items-center gap-3">
                         <label class="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
                             <input type="checkbox" x-model="autoColor"
                                 class="rounded border-white/20 bg-surface-400 text-brand-500 focus:ring-brand-500/50">

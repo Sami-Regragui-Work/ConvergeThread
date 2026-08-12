@@ -161,7 +161,7 @@
                                     class="px-4 py-2.5 rounded-2xl text-sm italic border border-white/10 bg-surface-200/80 text-slate-400">
                                     <span x-text="'Deleted by ' + (message.deleted_by_name || 'someone')"></span>
                                 </div>
-                                <div x-show="editingId !== message.id && !message.is_deleted" class="px-4 py-2.5 rounded-2xl text-sm wrap-break-word transition-shadow"
+                                <div x-show="editingId !== message.id && !message.is_deleted" class="px-4 py-2.5 rounded-2xl text-sm break-words transition-shadow"
                                     :class="message.user_id === currentUserId ? 'bg-brand-500 text-white rounded-tr-sm' : 'bg-surface-100 text-slate-200 rounded-tl-sm'">
                                     @include('partials.chat-attachments')
                                     <template x-if="message.content_html">

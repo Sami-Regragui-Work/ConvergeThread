@@ -3,10 +3,10 @@
 
 @section('content')
     <div class="max-w-3xl mx-auto space-y-6" data-sync="members,groups,invitations">
-        <div class="flex items-center justify-between gap-3 mb-6">
-            <div class="flex items-center gap-3">
-                <h1 class="text-xl font-bold text-white">Members</h1>
-                <span class="text-xs text-slate-500">{{ $group->name }}</span>
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+            <div class="flex items-center gap-3 min-w-0">
+                <h1 class="text-xl font-bold text-white shrink-0">Members</h1>
+                <span class="text-xs text-slate-500 truncate min-w-0">{{ $group->name }}</span>
             </div>
             @include('partials.sort-control', [
                 'label' => 'Sort',
@@ -57,18 +57,23 @@
             @endphp
             <div class="bg-surface-200 border border-white/5 rounded-2xl px-6 py-5">
                 <h2 class="text-sm font-semibold text-white mb-4">Add existing user</h2>
-                <form method="POST" action="{{ route('groups.members.store', $group) }}" class="flex items-start gap-3">
+                <form method="POST" action="{{ route('groups.members.store', $group) }}"
+                    class="flex flex-col sm:flex-row sm:items-end gap-3">
                     @csrf
                     <div class="flex-1 min-w-0">
-                        @include('partials.member-picker', ['members' => $pickerUsers, 'name' => 'user_ids'])
+                        @include('partials.member-picker', [
+                            'members' => $pickerUsers,
+                            'name' => 'user_ids',
+                            'statusTrailing' => $availableUsers->isNotEmpty()
+                                ? ''
+                                : '<span class="text-slate-500">Everyone in this tenant is already a member.</span>',
+                        ])
                     </div>
                     @if($availableUsers->isNotEmpty())
                         <button type="submit"
                             class="bg-brand-500 hover:bg-brand-600 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition shrink-0">
                             Add selected
                         </button>
-                    @else
-                        <p class="text-xs text-slate-500 py-2.5">Everyone in this tenant is already a member.</p>
                     @endif
                     @error('user_ids')<p class="mt-2 text-xs text-red-400 basis-full">{{ $message }}</p>@enderror
                 </form>

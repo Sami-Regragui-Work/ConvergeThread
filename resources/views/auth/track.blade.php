@@ -52,8 +52,8 @@
                             <span class="text-sm text-slate-300">{{ $tracked->created_at->format('M j, Y H:i') }}</span>
                         </div>
                         <div class="flex items-center justify-between gap-3">
-                            <span class="text-xs text-slate-500">Workspace</span>
-                            <span class="text-sm text-slate-300">{{ $tracked->tenant_slug ?? 'Unassigned' }}</span>
+                            <span class="text-xs text-slate-500 shrink-0">Workspace</span>
+                            <span class="text-sm text-slate-300 min-w-0 truncate">{{ $tracked->tenant_slug ?? 'Unassigned' }}</span>
                         </div>
                         <div class="flex items-center justify-between gap-3">
                             <span class="text-xs text-slate-500">Status</span>

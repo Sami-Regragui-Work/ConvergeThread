@@ -585,8 +585,8 @@
                         <button type="button" @click="$store.chatBrowse.goToMessage(hit)"
                             class="w-full text-left rounded-xl border border-white/5 bg-surface-200/50 hover:bg-white/5 px-3 py-2.5 transition">
                             <div class="flex items-center justify-between gap-2">
-                                <p class="text-xs font-medium text-brand-300" x-text="hit.userName"></p>
-                                <p class="text-[10px] text-slate-500" x-text="$store.chatBrowse.formatWhen(hit.createdAt)"></p>
+                                <p class="text-xs font-medium text-brand-300 truncate min-w-0" x-text="hit.userName"></p>
+                                <p class="text-[10px] text-slate-500 shrink-0" x-text="$store.chatBrowse.formatWhen(hit.createdAt)"></p>
                             </div>
                             <p class="text-sm text-slate-200 mt-1 line-clamp-2" x-text="hit.body || '(no text)'"></p>
                             <p x-show="hit.attachmentNames?.length" class="text-[11px] text-slate-500 mt-1"

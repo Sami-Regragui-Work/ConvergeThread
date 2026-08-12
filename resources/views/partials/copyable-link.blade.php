@@ -25,7 +25,7 @@
         <pre
             class="max-h-32 overflow-auto px-3 py-2.5 font-mono text-xs leading-relaxed text-slate-200 whitespace-pre-wrap break-all select-all">{{ $url }}</pre>
         <a href="{{ $url }}" target="_blank" rel="noopener noreferrer"
-            class="absolute right-2 top-2 rounded-md bg-surface-300/90 px-2 py-0.5 text-[10px] font-medium text-brand-400 opacity-0 transition group-hover:opacity-100 hover:text-brand-300">
+            class="absolute right-2 top-2 rounded-md bg-surface-300/90 px-2 py-0.5 text-[10px] font-medium text-brand-400 sm:opacity-0 transition group-hover:opacity-100 hover:text-brand-300">
             Open
         </a>
     </div>
