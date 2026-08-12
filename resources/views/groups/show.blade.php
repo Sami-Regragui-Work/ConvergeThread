@@ -19,7 +19,7 @@
                     <p class="text-slate-500 text-xs">{{ $memberCount }} members</p>
                 </div>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2">
                 @can('update', $group)
                     <button type="button"
                         onclick="window.__openGroupEdit && window.__openGroupEdit({ name: @js($group->name), color: @js($group->accentColor()), auto: @js(is_null($group->accent_color)), url: @js(route('groups.update', $group)) })"

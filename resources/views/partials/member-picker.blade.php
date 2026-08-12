@@ -4,18 +4,23 @@
     'name' => 'user_ids',
     'open' => false,
     'direction' => 'dropdown',
+    'showStatus' => true,
+    'statusTrailing' => '',
 ])
 
 <div x-data="memberPicker(@js($members), @js($selected), @js($name), @js($open), @js($direction))"
     class="relative w-full">
-    <div class="flex flex-wrap items-center gap-1.5 mb-2 min-h-5">
+    @if($showStatus)
+    <div class="flex flex-wrap items-center gap-x-1.5 gap-y-1 mb-2 min-h-5">
         <template x-for="id in selected" :key="'tag-' + id">
             <span
                 class="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-brand-300/90 bg-brand-500/10 px-1.5 py-0.5 rounded"
                 x-text="labelFor(id)"></span>
         </template>
         <span x-show="!selected.length" class="text-xs text-slate-500">No members selected</span>
+        {!! $statusTrailing !!}
     </div>
+    @endif
 
     <button type="button" x-ref="toggleBtn" @click="toggleOpen()"
         class="w-full inline-flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl border border-white/10 bg-surface-300 text-sm text-slate-300 hover:bg-white/5 transition">

@@ -144,8 +144,8 @@
             </div>
 
             <div class="min-w-0 rounded-2xl border border-white/5 bg-surface-200 shadow-xl shadow-black/10 overflow-hidden">
-                <div class="flex items-center justify-between gap-3 border-b border-white/5 px-6 py-4">
-                    <div>
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 px-6 py-4">
+                    <div class="min-w-0">
                         <h2 class="text-lg font-semibold text-white">Tenants</h2>
                         <p class="text-sm text-slate-400">Public info overview.</p>
                     </div>
@@ -163,7 +163,7 @@
                 </div>
 
                 <div class="overflow-x-auto">
-                    <table class="w-full min-w-0 text-sm">
+                    <table class="w-full min-w-full text-sm">
                             <thead class="bg-white/3 text-slate-400">
                                 <tr>
                                     <th class="px-4 py-3 text-left font-medium">#</th>
@@ -204,7 +204,7 @@
                                             @if ($tenant->id === 1)
                                                 <span class="text-xs text-slate-600">—</span>
                                             @elseif ($tenant->isClosed())
-                                                <div class="flex items-center gap-3">
+                                                <div class="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
                                                     <form method="POST" action="{{ route('owner.tenants.reopen', $tenant) }}">
                                                         @csrf @method('DELETE')
                                                         <button type="submit" class="text-xs text-emerald-400 hover:text-emerald-300">Reopen</button>
@@ -221,7 +221,7 @@
                                                     </form>
                                                 </div>
                                             @else
-                                                <div class="flex items-center gap-3">
+                                                <div class="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
                                                     <form method="POST" action="{{ route('owner.tenants.close', $tenant) }}">
                                                         @csrf
                                                         <button type="submit" class="text-xs text-red-400 hover:text-red-300">Close</button>
@@ -252,8 +252,8 @@
         </section>
 
         <section class="rounded-2xl border border-white/5 bg-surface-200 shadow-xl shadow-black/10 overflow-hidden">
-            <div class="flex items-center justify-between gap-3 border-b border-white/5 px-6 py-4">
-                <div>
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 px-6 py-4">
+                <div class="min-w-0">
                     <h2 class="text-lg font-semibold text-white">Users</h2>
                     <p class="text-sm text-slate-400">Users with tenant and ban information.</p>
                 </div>
@@ -316,7 +316,7 @@
                                 </td>
                                 <td class="px-4 py-3">
                                     @if(!$user->isOwner())
-                                        <div class="flex items-center gap-3">
+                                        <div class="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
                                             @if($user->banned_by_id)
                                                 <form method="POST" action="{{ route('owner.users.unban', $user) }}">
                                                     @csrf @method('DELETE')
@@ -357,8 +357,8 @@
 
         <section class="grid gap-8 2xl:grid-cols-2">
             <div class="rounded-2xl border border-white/5 bg-surface-200 p-6 shadow-xl shadow-black/10">
-                <div class="mb-4 flex items-start justify-between gap-3">
-                    <div>
+                <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+                    <div class="min-w-0">
                         <h2 class="text-lg font-semibold text-white">Groups</h2>
                         <p class="text-sm text-slate-400">Group public info and members.</p>
                     </div>

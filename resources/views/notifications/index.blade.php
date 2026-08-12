@@ -12,12 +12,12 @@
                     .listen('.notifications.unread', refresh);
             }
         ">
-        <div class="flex items-center justify-between gap-4">
-            <div>
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="min-w-0">
                 <h1 class="text-xl font-bold text-white">Notifications</h1>
                 <p class="text-sm text-slate-500 mt-1">Mentions, messages, and workspace updates.</p>
             </div>
-            <div class="flex items-center gap-3 shrink-0">
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-2 shrink-0">
                 @include('partials.sort-control', [
                     'label' => 'Sort',
                     'options' => [

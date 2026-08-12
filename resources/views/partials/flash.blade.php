@@ -61,7 +61,7 @@
             x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-[-1rem]"
             x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-200"
             x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
-            class="fixed top-4 right-4 z-50 max-w-sm w-full min-w-0" x-cloak>
+            class="fixed top-4 inset-x-4 z-50 max-w-sm mx-auto min-w-0" x-cloak>
             @if (session('success'))
                 <div
                     class="flex items-start gap-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-3 rounded-xl shadow-xl backdrop-blur">

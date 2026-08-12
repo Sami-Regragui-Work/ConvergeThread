@@ -54,7 +54,7 @@
                 </template>
                 <template x-if="!mediaViewer.loading && mediaViewer.type === 'text'">
                     <pre
-                        class="mx-auto max-h-[min(78dvh,48rem)] max-w-4xl overflow-auto whitespace-pre-wrap wrap-break-word rounded-xl border border-white/10 bg-zinc-950/90 p-4 font-mono text-[12px] leading-relaxed text-zinc-200"
+                        class="mx-auto max-h-[min(78dvh,48rem)] max-w-4xl overflow-auto whitespace-pre-wrap break-words rounded-xl border border-white/10 bg-zinc-950/90 p-4 font-mono text-[12px] leading-relaxed text-zinc-200"
                         x-text="mediaViewer.bodyText"
                     ></pre>
                 </template>

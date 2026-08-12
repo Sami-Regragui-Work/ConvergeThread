@@ -87,7 +87,7 @@
                             <p class="text-white font-medium text-sm truncate">{{ $group->name }}</p>
                             <p class="text-slate-500 text-xs">{{ $group->active_members_count ?? 0 }} members</p>
                         </div>
-                        <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition">
+                        <div class="flex items-center gap-2 sm:opacity-0 group-hover:opacity-100 transition">
                             {{-- Edit: managers bypass membership; members need update permission --}}
                             @if($managerGroupIds->contains($group->id) || ($memberGroupIds->contains($group->id) && auth()->user()->can('update', $group)))
                                 <button type="button"

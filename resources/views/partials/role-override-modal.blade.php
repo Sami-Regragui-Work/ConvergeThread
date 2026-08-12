@@ -32,15 +32,16 @@
                     </p>
                     <div class="space-y-2 max-h-56 overflow-y-auto rounded-xl border border-white/10 bg-surface-200/50 p-3">
                         <template x-for="perm in permissionOptions" :key="perm.value">
-                            <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer hover:text-white"
+                            <label class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-300 cursor-pointer hover:text-white"
                                 :class="isInherited(perm.value) ? 'opacity-60 cursor-not-allowed' : ''">
                                 <input type="checkbox"
                                     :checked="isInherited(perm.value) || permissions.includes(perm.value)"
                                     :disabled="isInherited(perm.value)"
                                     @change="togglePermission(perm.value)"
-                                    class="rounded border-white/20 bg-surface-400 text-brand-500 focus:ring-brand-500/50">
-                                <span class="text-xs" x-text="perm.label"></span>
-                                <code class="ml-auto font-mono text-[10px] text-slate-500" x-text="perm.value"></code>
+                                    class="shrink-0 rounded border-white/20 bg-surface-400 text-brand-500 focus:ring-brand-500/50">
+                                <span class="text-xs min-w-0" x-text="perm.label"></span>
+                                <code class="ml-auto font-mono text-[10px] text-slate-500 truncate min-w-0"
+                                    x-text="perm.value"></code>
                                 <span class="shrink-0 text-[10px] text-slate-500" x-show="isInherited(perm.value)">from base role</span>
                             </label>
                         </template>

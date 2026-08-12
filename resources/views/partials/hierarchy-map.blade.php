@@ -127,12 +127,16 @@
     </div>
 
     {{-- Viewport --}}
-    <div x-ref="viewport" class="relative overflow-hidden select-none"
+    <div x-ref="viewport" class="relative overflow-hidden select-none touch-none"
         style="height: 540px"
         @mousedown="startPan($event)"
         @wheel.prevent="onWheel($event)"
         @mousemove.window="onMove($event)"
         @mouseup.window="onUp($event)"
+        @touchstart="startTouch($event)"
+        @touchmove.window="touchMove($event)"
+        @touchend.window="touchEnd($event)"
+        @touchcancel.window="touchEnd($event)"
         :class="drag ? 'cursor-grabbing' : 'cursor-grab'">
 
         {{-- World --}}
@@ -161,6 +165,7 @@
                         : (node.kind === 'group' ? 'border-indigo-400/30' : (node.kind === 'role' ? 'border-purple-400/30' : 'border-white/10'))"
                     :style="nodeStyle(node)"
                     @mousedown.stop.prevent="startNodeDrag(node, $event)"
+                    @touchstart.stop="startNodeTouch(node, $event)"
                     @click.stop="select(node)">
                     <div class="flex items-center gap-2">
                         <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-brand-500/20 text-brand-300 text-[11px] font-bold shrink-0"
@@ -212,8 +217,8 @@
 
         {{-- Selected node actions --}}
         <div x-show="selectedId && selected()" x-cloak
-            class="absolute inset-x-3 bottom-3 z-10 bg-surface-300 border border-white/10 rounded-2xl shadow-2xl p-4 space-y-3 max-h-72 overflow-y-auto"
-            @mousedown.stop @wheel.stop>
+            class="absolute inset-x-3 bottom-3 z-10 bg-surface-300 border border-white/10 rounded-2xl shadow-2xl p-4 space-y-3 max-h-72 overflow-y-auto touch-pan-y"
+            @mousedown.stop @wheel.stop @touchstart.stop @touchmove.stop>
             <div class="flex items-center justify-between gap-3">
                 <div class="flex items-center gap-2 min-w-0">
                     <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-brand-500/20 text-brand-300 text-[11px] font-bold shrink-0"
@@ -371,6 +376,7 @@
             busy: false,
             error: '',
             drag: null,
+            pinch: null,
             memberIds: [],
             parentTargetId: '',
             typeDraft: 'member',
@@ -609,6 +615,54 @@
                     this.resizeWorld();
                 }
                 this.drag = null;
+            },
+
+            touchPoint(e) {
+                const t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]);
+                return t ? { clientX: t.clientX, clientY: t.clientY } : { clientX: 0, clientY: 0 };
+            },
+
+            startTouch(e) {
+                if (e.touches.length >= 2) {
+                    this.pinch = {
+                        dist: Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY),
+                        zoom: this.zoom,
+                    };
+                    this.drag = null;
+                    return;
+                }
+                this.startPan(this.touchPoint(e));
+            },
+
+            touchMove(e) {
+                if (this.pinch && e.touches.length >= 2) {
+                    const a = e.touches[0];
+                    const b = e.touches[1];
+                    const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+                    const cx = (a.clientX + b.clientX) / 2;
+                    const cy = (a.clientY + b.clientY) / 2;
+                    const rect = this.$refs.viewport.getBoundingClientRect();
+                    const vx = cx - rect.left;
+                    const vy = cy - rect.top;
+                    const z = Math.max(0.2, Math.min(2, this.pinch.zoom * (dist / Math.max(1, this.pinch.dist))));
+                    const k = z / this.zoom;
+                    this.pan.x = vx - (vx - this.pan.x) * k;
+                    this.pan.y = vy - (vy - this.pan.y) * k;
+                    this.zoom = z;
+                    return;
+                }
+                if (!this.drag) return;
+                this.onMove(this.touchPoint(e));
+            },
+
+            touchEnd() {
+                this.pinch = null;
+                this.onUp();
+            },
+
+            startNodeTouch(node, e) {
+                if (e.touches.length >= 2) return;
+                this.startNodeDrag(node, this.touchPoint(e));
             },
 
             edgeD(node) {
