@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Group;
 use App\Models\RoleHierarchy;
 use App\Models\RoleHierarchyLevel;
 use App\Models\Tenant;
@@ -31,7 +32,7 @@ class RoleHierarchyService
 
     public function systemRankForRole(?TenantRole $role): int
     {
-        if (!$role) {
+        if (! $role) {
             return 0;
         }
 
@@ -74,7 +75,7 @@ class RoleHierarchyService
             return true;
         }
 
-        if ($this->isTenantFounder($target) && !$this->isTenantFounder($actor)) {
+        if ($this->isTenantFounder($target) && ! $this->isTenantFounder($actor)) {
             return false;
         }
 
@@ -87,11 +88,11 @@ class RoleHierarchyService
 
     public function canAssignRole(User $actor, User $target, TenantRole $role): bool
     {
-        if (!$role->isUsableByTenant($actor->tenant_id)) {
+        if (! $role->isUsableByTenant($actor->tenant_id)) {
             return false;
         }
 
-        if (!$this->canManageUser($actor, $target)) {
+        if (! $this->canManageUser($actor, $target)) {
             return false;
         }
 
@@ -107,7 +108,7 @@ class RoleHierarchyService
             return false;
         }
 
-        if ($role->name === 'Admin' && !$this->isTenantFounder($actor)) {
+        if ($role->name === 'Admin' && ! $this->isTenantFounder($actor)) {
             return false;
         }
 
@@ -123,7 +124,7 @@ class RoleHierarchyService
 
         if ($target === null) {
             return $roles->filter(function (TenantRole $role) use ($actor) {
-                if ($role->name === 'Admin' && !$this->isTenantFounder($actor)) {
+                if ($role->name === 'Admin' && ! $this->isTenantFounder($actor)) {
                     return false;
                 }
 
@@ -138,7 +139,7 @@ class RoleHierarchyService
 
     public function assertCanAssignRole(User $actor, User $target, TenantRole $role): void
     {
-        if (!$this->canAssignRole($actor, $target, $role)) {
+        if (! $this->canAssignRole($actor, $target, $role)) {
             throw new InvalidArgumentException('You cannot assign this role to this member.');
         }
     }
@@ -153,10 +154,16 @@ class RoleHierarchyService
             ->get();
 
         foreach ($shared as $hierarchy) {
-            $actorLevel = $this->levelInHierarchy($hierarchy, $actor);
-            $targetLevel = $this->levelInHierarchy($hierarchy, $target);
+            $actorNode = $this->nodeInHierarchy($hierarchy, $actor);
+            $targetNode = $this->nodeInHierarchy($hierarchy, $target);
 
-            if ($actorLevel !== null && $targetLevel !== null && $actorLevel >= $targetLevel) {
+            if ($actorNode === null || $targetNode === null) {
+                continue;
+            }
+
+            // Only a vertical (ancestor / descendant) relation blocks:
+            // members in unrelated branches may both be managed by a third party.
+            if ($this->isAncestorOrSelf($actorNode, $targetNode)) {
                 return true;
             }
         }
@@ -164,13 +171,312 @@ class RoleHierarchyService
         return false;
     }
 
-    private function levelInHierarchy(RoleHierarchy $hierarchy, User $user): ?int
+    private function nodeInHierarchy(RoleHierarchy $hierarchy, User $user): ?RoleHierarchyLevel
     {
         foreach ($hierarchy->levels as $level) {
             if ($level->members->contains('id', $user->id)) {
-                return $level->level;
+                return $level;
             }
         }
+
+        return null;
+    }
+
+    private function isAncestorOrSelf(RoleHierarchyLevel $ancestor, RoleHierarchyLevel $node): bool
+    {
+        if ((int) $ancestor->id === (int) $node->id) {
+            return true;
+        }
+
+        $current = $node;
+
+        while ($current->parent_id !== null) {
+            $parent = $current->parent;
+
+            if (! $parent) {
+                break;
+            }
+
+            if ((int) $parent->id === (int) $ancestor->id) {
+                return true;
+            }
+
+            $current = $parent;
+        }
+
+        return false;
+    }
+
+    /**
+     * Create a node (level) in a hierarchy. $parent === null creates an
+     * unlinked top-level node (level 0) that can hold anyone until it is
+     * linked under another node (linking runs the contradiction checks).
+     */
+    public function createNode(
+        RoleHierarchy $hierarchy,
+        ?RoleHierarchyLevel $parent = null,
+        string $kind = 'member',
+        ?int $groupId = null,
+        ?int $roleId = null
+    ): RoleHierarchyLevel {
+        return RoleHierarchyLevel::create([
+            'role_hierarchy_id' => $hierarchy->id,
+            'parent_id' => $parent?->id,
+            'level' => $parent ? (int) $parent->level + 1 : 0,
+            'kind' => $kind,
+            'group_id' => $groupId,
+            'role_id' => $roleId,
+        ]);
+    }
+
+    /**
+     * Recompute the depth (level) of a node and every descendant.
+     */
+    public function recomputeLevels(RoleHierarchyLevel $node): void
+    {
+        $all = RoleHierarchyLevel::where('role_hierarchy_id', $node->role_hierarchy_id)
+            ->get(['id', 'parent_id']);
+
+        $this->applyLevel($node, $all);
+    }
+
+    private function applyLevel(RoleHierarchyLevel $node, Collection $all): void
+    {
+        $node->update(['level' => $node->parent_id ? (int) $node->parent()->value('level') + 1 : 0]);
+
+        foreach ($all->where('parent_id', $node->id) as $child) {
+            $this->applyLevel($child, $all);
+        }
+    }
+
+    /**
+     * All user ids on the path a new member of $node would occupy
+     * (ancestors + node + descendants). A user must not appear twice
+     * on the same root→leaf path.
+     */
+    private function pathOccupantUserIds(RoleHierarchyLevel $node): Collection
+    {
+        $all = RoleHierarchyLevel::where('role_hierarchy_id', $node->role_hierarchy_id)
+            ->with(['group', 'members:id'])
+            ->get();
+
+        $ids = collect();
+
+        foreach ($node->ancestorIds() as $id) {
+            $ids = $ids->merge($all->firstWhere('id', $id)?->occupantUserIds() ?? collect());
+        }
+
+        $ids = $ids->merge($node->occupantUserIds());
+
+        foreach ($node->subtreeIds($all)->filter(fn ($id) => $id !== (int) $node->id) as $id) {
+            $ids = $ids->merge($all->firstWhere('id', $id)?->occupantUserIds() ?? collect());
+        }
+
+        return $ids->unique();
+    }
+
+    /**
+     * Return the subset of $userIds that already sit on $node's vertical path
+     * and therefore cannot be placed here.
+     *
+     * @param  array<int>  $userIds
+     */
+    public function rejectedUserIds(RoleHierarchyLevel $node, array $userIds): array
+    {
+        if (! $userIds) {
+            return [];
+        }
+
+        $onPath = $this->pathOccupantUserIds($node);
+
+        return collect($userIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $onPath->contains($id))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Return the subset of $roleIds that already sit on $node's vertical path.
+     *
+     * @param  array<int>  $roleIds
+     */
+    public function rejectedRoleIds(RoleHierarchyLevel $node, array $roleIds): array
+    {
+        if (! $roleIds) {
+            return [];
+        }
+
+        $all = RoleHierarchyLevel::where('role_hierarchy_id', $node->role_hierarchy_id)
+            ->get(['id', 'parent_id', 'role_id']);
+
+        $onPath = collect([$node->role_id])
+            ->merge($node->ancestorIds()->map(fn ($id) => $all->firstWhere('id', $id)?->role_id))
+            ->filter();
+
+        foreach ($node->subtreeIds($all)->filter(fn ($id) => $id !== (int) $node->id) as $id) {
+            $onPath->push($all->firstWhere('id', $id)?->role_id);
+        }
+
+        return collect($roleIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $onPath->unique()->contains($id))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Link $node under $parent (null unlinks it back into a top-level node).
+     *
+     * @return array<string> human-readable contradictions, empty on success
+     */
+    public function linkNode(RoleHierarchyLevel $node, ?RoleHierarchyLevel $parent): array
+    {
+        if ($parent && (int) $parent->id === (int) $node->id) {
+            return ['A node cannot be its own parent.'];
+        }
+
+        if ($parent) {
+            $all = RoleHierarchyLevel::where('role_hierarchy_id', $node->role_hierarchy_id)
+                ->get(['id', 'parent_id']);
+
+            if ($node->subtreeIds($all)->contains((int) $parent->id)) {
+                return ['That would create a circular link (the target is inside this node already).'];
+            }
+        }
+
+        if ($node->kind === 'role') {
+            $conflicts = $this->linkedRoleConflicts($node, $parent);
+        } else {
+            $conflicts = $this->linkedUserConflicts($node, $parent);
+        }
+
+        if ($conflicts->isNotEmpty()) {
+            return ['Contradiction: '.$conflicts->join(', ').' already sit in an ancestor/descendant position.'];
+        }
+
+        $node->parent_id = $parent?->id;
+        $node->save();
+
+        $this->recomputeLevels($node);
+
+        return [];
+    }
+
+    /**
+     * Insert a brand-new empty level above $node. The new level inherits the
+     * node's current position (same parent) and $node moves one step down.
+     * Since the new level holds nobody, no contradiction checks are needed.
+     */
+    public function addParentLevel(RoleHierarchyLevel $node): RoleHierarchyLevel
+    {
+        $kind = $node->hierarchy->kind === 'role' ? 'role' : 'member';
+
+        $parent = RoleHierarchyLevel::create([
+            'role_hierarchy_id' => $node->role_hierarchy_id,
+            'parent_id' => $node->parent_id,
+            'level' => $node->parent_id ? (int) $node->parent()->value('level') + 1 : 0,
+            'kind' => $kind,
+        ]);
+
+        $node->parent_id = $parent->id;
+        $node->save();
+
+        $this->recomputeLevels($node);
+
+        return $parent;
+    }
+
+    private function linkedUserConflicts(RoleHierarchyLevel $node, ?RoleHierarchyLevel $parent): Collection
+    {
+        $all = RoleHierarchyLevel::where('role_hierarchy_id', $node->role_hierarchy_id)
+            ->with(['group', 'members:id'])
+            ->get();
+
+        $nodeUsers = collect();
+        foreach ($node->subtreeIds($all) as $id) {
+            $nodeUsers = $nodeUsers->merge($all->firstWhere('id', $id)?->occupantUserIds() ?? collect());
+        }
+
+        $parentChain = collect();
+        $cursor = $parent;
+        while ($cursor) {
+            $parentChain = $parentChain->merge($cursor->occupantUserIds());
+            $cursor = $all->firstWhere('id', $cursor->parent_id);
+        }
+
+        $overlap = $nodeUsers->unique()->filter(fn ($uid) => $parentChain->contains($uid));
+
+        return User::whereIn('id', $overlap)->pluck('display_name');
+    }
+
+    private function linkedRoleConflicts(RoleHierarchyLevel $node, ?RoleHierarchyLevel $parent): Collection
+    {
+        $all = RoleHierarchyLevel::where('role_hierarchy_id', $node->role_hierarchy_id)
+            ->get(['id', 'parent_id', 'role_id']);
+
+        $nodeRoles = collect();
+        foreach ($node->subtreeIds($all) as $id) {
+            $nodeRoles->push($all->firstWhere('id', $id)?->role_id);
+        }
+
+        $parentChain = collect();
+        $cursor = $parent;
+        while ($cursor) {
+            $parentChain->push($cursor->role_id);
+            $cursor = $all->firstWhere('id', $cursor->parent_id);
+        }
+
+        $overlap = $nodeRoles->filter(fn ($rid) => $rid && $parentChain->contains($rid));
+
+        return TenantRole::whereIn('id', $overlap)->pluck('name');
+    }
+
+    /**
+     * Attach $userIds to a member node. Returns the rejected ids.
+     *
+     * @param  array<int>  $userIds
+     * @return array<int>
+     */
+    public function syncNodeMembers(RoleHierarchyLevel $node, array $userIds): array
+    {
+        $rejected = $this->rejectedUserIds($node, $userIds);
+
+        $node->members()->sync(collect($userIds)->map(fn ($id) => (int) $id)->reject(fn ($id) => in_array($id, $rejected)));
+
+        return $rejected;
+    }
+
+    /**
+     * Point a group node at a group; returns rejected member ids.
+     *
+     * @return array<int>
+     */
+    public function attachGroupToNode(RoleHierarchyLevel $node, Group $group): array
+    {
+        $rejected = $this->rejectedUserIds($node, $group->activeMembers()->pluck('users.id')->all());
+
+        $node->update(['kind' => 'group', 'group_id' => $group->id, 'role_id' => null]);
+        $node->members()->detach();
+
+        return $rejected;
+    }
+
+    /**
+     * Point a role node at a tenant role; returns rejected role ids.
+     */
+    public function attachRoleToNode(RoleHierarchyLevel $node, TenantRole $role): ?int
+    {
+        $rejected = $this->rejectedRoleIds($node, [$role->id]);
+
+        if ($rejected) {
+            return $rejected[0];
+        }
+
+        $node->update(['kind' => 'role', 'role_id' => $role->id, 'group_id' => null]);
+        $node->members()->detach();
 
         return null;
     }

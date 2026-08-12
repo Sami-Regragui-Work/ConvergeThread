@@ -14,6 +14,23 @@
                         class="w-full bg-surface-200 border border-white/10 text-white text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition"
                         placeholder="e.g. Engineering" x-ref="nameInput">
                 </div>
+                <div>
+                    <label class="block text-[11px] text-slate-500 mb-1">Type</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button type="button" @click="kind = 'member'"
+                            :class="kind === 'member' ? 'border-brand-500/60 bg-brand-500/10 text-white' : 'border-white/10 text-slate-400 hover:text-white'"
+                            class="text-left px-3 py-2.5 rounded-xl border text-sm transition">
+                            <span class="block font-medium">Members</span>
+                            <span class="block text-[11px] text-slate-500">People who manage whom.</span>
+                        </button>
+                        <button type="button" @click="kind = 'role'"
+                            :class="kind === 'role' ? 'border-brand-500/60 bg-brand-500/10 text-white' : 'border-white/10 text-slate-400 hover:text-white'"
+                            class="text-left px-3 py-2.5 rounded-xl border text-sm transition">
+                            <span class="block font-medium">Roles</span>
+                            <span class="block text-[11px] text-slate-500">Tenant roles in the tree.</span>
+                        </button>
+                    </div>
+                </div>
                 <p x-show="error" x-cloak class="text-xs text-red-400" x-text="error"></p>
                 <div class="flex justify-end gap-2">
                     <button type="button" @click="close()"
@@ -32,6 +49,7 @@
         return {
             open: false,
             name: '',
+            kind: 'member',
             error: '',
             busy: false,
             storeUrl: @js(route('hierarchies.store')),
@@ -40,6 +58,7 @@
             },
             openCreate() {
                 this.name = '';
+                this.kind = 'member';
                 this.error = '';
                 this.open = true;
                 this.$nextTick(() => this.$refs.nameInput?.focus());
@@ -64,7 +83,7 @@
                             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
                         },
                         credentials: 'same-origin',
-                        body: JSON.stringify({ name: this.name.trim() }),
+                        body: JSON.stringify({ name: this.name.trim(), kind: this.kind }),
                     });
                     const data = await res.json().catch(() => ({}));
                     if (!res.ok) {

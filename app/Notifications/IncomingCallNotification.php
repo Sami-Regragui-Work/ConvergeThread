@@ -17,6 +17,7 @@ class IncomingCallNotification extends Notification
         public readonly string $callType,
         public readonly string $chatLabel,
         public readonly string $url,
+        public readonly ?int $callLogId = null,
     ) {
     }
 
@@ -37,6 +38,8 @@ class IncomingCallNotification extends Notification
             'chatable_id' => $this->chatableId,
             'chat_label' => $this->chatLabel,
             'author_name' => $this->callerName,
+            'stack_count' => 1,
+            'call_log_id' => $this->callLogId,
             'preview' => $kind.' call in '.$this->chatLabel,
             'url' => $this->url,
         ];

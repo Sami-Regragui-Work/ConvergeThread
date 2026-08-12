@@ -7,15 +7,16 @@ use App\Http\Requests\UpdateGroupRequest;
 use App\Models\Group;
 use App\Models\User;
 use App\Services\GroupService;
+use App\Support\SortsLists;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 
 class GroupController extends Controller
 {
-    public function __construct(private GroupService $groupService)
-    {
-    }
+    use SortsLists;
+
+    public function __construct(private GroupService $groupService) {}
 
     /**
      * Display a listing of the resource.
@@ -23,13 +24,20 @@ class GroupController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
         /** @var User */
         $user = Auth::user();
         Gate::authorize('viewAny', Group::class);
 
-        return view('groups.index', $this->groupService->getIndexDataForUser($user));
+        [$sort, $dir] = $this->resolveSort(
+            $request,
+            ['name', 'created_at', 'active_members_count'],
+            'created_at',
+            'asc',
+        );
+
+        return view('groups.index', $this->groupService->getIndexDataForUser($user, $sort, $dir));
     }
 
     /**
@@ -108,7 +116,7 @@ class GroupController extends Controller
         $credentials = $request->validated();
         Gate::authorize('update', $group);
 
-        $group = $this->groupService->updateName($group, $credentials['name']);
+        $group = $this->groupService->update($group, $credentials);
 
         if ($request->wantsJson()) {
             return response()->json([
@@ -116,6 +124,7 @@ class GroupController extends Controller
                 'group' => [
                     'id' => $group->id,
                     'name' => $group->name,
+                    'accent_color' => $group->accent_color,
                 ],
             ]);
         }
@@ -123,19 +132,6 @@ class GroupController extends Controller
         return redirect()
             ->back()
             ->with('success', 'Group updated successfully.');
-    }
-
-    public function join(Group $group)
-    {
-        Gate::authorize('join', $group);
-
-        $user = Auth::user();
-
-        $this->groupService->joinGroup($group, $user);
-
-        return redirect()
-            ->route('groups.show', $group)
-            ->with('success', "You have joined {$group->name}.");
     }
 
     /**

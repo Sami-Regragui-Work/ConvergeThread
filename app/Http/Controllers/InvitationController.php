@@ -11,26 +11,37 @@ use App\Models\Tenant;
 use App\Models\TenantRole;
 use App\Services\InvitationService;
 use App\Support\Flash;
+use App\Support\SortsLists;
 use App\Support\WorkspaceSync;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 
 class InvitationController extends Controller
 {
+    use SortsLists;
+
     public function __construct(
         private readonly InvitationService $invitationService,
     ) {
     }
 
-    public function manage()
+    public function manage(Request $request)
     {
         Gate::authorize('createMember', Invitation::class);
         $user = Auth::user();
 
+        [$sort, $dir] = $this->resolveSort(
+            $request,
+            ['email', 'created_at', 'expires_at'],
+            'created_at',
+            'desc',
+        );
+
         $invitations = Invitation::query()
             ->when(!$user->isOwner(), fn ($query) => $query->where('tenant_id', $user->tenant_id))
             ->with(['tenant', 'group', 'tenantRole', 'invitedBy'])
-            ->latest()
+            ->orderBy($sort, $dir)
             ->get()
             ->groupBy(fn (Invitation $invitation) => $invitation->status());
 

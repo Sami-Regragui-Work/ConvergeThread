@@ -7,6 +7,7 @@ use App\Models\Group;
 use App\Models\GroupRoleOverride;
 use App\Models\TenantRole;
 use App\Services\RoleService;
+use App\Support\Permissions;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 
@@ -26,7 +27,14 @@ class GroupRoleOverrideController extends Controller
                 ->orWhere('is_system', true);
         })->orderBy('name')->get();
 
-        return view('groups.role-overrides.index', compact('overrides', 'group', 'tenantRoles'));
+        $basePermissions = $tenantRoles->mapWithKeys(fn (TenantRole $role) => [
+            (string) $role->id => array_values(array_intersect(
+                Permissions::expand($role->permissions ?? []),
+                Permissions::groupScoped(),
+            )),
+        ]);
+
+        return view('groups.role-overrides.index', compact('overrides', 'group', 'tenantRoles', 'basePermissions'));
     }
 
     public function store(StoreGroupRoleOverrideRequest $request, Group $group)

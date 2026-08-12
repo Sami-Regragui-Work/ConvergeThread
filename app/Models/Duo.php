@@ -51,4 +51,11 @@ class Duo extends Model
     {
         return $this->morphMany(Message::class, 'chatable');
     }
+
+    public function accentColor(): string
+    {
+        $palette = Group::ACCENT_PALETTE;
+
+        return $palette[crc32((string) $this->id) % count($palette)];
+    }
 }

@@ -10,13 +10,17 @@ use App\Models\Group;
 use App\Models\MergeSession;
 use App\Models\Message;
 use App\Models\MessageAttachment;
+use App\Models\MessageHide;
 use App\Models\TenantRole;
 use App\Models\User;
+use App\Services\CallSessionService;
 use App\Services\ChatParticipantService;
+use App\Services\GroupPermissionService;
 use App\Services\MentionService;
 use App\Services\MessageService;
 use App\Services\NotificationStackService;
 use App\Support\MessageEncryption;
+use App\Support\Permissions;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -34,8 +38,7 @@ class MessageController extends Controller
         private readonly MessageService $messageService,
         private readonly MentionService $mentionService,
         private readonly NotificationStackService $notificationStackService,
-    ) {
-    }
+    ) {}
 
     private function payload(
         Message $message,
@@ -47,7 +50,7 @@ class MessageController extends Controller
         $payload = $message->toChatPayload($viewerId);
         $ctx = $renderContext ?? ['roleColors' => [], 'usernameLabels' => [], 'mergeUserLabels' => []];
 
-        if ($payload['content'] && !($payload['is_encrypted'] ?? false) && !MessageEncryption::isEncrypted($payload['content'])) {
+        if ($payload['content'] && ! ($payload['is_encrypted'] ?? false) && ! MessageEncryption::isEncrypted($payload['content'])) {
             $payload['content_html'] = $this->mentionService->renderContentHtml(
                 $payload['content'],
                 $ctx['roleColors'],
@@ -61,21 +64,21 @@ class MessageController extends Controller
 
         $message->loadMissing(['chatable', 'user']);
 
-        if ($chatType === 'merge' && $chatable) {
+        if ($chatType === 'merge' && $chatable && $message->user) {
             $payload['user_name'] = app(ChatParticipantService::class)
                 ->displayLabelFor($message->user, $chatable, $chatType);
         }
 
         $viewer = $viewerId ? Auth::user() : null;
         $payload['can_edit'] = $viewer
-            && !($payload['is_deleted'] ?? false)
+            && ! ($payload['is_deleted'] ?? false)
             && (int) $message->user_id === (int) $viewerId
             && Gate::forUser($viewer)->allows('update', $message);
         $payload['can_delete_everyone'] = $viewer
-            && !($payload['is_deleted'] ?? false)
+            && ! ($payload['is_deleted'] ?? false)
             && Gate::forUser($viewer)->allows('delete', $message);
         $payload['can_delete_for_me'] = $viewer
-            && !($payload['is_deleted'] ?? false)
+            && ! ($payload['is_deleted'] ?? false)
             && Gate::forUser($viewer)->allows('hide', $message);
         $payload['can_delete'] = $payload['can_delete_everyone'] || $payload['can_delete_for_me'];
 
@@ -103,6 +106,24 @@ class MessageController extends Controller
                 'role' => $u->tenantRole?->name,
                 'role_color' => $u->tenantRole?->color,
             ])->values();
+    }
+
+    /**
+     * Meetings are a group/merge-room video call. Every active member may start
+     * one; merge chats have no group-permission model, so any member may host.
+     */
+    private function canStartMeet(string $chatType, Group|Duo|MergeSession $chatable, User $user): bool
+    {
+        if (! in_array($chatType, ['group', 'merge'], true)) {
+            return false;
+        }
+
+        if ($chatType === 'merge') {
+            return true;
+        }
+
+        return app(GroupPermissionService::class)
+            ->hasPermission($chatable, $user, Permissions::GROUP_MEET);
     }
 
     /**
@@ -221,7 +242,7 @@ class MessageController extends Controller
             $chatable->getMorphClass(),
             $chatable->id,
         );
-        $activeCall = app(\App\Services\CallSessionService::class)->active($chatType, (int) $chatId);
+        $activeCall = app(CallSessionService::class)->active($chatType, (int) $chatId);
 
         return view('messages.index', compact(
             'chatable',
@@ -233,7 +254,7 @@ class MessageController extends Controller
             'mentionSuggestions',
             'chatMuted',
             'activeCall',
-        ));
+        ))->with('canMeet', $this->canStartMeet($chatType, $chatable, $user));
     }
 
     public function poll(Request $request, string $chatType, int $chatId)
@@ -433,7 +454,7 @@ class MessageController extends Controller
 
         $user = Auth::user();
         abort_if(
-            \App\Models\MessageHide::query()
+            MessageHide::query()
                 ->where('message_id', $message->id)
                 ->where('user_id', $user->id)
                 ->exists(),
@@ -458,7 +479,7 @@ class MessageController extends Controller
         $participants = $this->mapParticipants($chatable);
         $renderContext = $this->renderContextFor($chatable, $chatType, $user->tenant_id);
 
-        $hiddenIds = \App\Models\MessageHide::query()
+        $hiddenIds = MessageHide::query()
             ->where('user_id', $user->id)
             ->whereIn('message_id', $thread['replies']->pluck('id')->all())
             ->pluck('message_id')
@@ -476,7 +497,7 @@ class MessageController extends Controller
         $mentionSuggestions = $this->mentionSuggestions($chatable, $participants, $user->id, $chatType, $user->tenant_id);
         $parentPayload = $this->payload($thread['message'], $user->id, $renderContext, $chatType, $chatable);
         $threadMuted = $this->notificationStackService->isThreadMuted($user, $message->id);
-        $activeCall = app(\App\Services\CallSessionService::class)->active($chatType, (int) $message->chatable_id);
+        $activeCall = app(CallSessionService::class)->active($chatType, (int) $message->chatable_id);
 
         return view('messages.thread', array_merge($thread, [
             'chatType' => $chatType,
@@ -487,6 +508,7 @@ class MessageController extends Controller
             'parentPayload' => $parentPayload,
             'threadMuted' => $threadMuted,
             'activeCall' => $activeCall,
+            'canMeet' => $this->canStartMeet($chatType, $chatable, $user),
         ]));
     }
 

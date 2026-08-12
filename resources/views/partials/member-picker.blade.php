@@ -7,7 +7,7 @@
 ])
 
 <div x-data="memberPicker(@js($members), @js($selected), @js($name), @js($open), @js($direction))"
-    class="relative w-full max-w-md">
+    class="relative w-full">
     <div class="flex flex-wrap items-center gap-1.5 mb-2 min-h-5">
         <template x-for="id in selected" :key="'tag-' + id">
             <span
@@ -18,7 +18,7 @@
     </div>
 
     <button type="button" x-ref="toggleBtn" @click="toggleOpen()"
-        class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-surface-200 text-sm text-slate-300 hover:bg-white/5 transition">
+        class="w-full inline-flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl border border-white/10 bg-surface-300 text-sm text-slate-300 hover:bg-white/5 transition">
         <span x-text="direction === 'dropup' ? 'Pick members' : 'Add members'"></span>
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -41,6 +41,9 @@
             <template x-for="person in filtered()" :key="person.id">
                 <label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 cursor-pointer">
                     <input type="checkbox" :checked="selected.includes(person.id)" @change="toggle(person.id)">
+                    <span class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
+                        :style="'background-color: ' + (person.avatar_color || '#64748b')"
+                        x-text="person.initial || '?'"></span>
                     <span class="text-sm text-slate-200" x-text="person.display_name"></span>
                     <span class="text-xs text-slate-500" x-text="person.username ? '@' + person.username : ''"></span>
                 </label>

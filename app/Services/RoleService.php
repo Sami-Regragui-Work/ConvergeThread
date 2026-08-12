@@ -6,6 +6,7 @@ use App\Models\Group;
 use App\Models\GroupRoleOverride;
 use App\Models\Tenant;
 use App\Models\TenantRole;
+use App\Support\Permissions;
 use App\Support\WorkspaceSync;
 use Illuminate\Validation\ValidationException;
 
@@ -34,10 +35,13 @@ class RoleService
             ]);
         }
 
+        $inScope = Permissions::groupScoped();
+
         return GroupRoleOverride::create([
             'group_id' => $group->id,
             'tenant_role_id' => $tenantRole->id,
-            'permissions' => $permissions ?? $tenantRole->permissions,
+            'permissions' => $permissions
+                ?? array_values(array_intersect($tenantRole->permissions ?? [], $inScope)),
         ]);
     }
 

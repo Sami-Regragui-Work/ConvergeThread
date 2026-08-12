@@ -21,7 +21,7 @@
                         <label class="block text-sm font-medium text-slate-300 mb-1.5">Email</label>
                         <input type="email" name="email" value="{{ old('email', $email) }}" readonly required
                             class="w-full bg-surface-300 border border-white/10 text-slate-500 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition placeholder-slate-500">
-                        @error('email')<p class="mt-1 text-xs text-red-400">{{ $message }}</p>@enderror
+                        @error('email')<p class="mt-1 text-xs text-red-400 break-words">{{ $message }}</p>@enderror
                     </div>
 
                     <div x-data="{ show: false }">
@@ -47,7 +47,7 @@
                                 </svg>
                             </button>
                         </div>
-                        @error('password')<p class="mt-1 text-xs text-red-400">{{ $message }}</p>@enderror
+                        @error('password')<p class="mt-1 text-xs text-red-400 break-words">{{ $message }}</p>@enderror
                     </div>
 
                     <div x-data="{ show: false }">
@@ -73,7 +73,7 @@
                                 </svg>
                             </button>
                         </div>
-                        @error('password_confirmation')<p class="mt-1 text-xs text-red-400">{{ $message }}</p>@enderror
+                        @error('password_confirmation')<p class="mt-1 text-xs text-red-400 break-words">{{ $message }}</p>@enderror
                     </div>
 
                     @if (session('status'))

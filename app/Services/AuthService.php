@@ -2,57 +2,34 @@
 
 namespace App\Services;
 
-use App\Models\TenantRole;
+use App\Models\RegistrationRequest;
 use App\Models\User;
-use App\Support\WorkspaceSync;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
 
 class AuthService
 {
-    public function __construct(private readonly TenantUserService $tenantUserService)
+    public function __construct(private readonly RegistrationService $registrationService)
     {
     }
     public function register(
         string $email,
         string $password,
         ?string $displayName,
-        string $tenantSlug
-    ): User {
-        $tenant = $this->tenantUserService->findTenantBySlug($tenantSlug);
-
-        $username = $this->tenantUserService->generateUniqueTenantUsername(
-            $displayName ?? explode('@', $email)[0],
-            $tenant
+        ?string $tenantSlug
+    ): RegistrationRequest {
+        return $this->registrationService->submit(
+            $email,
+            $password,
+            $displayName,
+            $tenantSlug,
         );
-
-        if ($tenant->isClosed()) {
-            throw new \Exception('This workspace is closed.', 403);
-        }
-
-        $memberRoleId = TenantRole::where('is_system', true)->where('name', 'Member')->value('id');
-
-        $user = User::create([
-            'email' => $email,
-            'password' => Hash::make($password),
-            'username' => $username,
-            'display_name' => $displayName,
-            'tenant_id' => $tenant->id,
-            'tenant_role_id' => $memberRoleId,
-        ]);
-
-        WorkspaceSync::bump($tenant->id, ['users']);
-
-        Auth::login($user);
-
-        session()->regenerate();
-
-        return $user;
     }
 
     public function login(string $email, string $password): User
     {
         if (!Auth::attempt(compact('email', 'password'), false)) {
+            $this->throwRegistrationStatusMessage($email);
+
             throw new \Exception('Invalid credentials', 401);
         }
 
@@ -78,6 +55,33 @@ class AuthService
         session()->regenerate();
 
         return $user;
+    }
+
+    private function throwRegistrationStatusMessage(string $email): void
+    {
+        $hasUser = User::where('email', $email)->exists();
+
+        if ($hasUser) {
+            return;
+        }
+
+        $registration = RegistrationRequest::where('email', $email)->latest()->first();
+
+        if ($registration === null) {
+            return;
+        }
+
+        if ($registration->isExpired()) {
+            throw new \Exception('Your registration request has expired. Please register again.', 401);
+        }
+
+        if ($registration->isRejected()) {
+            throw new \Exception('Your registration request was declined. Please contact your workspace admin if you believe this is a mistake.', 401);
+        }
+
+        if ($registration->isPending()) {
+            throw new \Exception('Your registration request is still pending approval. An admin has not accepted you yet — track its status below.', 401);
+        }
     }
 
     public function logout(): void

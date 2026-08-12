@@ -23,7 +23,8 @@ class AddGroupMemberRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'user_id' => 'required|exists:users,id',
+            'user_ids' => 'required|array|min:1|max:50',
+            'user_ids.*' => 'required|exists:users,id',
         ];
     }
 }

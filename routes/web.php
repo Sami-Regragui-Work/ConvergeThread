@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CallController;
+use App\Http\Controllers\CallLogController;
 use App\Http\Controllers\ChatBrowseController;
 use App\Http\Controllers\ChatCryptoController;
 use App\Http\Controllers\DuoController;
@@ -15,8 +16,10 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Owner\OwnerController;
 use App\Http\Controllers\Owner\OwnerTenantController;
 use App\Http\Controllers\Owner\OwnerUserController;
-use App\Http\Controllers\TenantRoleController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\RegistrationRequestController;
 use App\Http\Controllers\RoleHierarchyController;
+use App\Http\Controllers\TenantRoleController;
 use App\Http\Controllers\WorkspaceMemberController;
 use App\Http\Controllers\WorkspaceSyncController;
 use Illuminate\Support\Facades\Auth;
@@ -31,6 +34,8 @@ Route::middleware('guest')->prefix('auth')->name('auth.')->group(function () {
     Route::post('register', [AuthController::class, 'register'])->name('register.store');
     Route::get('login', [AuthController::class, 'showLogin'])->name('login');
     Route::post('login', [AuthController::class, 'login'])->name('login.store');
+    Route::get('track', [AuthController::class, 'showTrack'])->name('track');
+    Route::post('track', [AuthController::class, 'track'])->name('track.store');
 });
 
 Route::middleware('guest')->prefix('auth')->group(function () {
@@ -60,8 +65,12 @@ Route::middleware(['auth', 'is.owner'])->prefix('owner')->name('owner.')->group(
     Route::get('', [OwnerController::class, 'index'])->name('index');
     Route::post('users/{user}/ban', [OwnerUserController::class, 'ban'])->name('users.ban');
     Route::delete('users/{user}/ban', [OwnerUserController::class, 'unban'])->name('users.unban');
+    Route::delete('users/{user}', [OwnerUserController::class, 'destroy'])->name('users.destroy');
     Route::post('tenants/{tenant}/close', [OwnerTenantController::class, 'close'])->name('tenants.close');
     Route::delete('tenants/{tenant}/close', [OwnerTenantController::class, 'reopen'])->name('tenants.reopen');
+    Route::delete('tenants/{tenant}', [OwnerTenantController::class, 'destroy'])->name('tenants.destroy');
+    Route::post('registrations/{registration}/approve', [RegistrationRequestController::class, 'approve'])->name('registrations.approve');
+    Route::post('registrations/{registration}/reject', [RegistrationRequestController::class, 'reject'])->name('registrations.reject');
 });
 
 Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
@@ -69,17 +78,31 @@ Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
 
     Route::get('workspace/members', [WorkspaceMemberController::class, 'index'])->name('workspace.members.index');
     Route::patch('workspace/members/{member}/role', [WorkspaceMemberController::class, 'updateRole'])->name('workspace.members.role');
+    Route::delete('workspace/members/{member}', [WorkspaceMemberController::class, 'destroy'])->name('workspace.members.destroy');
+    Route::post('workspace/registrations/{registration}/approve', [RegistrationRequestController::class, 'approve'])->name('workspace.registrations.approve');
+    Route::post('workspace/registrations/{registration}/reject', [RegistrationRequestController::class, 'reject'])->name('workspace.registrations.reject');
     Route::get('workspace/invitations', [InvitationController::class, 'manage'])->name('invitations.manage.index');
     Route::delete('workspace/invitations/closed', [InvitationController::class, 'clearClosed'])->name('invitations.manage.clear');
     Route::delete('workspace/invitations/{invitation}', [InvitationController::class, 'revoke'])->name('invitations.manage.revoke');
 
     Route::get('workspace/sync', [WorkspaceSyncController::class, 'poll'])->name('workspace.sync');
 
+    Route::get('profile', [ProfileController::class, 'index'])->name('profile.index');
+    Route::patch('profile', [ProfileController::class, 'updateProfile'])->name('profile.update');
+    Route::post('profile/email', [ProfileController::class, 'changeEmail'])->name('profile.email');
+    Route::post('profile/password', [ProfileController::class, 'changePassword'])->name('profile.password');
+    Route::delete('profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
     Route::prefix('hierarchies')->name('hierarchies.')->group(function () {
         Route::get('', [RoleHierarchyController::class, 'index'])->name('index');
         Route::post('', [RoleHierarchyController::class, 'store'])->name('store');
-        Route::post('{hierarchy}/levels', [RoleHierarchyController::class, 'addLevel'])->name('levels.store');
-        Route::patch('levels/{level}/members', [RoleHierarchyController::class, 'syncLevelMembers'])->name('levels.members');
+        Route::post('{hierarchy}/levels', [RoleHierarchyController::class, 'addNode'])->name('levels.store');
+        Route::patch('levels/{level}/parent', [RoleHierarchyController::class, 'link'])->name('levels.link');
+        Route::patch('levels/{level}/add-parent', [RoleHierarchyController::class, 'addParent'])->name('levels.add-parent');
+        Route::patch('levels/{level}/members', [RoleHierarchyController::class, 'syncMembers'])->name('levels.members');
+        Route::patch('levels/{level}/group', [RoleHierarchyController::class, 'setGroup'])->name('levels.group');
+        Route::patch('levels/{level}/role', [RoleHierarchyController::class, 'setRole'])->name('levels.role');
+        Route::patch('levels/{level}/member', [RoleHierarchyController::class, 'setMember'])->name('levels.member');
         Route::delete('levels/{level}', [RoleHierarchyController::class, 'destroyLevel'])->name('levels.destroy');
         Route::delete('{hierarchy}', [RoleHierarchyController::class, 'destroy'])->name('destroy');
     });
@@ -94,8 +117,6 @@ Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
         Route::get('create', [GroupController::class, 'create'])->name('create');
         Route::post('', [GroupController::class, 'store'])->name('store');
 
-        Route::post('{group}/join', [GroupController::class, 'join'])->name('join');
-
         Route::prefix('{group}')->group(function () {
             Route::get('edit', [GroupController::class, 'edit'])->name('edit');
             Route::patch('', [GroupController::class, 'update'])->name('update');
@@ -103,6 +124,7 @@ Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
 
             Route::middleware('group.member')->group(function () {
                 Route::get('', [GroupController::class, 'show'])->name('show');
+                Route::post('leave', [GroupMemberController::class, 'leave'])->name('leave');
 
                 // Members
                 Route::prefix('members')->name('members.')->group(function () {
@@ -147,6 +169,12 @@ Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
         Route::post('', [MergeSessionController::class, 'store'])->name('store');
         Route::get('{mergeSession}', [MergeSessionController::class, 'show'])->name('show');
         Route::delete('{mergeSession}', [MergeSessionController::class, 'destroy'])->name('destroy');
+    });
+
+    // Call logs
+    Route::prefix('calls')->name('calls.')->group(function () {
+        Route::get('', [CallLogController::class, 'index'])->name('index');
+        Route::get('{callLog}', [CallLogController::class, 'show'])->name('show');
     });
 
     // Messages

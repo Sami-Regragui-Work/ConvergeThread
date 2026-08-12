@@ -1,7 +1,9 @@
-{{-- Group role-override create modal. Classic form on the page remains as fallback. --}}
+{{-- Group role-override create modal. Only group-scoped permissions are offered; permissions already granted by the base role are shown checked and disabled. --}}
 @can('create', [App\Models\GroupRoleOverride::class, $group])
 @php
-    $permissionOptions = App\Support\Permissions::all();
+    $permissionOptions = collect(App\Support\Permissions::groupScopedOptions())
+        ->map(fn ($label, $value) => ['value' => $value, 'label' => $label])
+        ->values();
 @endphp
 <div x-data="roleOverrideModal()" x-cloak>
     <template x-teleport="body">
@@ -14,7 +16,7 @@
                 </div>
                 <div>
                     <label class="block text-[11px] text-slate-500 mb-1">Base tenant role</label>
-                    <select x-model="tenantRoleId"
+                    <select x-model="tenantRoleId" @change="onRoleChange()"
                         class="w-full bg-surface-200 border border-white/10 text-white text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition">
                         <option value="">— Select role —</option>
                         <template x-for="role in tenantRoles" :key="role.id">
@@ -23,14 +25,23 @@
                     </select>
                 </div>
                 <div>
-                    <label class="block text-[11px] text-slate-500 mb-1">Permissions (optional override)</label>
-                    <p class="text-[11px] text-slate-500 mb-2">Leave empty to keep the base role permissions for this group.</p>
+                    <label class="block text-[11px] text-slate-500 mb-1">Group permissions</label>
+                    <p class="text-[11px] text-slate-500 mb-2">
+                        Checked-but-disabled permissions come from the base role and already apply to this member.
+                        Check additional permissions to grant them inside this group only.
+                    </p>
                     <div class="space-y-2 max-h-56 overflow-y-auto rounded-xl border border-white/10 bg-surface-200/50 p-3">
-                        <template x-for="perm in permissionOptions" :key="perm">
-                            <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer hover:text-white">
-                                <input type="checkbox" :value="perm" x-model="permissions"
+                        <template x-for="perm in permissionOptions" :key="perm.value">
+                            <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer hover:text-white"
+                                :class="isInherited(perm.value) ? 'opacity-60 cursor-not-allowed' : ''">
+                                <input type="checkbox"
+                                    :checked="isInherited(perm.value) || permissions.includes(perm.value)"
+                                    :disabled="isInherited(perm.value)"
+                                    @change="togglePermission(perm.value)"
                                     class="rounded border-white/20 bg-surface-400 text-brand-500 focus:ring-brand-500/50">
-                                <span class="font-mono text-xs" x-text="perm"></span>
+                                <span class="text-xs" x-text="perm.label"></span>
+                                <code class="ml-auto font-mono text-[10px] text-slate-500" x-text="perm.value"></code>
+                                <span class="shrink-0 text-[10px] text-slate-500" x-show="isInherited(perm.value)">from base role</span>
                             </label>
                         </template>
                     </div>
@@ -54,10 +65,12 @@
             open: false,
             tenantRoleId: '',
             permissions: [],
+            inherited: [],
             error: '',
             busy: false,
             storeUrl: @js(route('groups.role-overrides.store', $group)),
             tenantRoles: @js($tenantRoles->map(fn ($r) => ['id' => $r->id, 'name' => $r->name])->values()),
+            basePermissions: @js($basePermissions),
             permissionOptions: @js($permissionOptions),
             init() {
                 window.addEventListener('ct-role-override-create', () => this.openCreate());
@@ -65,12 +78,30 @@
             openCreate() {
                 this.tenantRoleId = '';
                 this.permissions = [];
+                this.inherited = [];
                 this.error = '';
                 this.open = true;
             },
             close() {
                 this.open = false;
                 this.busy = false;
+            },
+            onRoleChange() {
+                this.inherited = this.basePermissions[this.tenantRoleId] || [];
+            },
+            isInherited(value) {
+                return this.inherited.includes(value);
+            },
+            togglePermission(value) {
+                if (this.inherited.includes(value)) {
+                    return;
+                }
+                const idx = this.permissions.indexOf(value);
+                if (idx >= 0) {
+                    this.permissions.splice(idx, 1);
+                } else {
+                    this.permissions.push(value);
+                }
             },
             async submit() {
                 if (!this.tenantRoleId) {

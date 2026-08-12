@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
+use App\Models\RegistrationRequest;
 use App\Models\User;
 use App\Services\AuthService;
 use App\Support\Flash;
@@ -34,18 +35,47 @@ class AuthController extends Controller
                 $credentials['email'],
                 $credentials['password'],
                 $credentials['display_name'] ?? null,
-                $credentials['tenant_slug']
+                $credentials['tenant_slug'] ?? null,
             );
-        } catch (\Exception $e) {
+        } catch (\InvalidArgumentException $e) {
             return back()->withErrors(['email' => $e->getMessage()])->withInput();
         }
 
-        return redirect()->route('groups.index')->with('success', 'Welcome!');
+        return redirect()->route('auth.login')->with(
+            'success',
+            'Your registration request has been submitted. An admin will review it before you can sign in.',
+        );
     }
 
     public function showLogin()
     {
         return view('auth.login');
+    }
+
+    public function showTrack()
+    {
+        return view('auth.track');
+    }
+
+    public function track(Request $request)
+    {
+        $data = $request->validate([
+            'email' => 'required|email',
+        ]);
+
+        $registration = RegistrationRequest::where('email', $data['email'])
+            ->latest()
+            ->first();
+
+        if ($registration === null) {
+            return back()->withErrors([
+                'email' => 'No registration request was found for this email.',
+            ])->withInput();
+        }
+
+        return view('auth.track', [
+            'tracked' => $registration,
+        ]);
     }
 
     public function login(LoginRequest $request)

@@ -17,51 +17,65 @@
                 <h1 class="text-xl font-bold text-white">Notifications</h1>
                 <p class="text-sm text-slate-500 mt-1">Mentions, messages, and workspace updates.</p>
             </div>
-            @if(auth()->user()->unreadNotifications()->count())
-                <form method="POST" action="{{ route('notifications.read-all') }}">
-                    @csrf
-                    <button type="submit" class="text-xs text-brand-400 hover:text-brand-300">Mark all read</button>
-                </form>
-            @endif
+            <div class="flex items-center gap-3 shrink-0">
+                @include('partials.sort-control', [
+                    'label' => 'Sort',
+                    'options' => [
+                        'created_at:desc' => 'Newest',
+                        'created_at:asc' => 'Oldest',
+                    ],
+                ])
+                @if(auth()->user()->unreadNotifications()->count())
+                    <form method="POST" action="{{ route('notifications.read-all') }}">
+                        @csrf
+                        <button type="submit" class="text-xs text-brand-400 hover:text-brand-300">Mark all read</button>
+                    </form>
+                @endif
+            </div>
         </div>
 
         <div class="bg-surface-200 border border-white/5 rounded-2xl overflow-hidden divide-y divide-white/5">
             @forelse($notifications as $notification)
-                @php $data = $notification->data; @endphp
-                <a href="{{ ($data['url'] ?? null) ? route('notifications.read', $notification->id) : '#' }}"
-                    class="block px-5 py-4 hover:bg-white/3 transition {{ $notification->read_at ? 'opacity-70' : '' }}">
-                    @if(($data['type'] ?? '') === 'chat_message')
-                        <p class="text-sm text-white">
-                            Messages from <span class="font-semibold">{{ $data['chat_label'] ?? 'chat' }}</span>
-                            @if(($data['stack_count'] ?? 1) > 1)
-                                <span class="ml-2 inline-flex min-w-5 h-5 px-1.5 rounded-full bg-brand-500 text-[11px] font-bold items-center justify-center">{{ $data['stack_count'] }}</span>
-                            @endif
-                        </p>
-                        <p class="text-xs text-slate-500 mt-1">{{ $data['preview'] ?? '' }}</p>
-                    @elseif(($data['type'] ?? '') === 'added_to_group')
-                        <p class="text-sm text-white">Added to group <span class="font-semibold">{{ $data['group_name'] ?? '' }}</span></p>
-                        <p class="text-xs text-slate-500 mt-1">By {{ $data['added_by'] ?? 'someone' }}</p>
-                    @elseif(($data['type'] ?? '') === 'role_changed')
-                        <p class="text-sm text-white">Your role is now <span class="font-semibold">{{ $data['role_name'] ?? '' }}</span></p>
-                    @elseif(($data['type'] ?? '') === 'group_permissions')
-                        <p class="text-sm text-white">{{ $data['summary'] ?? 'New permissions' }}</p>
-                    @elseif(($data['type'] ?? '') === 'merge_session')
-                        <p class="text-sm text-white">Merge session started for <span class="font-semibold">{{ $data['group_name'] ?? '' }}</span></p>
-                    @elseif(($data['type'] ?? '') === 'incoming_call')
-                        <p class="text-sm text-white">
-                            <span class="font-semibold">{{ $data['author_name'] ?? 'Someone' }}</span>
-                            started a {{ ($data['call_type'] ?? '') === 'video' ? 'video' : 'voice' }} call
-                            in <span class="font-semibold">{{ $data['chat_label'] ?? 'chat' }}</span>
-                        </p>
-                        <p class="text-xs text-slate-500 mt-1">{{ $data['preview'] ?? 'Tap to join' }}</p>
+                @php
+                    $data = $notification->data;
+                    $isChatStack = ($data['type'] ?? '') === 'chat_message'
+                        && count($data['items'] ?? []) > 1;
+                @endphp
+                <div class="px-5 py-4 hover:bg-white/3 transition {{ $notification->read_at ? 'opacity-70' : '' }}"
+                    x-data="{ expanded: false }">
+                    @if($isChatStack)
+                        <div class="flex items-start justify-between gap-3">
+                            <a href="{{ route('notifications.read', $notification->id) }}" class="block min-w-0">
+                                @include('partials.notification-body', ['data' => $data])
+                                <p class="text-[11px] text-slate-600 mt-1">{{ $notification->created_at->diffForHumans() }}</p>
+                            </a>
+                            <button type="button" @click="expanded = !expanded" :title="expanded ? 'Hide messages' : 'Show messages'"
+                                class="shrink-0 p-1.5 rounded-lg hover:bg-white/5 text-slate-400 transition">
+                                <svg class="w-4 h-4 transition-transform duration-200" :class="expanded ? 'rotate-180' : ''"
+                                    fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div x-show="expanded" x-cloak class="mt-2.5 pt-2.5 border-t border-white/5 space-y-1.5">
+                            @foreach($data['items'] ?? [] as $item)
+                                <a href="{{ route('messages.index', [$data['chat_type'], $data['chatable_id']]) }}?message={{ $item['message_id'] }}"
+                                    class="block px-3 py-2 rounded-xl bg-white/3 hover:bg-white/5 transition">
+                                    <p class="text-xs text-slate-400 truncate">
+                                        <span class="font-semibold text-white">{{ $item['author_name'] ?? 'Someone' }}</span>
+                                        <span class="mx-1 text-slate-600">·</span>
+                                        <span class="break-words">{{ $item['preview'] ?? '' }}</span>
+                                    </p>
+                                </a>
+                            @endforeach
+                        </div>
                     @else
-                        <p class="text-sm text-white">
-                            <span class="font-semibold">{{ $data['author_name'] ?? 'Someone' }}</span> mentioned you
-                        </p>
-                        <p class="text-xs text-slate-500 mt-1 line-clamp-2">{{ $data['preview'] ?? '' }}</p>
+                        <a href="{{ ($data['url'] ?? null) ? route('notifications.read', $notification->id) : '#' }}" class="block">
+                            @include('partials.notification-body', ['data' => $data])
+                            <p class="text-[11px] text-slate-600 mt-1">{{ $notification->created_at->diffForHumans() }}</p>
+                        </a>
                     @endif
-                    <p class="text-[11px] text-slate-600 mt-1">{{ $notification->created_at->diffForHumans() }}</p>
-                </a>
+                </div>
             @empty
                 <div class="px-5 py-12 text-center text-slate-500 text-sm">No notifications yet.</div>
             @endforelse

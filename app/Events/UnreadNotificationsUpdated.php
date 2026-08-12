@@ -15,6 +15,7 @@ class UnreadNotificationsUpdated implements ShouldBroadcastNow
     public function __construct(
         public int $userId,
         public int $count,
+        public bool $playSound = false,
     ) {
     }
 
@@ -34,6 +35,7 @@ class UnreadNotificationsUpdated implements ShouldBroadcastNow
     {
         return [
             'count' => $this->count,
+            'play_sound' => $this->playSound,
         ];
     }
 }

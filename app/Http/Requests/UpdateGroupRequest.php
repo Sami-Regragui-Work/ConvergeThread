@@ -24,6 +24,7 @@ class UpdateGroupRequest extends FormRequest
     {
         return [
             'name' => 'sometimes|string|max:255',
+            'accent_color' => 'nullable|string|regex:/^#[0-9a-fA-F]{6}$/',
         ];
     }
 }

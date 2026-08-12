@@ -6,14 +6,14 @@ use App\Models\Group;
 use App\Models\GroupMember;
 use App\Models\User;
 use App\Services\GroupPermissionService;
+use App\Services\RoleHierarchyService;
 use App\Support\Permissions;
 
 class GroupMemberPolicy
 {
     public function __construct(
         private readonly GroupPermissionService $groupPermissionService
-    ) {
-    }
+    ) {}
 
     /**
      * Determine whether the user can view any models.
@@ -34,9 +34,36 @@ class GroupMemberPolicy
     /**
      * Determine whether the user can delete the model.
      */
-    public function delete(User $deleter, Group $group): bool
+    public function delete(User $deleter, GroupMember $member, Group $group): bool
     {
-        return $this->groupPermissionService->hasPermission($group, $deleter, Permissions::GROUP_MEMBERS_REMOVE);
+        $target = $member->user;
+
+        if (! $target) {
+            return false;
+        }
+
+        if ((int) $deleter->id === (int) $target->id) {
+            return false;
+        }
+
+        // The group creator cannot be removed from their own group.
+        if ((int) $group->creator_id === (int) $target->id) {
+            return false;
+        }
+
+        // The group creator may manage anyone in their own group.
+        $isCreator = (int) $group->creator_id === (int) $deleter->id;
+        if ($isCreator) {
+            return true;
+        }
+
+        if (! $this->groupPermissionService->hasPermission($group, $deleter, Permissions::GROUP_MEMBERS_REMOVE)) {
+            return false;
+        }
+
+        // Respect the role hierarchy: you cannot remove someone
+        // at your own level or above.
+        return app(RoleHierarchyService::class)->canManageUser($deleter, $target);
     }
 
     public function assignRole(User $editor, Group $group): bool
