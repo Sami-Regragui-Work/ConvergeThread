@@ -3,19 +3,15 @@
 namespace App\Services;
 
 use App\Models\Group;
-use App\Models\GroupMember;
 use App\Models\TenantRole;
 use App\Models\User;
 use App\Support\WorkspaceSync;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 class GroupService
 {
-    public function __construct(private readonly GroupMemberService $groupMemberService)
-    {
-    }
+    public function __construct(private readonly GroupMemberService $groupMemberService) {}
 
     public function create(string $name, User $creator): Group
     {
@@ -38,25 +34,14 @@ class GroupService
         });
     }
 
-    public function joinGroup(Group $group, User $user): GroupMember
+    public function update(Group $group, array $attributes): Group
     {
-        if ($user->tenant_id !== $group->tenant_id) {
-            throw new AuthorizationException('You cannot join a group outside your tenant.');
+        $updates = array_intersect_key($attributes, array_flip(['name', 'accent_color']));
+
+        if ($updates) {
+            $group->update($updates);
+            WorkspaceSync::bump($group->tenant_id, ['groups']);
         }
-
-        if ($group->activeMembers()->where('users.id', $user->id)->exists()) {
-            throw ValidationException::withMessages([
-                'group' => 'You are already a member of this group.',
-            ]);
-        }
-
-        return $this->groupMemberService->add($group, $user);
-    }
-
-    public function updateName(Group $group, string $name): Group
-    {
-        $group->update(['name' => $name]);
-        WorkspaceSync::bump($group->tenant_id, ['groups']);
 
         return $group->fresh();
     }
@@ -68,11 +53,12 @@ class GroupService
         WorkspaceSync::bump($tenantId, ['groups', 'members']);
     }
 
-    public function getIndexDataForUser(User $user): array
+    public function getIndexDataForUser(User $user, string $sort = 'created_at', string $dir = 'desc'): array
     {
         $groups = Group::where('tenant_id', $user->tenant_id)
             ->withCount(['activeMembers'])
             ->with('creator:id,display_name')
+            ->orderBy($sort, $dir)
             ->get();
 
         $memberGroupIds = $user->groups()->pluck('group_members.group_id');

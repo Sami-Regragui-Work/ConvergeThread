@@ -10,8 +10,9 @@
             class="bg-surface-200 border border-white/5 rounded-2xl px-6 py-5 flex flex-col sm:flex-row sm:items-center gap-4">
             <div class="flex items-center gap-4 flex-1">
                 <div
-                    class="w-12 h-12 rounded-xl bg-brand-500/10 text-brand-400 flex items-center justify-center font-bold text-base shrink-0">
-                    {{ strtoupper(substr($group->name, 0, 2)) }}
+                    class="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-base shrink-0"
+                    :style="'background-color: ' + @js($group->accentColor())">
+                    {{ $group->monogramInitials() }}
                 </div>
                 <div>
                     <h1 class="text-lg font-bold text-white">{{ $group->name }}</h1>
@@ -19,20 +20,11 @@
                 </div>
             </div>
             <div class="flex items-center gap-2">
-                @can('join', $group)
-                    <form method="POST" action="{{ route('groups.join', $group) }}">
-                        @csrf
-                        <button type="submit"
-                            class="inline-flex items-center gap-2 bg-brand-500/10 hover:bg-brand-500/20 text-brand-400 text-sm px-4 py-2 rounded-xl transition">
-                            Join
-                        </button>
-                    </form>
-                @endcan
                 @can('update', $group)
                     <button type="button"
-                        onclick="window.__openGroupRename && window.__openGroupRename({ name: @js($group->name), url: @js(route('groups.update', $group)) })"
+                        onclick="window.__openGroupEdit && window.__openGroupEdit({ name: @js($group->name), color: @js($group->accentColor()), auto: @js(is_null($group->accent_color)), url: @js(route('groups.update', $group)) })"
                         class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-slate-300 text-sm px-4 py-2 rounded-xl transition">
-                        Rename
+                        Edit
                     </button>
                 @endcan
                 @can('delete', $group)
@@ -44,6 +36,19 @@
                         </button>
                     </form>
                 @endcan
+                @if(auth()->user()->id !== (int) $group->creator_id)
+                    <form method="POST" action="{{ route('groups.leave', $group) }}">
+                        @csrf
+                        <button type="button" @click="$dispatch('confirm-action', { message: 'Leave this group?', form: $el.closest('form') })"
+                            class="inline-flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm px-4 py-2 rounded-xl transition">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                            </svg>
+                            Leave
+                        </button>
+                    </form>
+                @endif
             </div>
         </div>
 
@@ -63,9 +68,9 @@
                 <div class="divide-y divide-white/5">
                     @forelse($group->activeMembers as $member)
                         <div class="px-5 py-3 flex items-center gap-3">
-                            <div
-                                class="w-7 h-7 rounded-full bg-brand-500/10 text-brand-400 flex items-center justify-center text-xs font-semibold shrink-0">
-                                {{ strtoupper(substr($member->displayLabel(), 0, 1)) }}
+                            <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
+                                :style="'background-color: ' + @js($member->avatarColor())">
+                                {{ $member->avatarInitial() }}
                             </div>
                             <div class="min-w-0 flex-1">
                                 <p class="text-sm text-slate-300 truncate">

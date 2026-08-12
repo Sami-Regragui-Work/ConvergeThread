@@ -9,7 +9,7 @@
                     class="w-12 h-12 rounded-2xl bg-brand-500 flex items-center justify-center text-white font-bold text-lg mx-auto mb-4">
                     CT</div>
                 <h1 class="text-2xl font-bold text-white">Create account</h1>
-                <p class="text-slate-400 text-sm mt-1">Join your workspace</p>
+                <p class="text-slate-400 text-sm mt-1">Request to join your workspace</p>
             </div>
 
             <div class="bg-surface-200 border border-white/5 rounded-2xl p-8 shadow-xl">
@@ -18,10 +18,11 @@
 
                     <div>
                         <label class="block text-sm font-medium text-slate-300 mb-1.5">Workspace Slug</label>
-                        <input type="text" name="tenant_slug" value="{{ old('tenant_slug') }}" required
+                        <input type="text" name="tenant_slug" value="{{ old('tenant_slug') }}"
                             class="w-full bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition placeholder-slate-500"
                             placeholder="my-workspace">
-                        @error('tenant_slug')<p class="mt-1 text-xs text-red-400">{{ $message }}</p>@enderror
+                        <p class="mt-1 text-xs text-slate-500">An admin of the workspace reviews your request before you can sign in.</p>
+                        @error('tenant_slug')<p class="mt-1 text-xs text-red-400 break-words">{{ $message }}</p>@enderror
                     </div>
 
                     <div>
@@ -30,7 +31,7 @@
                         <input type="text" name="display_name" value="{{ old('display_name') }}"
                             class="w-full bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition placeholder-slate-500"
                             placeholder="Jane Doe">
-                        @error('display_name')<p class="mt-1 text-xs text-red-400">{{ $message }}</p>@enderror
+                        @error('display_name')<p class="mt-1 text-xs text-red-400 break-words">{{ $message }}</p>@enderror
                     </div>
 
                     <div>
@@ -38,7 +39,7 @@
                         <input type="email" name="email" value="{{ old('email') }}" required
                             class="w-full bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition placeholder-slate-500"
                             placeholder="you@example.com">
-                        @error('email')<p class="mt-1 text-xs text-red-400">{{ $message }}</p>@enderror
+                        @error('email')<p class="mt-1 text-xs text-red-400 break-words">{{ $message }}</p>@enderror
                     </div>
 
                     <div>
@@ -46,7 +47,7 @@
                         <input type="password" name="password" required
                             class="w-full bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition placeholder-slate-500"
                             placeholder="••••••••">
-                        @error('password')<p class="mt-1 text-xs text-red-400">{{ $message }}</p>@enderror
+                        @error('password')<p class="mt-1 text-xs text-red-400 break-words">{{ $message }}</p>@enderror
                     </div>
 
                     <div>

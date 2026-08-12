@@ -36,6 +36,9 @@
             currentUserName: config.currentUserName ?? 'You',
             parentMessage: config.parentMessage ?? null,
             activeCall: config.activeCall ?? null,
+            canMeet: !!config.canMeet,
+            hostMutedIds: {},
+            meetNotice: '',
             draft: '',
             draftFormat: 'plain',
             showMarkdownGuide: (typeof localStorage !== 'undefined' && localStorage.getItem('ct_md_guide') !== '0'),
@@ -47,11 +50,15 @@
             maxFilesPerMessage: 20,
             dragOverComposer: false,
             recording: false,
+            recordPaused: false,
+            recordModifying: false,
             recordSeconds: 0,
             mediaRecorder: null,
             recordStream: null,
             recordChunks: [],
             recordTimer: null,
+            recordSegments: [],
+            recordPartialIndex: -1,
             mediaViewer: null,
             _pdfjsLoading: null,
             _jszipLoading: null,
@@ -114,10 +121,12 @@
             localStream: null,
             localMuted: false,
             localVideoOff: false,
+            localDeafened: false,
             sharingScreen: false,
             cameraTrack: null,
             screenTrack: null,
             screenStream: null,
+            screenZooms: {},
             peers: [],
             peerConnections: {},
             peerDisconnectTimers: {},
@@ -1424,8 +1433,18 @@
                     }
                     if (audio && stream) {
                         audio.srcObject = stream;
-                        audio.muted = this.callType === 'video';
-                        if (this.callType !== 'video') audio.play?.().catch(() => {});
+                        audio.muted = this.callType === 'video' || this.callType === 'meet';
+                        if (this.callType !== 'video' && this.callType !== 'meet') audio.play?.().catch(() => {});
+                    }
+                    const mvideo = document.getElementById('meet-remote-' + userId);
+                    const maudio = document.getElementById('meet-audio-' + userId);
+                    if (mvideo && stream) {
+                        mvideo.srcObject = stream;
+                        mvideo.play?.().catch(() => {});
+                    }
+                    if (maudio && stream) {
+                        maudio.srcObject = stream;
+                        maudio.play?.().catch(() => {});
                     }
                 });
             },
@@ -2719,14 +2738,22 @@
                 }
                 if (!files.length) return;
                 event.preventDefault();
-                this.addFiles(files);
+                if (this.editingId !== null) {
+                    this.addEditFiles(files);
+                } else {
+                    this.addFiles(files);
+                }
             },
 
             onComposerDrop(event) {
                 this.dragOverComposer = false;
                 const files = [...(event.dataTransfer?.files || [])];
                 if (!files.length) return;
-                this.addFiles(files);
+                if (this.editingId !== null) {
+                    this.addEditFiles(files);
+                } else {
+                    this.addFiles(files);
+                }
             },
 
             async toggleRecording() {
@@ -2751,40 +2778,139 @@
                         ? new MediaRecorder(this.recordStream, { mimeType: mime })
                         : new MediaRecorder(this.recordStream);
                     this.recordChunks = [];
+                    this.recordSegments = [];
+                    this.recordPartialIndex = -1;
+                    this.recordPaused = false;
+                    this.recordModifying = false;
                     this.mediaRecorder.ondataavailable = (e) => {
                         if (e.data && e.data.size) this.recordChunks.push(e.data);
                     };
-                    this.mediaRecorder.onstop = () => {
-                        const type = this.mediaRecorder?.mimeType || 'audio/webm';
-                        const blob = new Blob(this.recordChunks, { type });
-                        const ext = type.includes('ogg') ? 'ogg' : 'webm';
-                        const file = new File([blob], `voice-${Date.now()}.${ext}`, { type });
-                        if (blob.size > 0) this.addFiles([file]);
-                        this.recordChunks = [];
-                        if (this.recordStream) {
-                            this.recordStream.getTracks().forEach((t) => t.stop());
-                            this.recordStream = null;
-                        }
-                    };
-                    this.mediaRecorder.start();
+                    this.mediaRecorder.start(500);
                     this.recording = true;
                     this.recordSeconds = 0;
-                    this.recordTimer = setInterval(() => { this.recordSeconds += 1; }, 1000);
+                    this.startRecordTimer();
                 } catch (e) {
                     this.sendError = 'Microphone permission denied for recording.';
                     this.recording = false;
                 }
             },
 
-            stopRecording() {
+            startRecordTimer() {
+                if (this.recordTimer) clearInterval(this.recordTimer);
+                this.recordTimer = setInterval(() => { this.recordSeconds += 1; }, 1000);
+            },
+
+            stopRecordTimer() {
                 if (this.recordTimer) {
                     clearInterval(this.recordTimer);
                     this.recordTimer = null;
                 }
+            },
+
+            pauseRecording() {
+                if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+                    try { this.mediaRecorder.pause(); } catch (e) {}
+                    this.recordPaused = true;
+                    this.stopRecordTimer();
+                }
+            },
+
+            resumeRecording() {
+                if (this.mediaRecorder && this.mediaRecorder.state === 'paused') {
+                    try { this.mediaRecorder.resume(); } catch (e) {}
+                    this.recordPaused = false;
+                    this.recordModifying = false;
+                    this.startRecordTimer();
+                }
+            },
+
+            openRecordModify() {
+                if (!this.recordPaused || this.recordModifying || !this.recordChunks.length) return;
+                const type = this.mediaRecorder?.mimeType || 'audio/webm';
+                const blob = new Blob(this.recordChunks, { type });
+                this.recordChunks = [];
+                const file = new File([blob], `voice-${Date.now()}.webm`, { type });
+                this.files.push(file);
+                this.filePreviews.push(this.buildPreview(file));
+                this.recordPartialIndex = this.filePreviews.length - 1;
+                this.recordModifying = true;
+            },
+
+            async continueFromRecordModify() {
+                const index = this.recordPartialIndex;
+                const preview = index >= 0 ? this.filePreviews[index] : null;
+                let baked = preview?.sourceFile;
+                if (preview && window.CtMediaExport && this.stagedMediaIsDirty(preview)) {
+                    baked = await window.CtMediaExport.processAudio(preview.sourceFile, {
+                        rate: preview.rate || 1,
+                        trimStart: preview.trimStart || 0,
+                        trimEnd: preview.trimEnd,
+                    }).catch(() => preview.sourceFile);
+                }
+                if (baked) this.recordSegments.push(baked);
+                if (index >= 0) this.removeFile(index);
+                this.recordPartialIndex = -1;
+                this.recordModifying = false;
+                this.resumeRecording();
+            },
+
+            async finalizeRecording() {
+                const segments = [...this.recordSegments];
+                if (this.recordPartialIndex >= 0) {
+                    const preview = this.filePreviews[this.recordPartialIndex];
+                    if (preview) {
+                        let baked = preview.sourceFile;
+                        if (window.CtMediaExport && this.stagedMediaIsDirty(preview)) {
+                            baked = await window.CtMediaExport.processAudio(preview.sourceFile, {
+                                rate: preview.rate || 1,
+                                trimStart: preview.trimStart || 0,
+                                trimEnd: preview.trimEnd,
+                            }).catch(() => preview.sourceFile);
+                        }
+                        segments.push(baked);
+                        this.removeFile(this.recordPartialIndex);
+                    }
+                    this.recordPartialIndex = -1;
+                }
+
+                const finalBlob = this.recordChunks.length
+                    ? new Blob(this.recordChunks, { type: this.mediaRecorder?.mimeType || 'audio/webm' })
+                    : null;
+
+                if (!segments.length) {
+                    if (finalBlob && finalBlob.size > 0) {
+                        this.addFiles([new File([finalBlob], `voice-${Date.now()}.webm`, { type: finalBlob.type })]);
+                    }
+                } else {
+                    if (finalBlob && finalBlob.size > 0) segments.push(finalBlob);
+                    const merged = window.CtMediaExport
+                        ? await window.CtMediaExport.concatAudioFiles(segments)
+                        : segments[0];
+                    if (merged) this.addFiles([merged]);
+                }
+
+                this.recordChunks = [];
+                this.recordSegments = [];
+            },
+
+            async stopRecording() {
+                this.stopRecordTimer();
                 this.recording = false;
-                if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-                    try { this.mediaRecorder.stop(); } catch (e) {}
-                } else if (this.recordStream) {
+                this.recordPaused = false;
+                this.recordModifying = false;
+                const recorder = this.mediaRecorder;
+                if (recorder && recorder.state !== 'inactive') {
+                    recorder.ondataavailable = (e) => {
+                        if (e.data && e.data.size) this.recordChunks.push(e.data);
+                    };
+                    await new Promise((resolve) => {
+                        recorder.onstop = () => resolve();
+                        try { recorder.stop(); } catch (e) { resolve(); }
+                    });
+                }
+                await this.finalizeRecording();
+                this.mediaRecorder = null;
+                if (this.recordStream) {
                     this.recordStream.getTracks().forEach((t) => t.stop());
                     this.recordStream = null;
                 }
@@ -2796,6 +2922,14 @@
                 }
                 this.files.splice(index, 1);
                 this.filePreviews.splice(index, 1);
+                if (this.recordPartialIndex >= 0) {
+                    if (index === this.recordPartialIndex) {
+                        this.recordPartialIndex = -1;
+                        this.recordModifying = false;
+                    } else if (index < this.recordPartialIndex) {
+                        this.recordPartialIndex -= 1;
+                    }
+                }
                 if (this.$refs.fileInput) this.$refs.fileInput.value = '';
             },
 
@@ -2844,15 +2978,14 @@
                 if (this.$refs.editFileInput) this.$refs.editFileInput.value = '';
             },
 
-            onEditFilesChange(event) {
-                const incoming = [...(event.target.files || [])];
-                if (this.$refs.editFileInput) this.$refs.editFileInput.value = '';
-                if (!incoming.length) return;
+            addEditFiles(incoming) {
+                const list = [...(incoming || [])].filter(Boolean);
+                if (!list.length) return;
 
                 this.editError = '';
                 const existing = new Set(this.editFiles.map((f) => this.fileKey(f)));
 
-                for (const file of incoming) {
+                for (const file of list) {
                     if (this.editKeepAttachments.length + this.editFiles.length >= this.maxFilesPerMessage) {
                         this.editError = 'You can attach at most 20 files per message.';
                         break;
@@ -2863,6 +2996,12 @@
                     this.editFiles.push(file);
                     this.editFilePreviews.push(this.buildPreview(file));
                 }
+            },
+
+            onEditFilesChange(event) {
+                const incoming = [...(event.target.files || [])];
+                if (this.$refs.editFileInput) this.$refs.editFileInput.value = '';
+                this.addEditFiles(incoming);
             },
 
             askDelete(message) {
@@ -3323,7 +3462,7 @@
                     const audio = this.localStream.getAudioTracks()[0];
                     const video = this.localStream.getVideoTracks()[0];
                     if (audio) await room.localParticipant.publishTrack(audio);
-                    if (video && this.callType === 'video') await room.localParticipant.publishTrack(video);
+                    if (video && (this.callType === 'video' || this.callType === 'meet')) await room.localParticipant.publishTrack(video);
                 }
 
                 room.remoteParticipants.forEach((p) => attachParticipant(p));
@@ -3353,10 +3492,11 @@
                         noiseSuppression: true,
                         autoGainControl: true,
                     },
-                    video: type === 'video',
+                    video: type === 'video' || type === 'meet',
                 });
                 this.localMuted = false;
                 this.localVideoOff = false;
+                this.localDeafened = false;
                 this.sharingScreen = false;
                 this.screenTrack = null;
                 this.screenStream = null;
@@ -3406,6 +3546,8 @@
                         this.showCallModal = true;
                         return;
                     }
+                    if (res?.active) this.activeCall = res.active;
+                    if (type === 'meet') this.callState = 'active';
                     if ((res?.media_mode || this.callMediaMode) === 'sfu') {
                         this.callMediaMode = 'sfu';
                         await this.connectSfu();
@@ -3449,6 +3591,7 @@
                         this.showCallModal = true;
                         return;
                     }
+                    if (res?.active) this.activeCall = res.active;
                     if ((res?.media_mode || this.callMediaMode) === 'sfu') {
                         this.callMediaMode = 'sfu';
                         await this.connectSfu();
@@ -3518,6 +3661,98 @@
                 this.showCallModal = false;
                 this.incomingCall = null;
                 this.callError = '';
+                this.hostMutedIds = {};
+                this.meetNotice = '';
+            },
+
+            callHostId() {
+                return Number(this.activeCall?.host_user_id ?? this.activeCall?.from_user_id ?? 0);
+            },
+
+            isCallHost() {
+                return this.callHostId() === Number(this.currentUserId);
+            },
+
+            meetPeerIds() {
+                const ids = new Set();
+                const session = this.activeCall;
+                if (session?.participant_ids) {
+                    session.participant_ids.forEach((id) => {
+                        if (Number(id) !== Number(this.currentUserId)) ids.add(Number(id));
+                    });
+                }
+                (this.peers || []).forEach((p) => {
+                    if (Number(p.userId) !== Number(this.currentUserId)) ids.add(Number(p.userId));
+                });
+                return [...ids];
+            },
+
+            meetPeer(uid) {
+                return (this.peers || []).find((p) => Number(p.userId) === Number(uid));
+            },
+
+            meetName(uid) {
+                const peer = this.meetPeer(uid);
+                return peer?.name || this.participantLabel(Number(uid));
+            },
+
+            meetHasAudio(uid) {
+                return !!this.meetPeer(uid)?.stream;
+            },
+
+            async endMeeting() {
+                const id = this.callId;
+                const type = this.callType;
+                this.stopRingtone();
+                this.stopCallHeartbeat();
+                if (id) {
+                    try {
+                        const res = await this.signalCall({ action: 'end_call', call_id: id, call_type: type || 'meet' });
+                        if (res?.session_ended) this.activeCall = null;
+                    } catch (e) {}
+                }
+                this.teardownCall();
+            },
+
+            async muteForEveryone(uid) {
+                if (!this.isCallHost() || !this.callId) return;
+                const muted = !this.hostMutedIds[uid];
+                try {
+                    await this.signalCall({
+                        action: 'remote_mute',
+                        call_id: this.callId,
+                        call_type: this.callType,
+                        to_user_id: Number(uid),
+                        muted,
+                    });
+                    this.hostMutedIds = { ...this.hostMutedIds, [uid]: muted };
+                } catch (e) {}
+            },
+
+            applyRemoteMute(payload) {
+                if (this.callId && payload.call_id === this.callId && this.localStream) {
+                    if (payload.muted !== false) {
+                        this.localMuted = true;
+                        this.localStream.getAudioTracks().forEach((t) => { t.enabled = false; });
+                        try {
+                            const pubs = this.livekitRoom?.localParticipant?.audioTrackPublications;
+                            if (pubs) pubs.forEach((pub) => {
+                                if (pub?.track?.mediaStreamTrack) pub.track.mediaStreamTrack.enabled = false;
+                            });
+                        } catch (e) {}
+                        this.meetNotice = 'The host muted your microphone.';
+                    } else if (!this.localMuted) {
+                        this.localMuted = false;
+                        this.localStream.getAudioTracks().forEach((t) => { t.enabled = true; });
+                        try {
+                            const pubs = this.livekitRoom?.localParticipant?.audioTrackPublications;
+                            if (pubs) pubs.forEach((pub) => {
+                                if (pub?.track?.mediaStreamTrack) pub.track.mediaStreamTrack.enabled = true;
+                            });
+                        } catch (e) {}
+                        this.meetNotice = 'The host unmuted your microphone.';
+                    }
+                }
             },
 
             async toggleMute() {
@@ -3538,7 +3773,7 @@
             },
 
             async toggleVideo() {
-                if (!this.localStream || this.callType !== 'video' || this.sharingScreen) return;
+                if (!this.localStream || (this.callType !== 'video' && this.callType !== 'meet') || this.sharingScreen) return;
                 this.localVideoOff = !this.localVideoOff;
                 this.localStream.getVideoTracks().forEach((t) => { t.enabled = !this.localVideoOff; });
                 try {
@@ -3553,8 +3788,35 @@
                 } catch (e) {}
             },
 
+            toggleDeafen() {
+                this.localDeafened = !this.localDeafened;
+                try {
+                    this.livekitRoom?.remoteParticipants?.forEach?.((participant) => {
+                        participant.audioTrackPublications.forEach((pub) => {
+                            pub?.track?.setVolume?.(this.localDeafened ? 0 : 1);
+                        });
+                    });
+                } catch (e) {}
+            },
+
+            cycleScreenZoom(key) {
+                const levels = [1, 1.5, 2, 1];
+                const current = this.screenZooms[key] || 1;
+                this.screenZooms = { ...this.screenZooms, [key]: levels[(levels.indexOf(current) + 1) % levels.length] };
+            },
+
+            toggleScreenFullscreen(event, key) {
+                const tile = event?.currentTarget?.closest('.ct-screen-tile');
+                if (!tile) return;
+                if (document.fullscreenElement === tile) {
+                    document.exitFullscreen().catch(() => {});
+                } else {
+                    tile.requestFullscreen?.().catch(() => {});
+                }
+            },
+
             localShowsVideo() {
-                return this.callType === 'video';
+                return this.callType === 'video' || this.callType === 'meet';
             },
 
             localShowsScreen() {
@@ -3562,7 +3824,7 @@
             },
 
             peerShowsVideo(peer) {
-                if (this.callType === 'video') return true;
+                if (this.callType === 'video' || this.callType === 'meet') return true;
                 const tracks = peer?.stream?.getVideoTracks?.() || [];
                 return tracks.some((t) => t && t.readyState === 'live');
             },
@@ -3574,6 +3836,12 @@
                     }
                     if (this.$refs.localScreenVideo) {
                         this.$refs.localScreenVideo.srcObject = this.localShowsScreen() ? this.screenStream : null;
+                    }
+                    if (this.$refs.meetLocalVideo) {
+                        this.$refs.meetLocalVideo.srcObject = this.localStream;
+                    }
+                    if (this.$refs.meetLocalScreenVideo) {
+                        this.$refs.meetLocalScreenVideo.srcObject = this.localShowsScreen() ? this.screenStream : null;
                     }
                 });
             },
@@ -3882,6 +4150,18 @@
 
                 if (action === 'invite') {
                     if (this.callState !== 'idle') return;
+                    if (payload.call_type === 'meet') {
+                        // Meetings don't ring — everyone can join whenever they want.
+                        this.activeCall = {
+                            call_id: payload.call_id,
+                            call_type: payload.call_type,
+                            media_mode: payload.media_mode || this.preferredMediaMode,
+                            host_user_id: payload.from_user_id,
+                            from_user_id: payload.from_user_id,
+                            from_user_name: payload.from_user_name,
+                        };
+                        return;
+                    }
                     this.incomingCall = {
                         call_id: payload.call_id,
                         call_type: payload.call_type,
@@ -3897,6 +4177,25 @@
                         from_user_name: payload.from_user_name,
                     };
                     this.startRingtone();
+                    return;
+                }
+
+                if (action === 'end_call') {
+                    if (this.callId && payload.call_id === this.callId) {
+                        this.teardownCall();
+                    }
+                    if (this.activeCall && payload.call_id === this.activeCall.call_id) {
+                        this.activeCall = null;
+                        this.stopRingtone();
+                        if (this.incomingCall?.call_id === payload.call_id) {
+                            this.incomingCall = null;
+                        }
+                    }
+                    return;
+                }
+
+                if (action === 'remote_mute') {
+                    this.applyRemoteMute(payload);
                     return;
                 }
 

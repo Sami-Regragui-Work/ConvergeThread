@@ -2,19 +2,29 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\SortsLists;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class NotificationController extends Controller
 {
+    use SortsLists;
+
     public function index(Request $request)
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
+        [$sort, $dir] = $this->resolveSort(
+            $request,
+            ['created_at'],
+            'created_at',
+            'desc',
+        );
+
         $notifications = $user
             ->notifications()
-            ->latest()
+            ->orderBy('created_at', $dir)
             ->paginate(30);
 
         if ($request->wantsJson()) {

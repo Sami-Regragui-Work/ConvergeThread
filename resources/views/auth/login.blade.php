@@ -25,7 +25,7 @@
                         <input type="email" name="email" x-model="email" value="{{ old('email') }}" required autofocus
                             class="w-full bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition placeholder-slate-500"
                             placeholder="you@example.com">
-                        @error('email')<p class="mt-1 text-xs text-red-400">{{ $message }}</p>@enderror
+                        @error('email')<p class="mt-1 text-xs text-red-400 break-words">{{ $message }}</p>@enderror
                     </div>
 
                     <div>
@@ -56,7 +56,7 @@
                                 </svg>
                             </button>
                         </div>
-                        @error('password')<p class="mt-1 text-xs text-red-400">{{ $message }}</p>@enderror
+                        @error('password')<p class="mt-1 text-xs text-red-400 break-words">{{ $message }}</p>@enderror
                     </div>
 
                     <p x-show="error" x-cloak class="text-xs text-red-400" x-text="error"></p>
@@ -72,6 +72,11 @@
                     Don't have an account?
                     <a href="{{ url('/auth/register') }}"
                         class="text-brand-400 hover:text-brand-300 transition">Register</a>
+                </p>
+                <p class="text-center text-sm text-slate-500 mt-2">
+                    Registered but can't sign in yet?
+                    <a href="{{ route('auth.track') }}"
+                        class="text-brand-400 hover:text-brand-300 transition">Track your request</a>
                 </p>
             </div>
         </div>

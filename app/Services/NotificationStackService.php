@@ -37,15 +37,30 @@ class NotificationStackService
             $data = $existing->data;
             $data['stack_count'] = ($data['stack_count'] ?? 1) + 1;
             $data['message_id'] = $message->id;
-            $data['preview'] = ($message->is_encrypted || MessageEncryption::isEncrypted($message->content))
+
+            $preview = ($message->is_encrypted || MessageEncryption::isEncrypted($message->content))
                 ? 'Encrypted message'
                 : str($message->content)->limit(80)->toString();
-            $data['author_name'] = $message->user->display_name ?? $message->user->username;
+            $author = $message->user->display_name ?? $message->user->username;
+
+            $data['preview'] = $preview;
+            $data['author_name'] = $author;
+
+            $data['items'] = $data['items'] ?? [];
+            $data['items'][] = [
+                'message_id' => $message->id,
+                'author_name' => $author,
+                'preview' => $preview,
+                'created_at' => $message->created_at?->toIso8601String(),
+            ];
+            $data['items'] = array_slice($data['items'], -10);
+
             $existing->update(['data' => $data, 'created_at' => now()]);
 
             \App\Events\UnreadNotificationsUpdated::dispatch(
                 (int) $recipient->id,
                 (int) $recipient->unreadNotifications()->count(),
+                playSound: true,
             );
 
             if ($recipient->tenant_id) {

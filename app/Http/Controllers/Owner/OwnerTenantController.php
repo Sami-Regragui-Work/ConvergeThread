@@ -33,4 +33,19 @@ class OwnerTenantController extends Controller
 
         return back()->with('success', "Workspace \"{$tenant->name}\" has been reopened.");
     }
+
+    public function destroy(Tenant $tenant): RedirectResponse
+    {
+        if ($tenant->id === 1) {
+            abort(403, 'The owner workspace cannot be removed.');
+        }
+
+        $label = $tenant->name;
+
+        $tenant->delete();
+
+        WorkspaceSync::bump(null, ['users', 'tenants', 'groups', 'members']);
+
+        return back()->with('success', "Workspace \"{$label}\" and all of its users, groups, and chats have been removed.");
+    }
 }

@@ -7,23 +7,34 @@ use App\Http\Requests\UpdateTenantRoleRequest;
 use App\Models\TenantRole;
 use App\Services\RoleService;
 use App\Support\Permissions;
+use App\Support\SortsLists;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 
 class TenantRoleController extends Controller
 {
+    use SortsLists;
+
     public function __construct(private readonly RoleService $roleService)
     {
     }
 
-    public function index()
+    public function index(Request $request)
     {
         $tenantId = Auth::user()->tenant_id;
         Gate::authorize('viewAny', TenantRole::class);
 
+        [$sort, $dir] = $this->resolveSort(
+            $request,
+            ['name', 'created_at'],
+            'name',
+            'asc',
+        );
+
         $roles = TenantRole::where('tenant_id', $tenantId)
             ->orWhere('is_system', true)
-            ->orderBy('name')
+            ->orderBy($sort, $dir)
             ->get();
 
         return view('tenant-roles.index', compact('roles'));

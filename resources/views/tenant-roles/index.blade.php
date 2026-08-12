@@ -3,32 +3,44 @@
 
 @section('content')
     <div class="max-w-3xl mx-auto" data-sync="roles">
-        <div class="flex items-center justify-between mb-6">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
             <h1 class="text-xl font-bold text-white">Tenant Roles</h1>
-            @can('create', App\Models\TenantRole::class)
-                <button type="button" @click="window.__openTenantRoleCreate?.()"
-                    class="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold px-4 py-2 rounded-xl transition">
-                    + New Role
-                </button>
-            @endcan
+            <div class="flex items-center gap-2">
+                @include('partials.sort-control', [
+                    'options' => [
+                        'name:asc' => 'Name A–Z',
+                        'name:desc' => 'Name Z–A',
+                        'created_at:desc' => 'Newest',
+                        'created_at:asc' => 'Oldest',
+                    ],
+                ])
+                @can('create', App\Models\TenantRole::class)
+                    <button type="button" @click="window.__openTenantRoleCreate?.()"
+                        class="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold px-4 py-2 rounded-xl transition">
+                        + New Role
+                    </button>
+                @endcan
+            </div>
         </div>
 
         <div class="bg-surface-200 border border-white/5 rounded-2xl overflow-hidden">
             <div class="divide-y divide-white/5">
                 @forelse($roles as $role)
-                    <div class="px-5 py-4 flex items-center gap-4 hover:bg-white/5 transition group">
-                        <div
-                            class="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 border border-white/10"
-                            style="background-color: {{ $role->color ?? '#6366f1' }}22; color: {{ $role->color ?? '#6366f1' }}">
-                            {{ strtoupper(substr($role->name, 0, 1)) }}
+                    <div class="px-5 py-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_6rem] sm:items-center hover:bg-white/5 transition">
+                        <div class="flex items-center gap-4 min-w-0">
+                            <div
+                                class="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 border border-white/10"
+                                style="background-color: {{ $role->color ?? '#6366f1' }}22; color: {{ $role->color ?? '#6366f1' }}">
+                                {{ strtoupper(substr($role->name, 0, 1)) }}
+                            </div>
+                            <div class="min-w-0">
+                                <span class="text-sm font-medium" style="color: {{ $role->color ?? '#e2e8f0' }}">{{ $role->name }}</span>
+                                @if($role->is_system)
+                                    <span class="ml-2 text-[10px] uppercase tracking-wide text-slate-500">System</span>
+                                @endif
+                            </div>
                         </div>
-                        <div class="flex-1 min-w-0">
-                            <span class="text-sm font-medium" style="color: {{ $role->color ?? '#e2e8f0' }}">{{ $role->name }}</span>
-                            @if($role->is_system)
-                                <span class="ml-2 text-[10px] uppercase tracking-wide text-slate-500">System</span>
-                            @endif
-                        </div>
-                        <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                        <div class="flex sm:justify-end">
                         @can('update', $role)
                             <button type="button"
                                 @click="window.__openTenantRoleEdit?.(@js([
@@ -46,16 +58,19 @@
                                 </svg>
                             </button>
                         @endcan
+                        </div>
+                        <div class="flex sm:justify-center">
                         @if(!$role->is_system)
                                 @can('delete', $role)
-                                    <form method="POST" action="{{ route('tenant-roles.destroy', $role) }}">
+                                    <form method="POST" action="{{ route('tenant-roles.destroy', $role) }}" class="shrink-0">
                                         @csrf @method('DELETE')
                                         <button type="button" @click="$dispatch('confirm-action', { message: 'Delete this role?', form: $el.closest('form') })"
-                                            class="p-2 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            class="inline-flex items-center gap-1.5 text-xs font-medium text-red-500/80 hover:text-red-400 hover:bg-red-500/10 px-2.5 py-1.5 rounded-lg transition">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                                     d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                             </svg>
+                                            Remove
                                         </button>
                                     </form>
                                 @endcan

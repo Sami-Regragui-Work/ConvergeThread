@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Events\CallSignal;
+use App\Models\Duo;
 use App\Models\GroupMember;
 use App\Models\Tenant;
 use App\Models\TenantRole;
@@ -202,5 +203,152 @@ class CallSignalTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonStructure(['ok', 'url', 'token', 'room']);
+    }
+
+    public function test_meet_invite_creates_session_without_ringing_or_notifications(): void
+    {
+        Event::fake([CallSignal::class]);
+
+        $tenant = Tenant::create(['slug' => 'acme_corp', 'admin_email' => 'admin@acme.com']);
+        $adminRoleId = TenantRole::where('is_system', true)->where('name', 'Admin')->value('id');
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'tenant_role_id' => $adminRoleId,
+        ]);
+        $peer = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'tenant_role_id' => $adminRoleId,
+        ]);
+
+        $this->actingAs($user);
+        $group = app(GroupService::class)->create('Calls', $user);
+        GroupMember::create([
+            'group_id' => $group->id,
+            'user_id' => $peer->id,
+            'joined_at' => now(),
+        ]);
+
+        $this->postJson(route('messages.call.signal', ['chatType' => 'group', 'chatId' => $group->id]), [
+            'action' => 'invite',
+            'call_id' => 'meet_1',
+            'call_type' => 'meet',
+        ])
+            ->assertOk()
+            ->assertJsonPath('active.call_type', 'meet')
+            ->assertJsonPath('active.host_user_id', $user->id);
+
+        Event::assertDispatched(CallSignal::class, fn (CallSignal $event) =>
+            $event->payload['action'] === 'invite' && $event->payload['call_type'] === 'meet'
+        );
+
+        $this->assertFalse(
+            $peer->fresh()->notifications()->where('type', IncomingCallNotification::class)->exists()
+        );
+    }
+
+    public function test_meet_cannot_be_started_in_a_duo(): void
+    {
+        $tenant = Tenant::create(['slug' => 'acme_corp', 'admin_email' => 'admin@acme.com']);
+        $adminRoleId = TenantRole::where('is_system', true)->where('name', 'Admin')->value('id');
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'tenant_role_id' => $adminRoleId,
+        ]);
+        $peer = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'tenant_role_id' => $adminRoleId,
+        ]);
+
+        $this->actingAs($user);
+        $group = app(GroupService::class)->create('Calls', $user);
+        GroupMember::create([
+            'group_id' => $group->id,
+            'user_id' => $peer->id,
+            'joined_at' => now(),
+        ]);
+        $duo = Duo::create([
+            'group_id' => $group->id,
+            'name' => 'Test Pair',
+            'user1_id' => $user->id,
+            'user2_id' => $peer->id,
+        ]);
+
+        $this->postJson(route('messages.call.signal', ['chatType' => 'duo', 'chatId' => $duo->id]), [
+            'action' => 'invite',
+            'call_id' => 'meet_duo',
+            'call_type' => 'meet',
+        ])->assertStatus(422);
+    }
+
+    public function test_only_meeting_host_can_end_call_or_mute_remotely(): void
+    {
+        Event::fake([CallSignal::class]);
+
+        $tenant = Tenant::create(['slug' => 'acme_corp', 'admin_email' => 'admin@acme.com']);
+        $adminRoleId = TenantRole::where('is_system', true)->where('name', 'Admin')->value('id');
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'tenant_role_id' => $adminRoleId,
+        ]);
+        $peer = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'tenant_role_id' => $adminRoleId,
+        ]);
+
+        $this->actingAs($user);
+        $group = app(GroupService::class)->create('Calls', $user);
+        GroupMember::create([
+            'group_id' => $group->id,
+            'user_id' => $peer->id,
+            'joined_at' => now(),
+        ]);
+
+        $this->postJson(route('messages.call.signal', ['chatType' => 'group', 'chatId' => $group->id]), [
+            'action' => 'invite',
+            'call_id' => 'meet_1',
+            'call_type' => 'meet',
+        ])->assertOk();
+
+        $this->actingAs($peer)
+            ->postJson(route('messages.call.signal', ['chatType' => 'group', 'chatId' => $group->id]), [
+                'action' => 'end_call',
+                'call_id' => 'meet_1',
+                'call_type' => 'meet',
+            ])->assertStatus(422);
+
+        $this->actingAs($peer)
+            ->postJson(route('messages.call.signal', ['chatType' => 'group', 'chatId' => $group->id]), [
+                'action' => 'remote_mute',
+                'call_id' => 'meet_1',
+                'call_type' => 'meet',
+                'to_user_id' => $user->id,
+            ])->assertStatus(422);
+
+        $this->actingAs($user)
+            ->postJson(route('messages.call.signal', ['chatType' => 'group', 'chatId' => $group->id]), [
+                'action' => 'remote_mute',
+                'call_id' => 'meet_1',
+                'call_type' => 'meet',
+                'to_user_id' => $peer->id,
+                'muted' => true,
+            ])->assertOk();
+
+        Event::assertDispatched(CallSignal::class, function (CallSignal $event) use ($peer) {
+            return $event->payload['action'] === 'remote_mute'
+                && $event->payload['to_user_id'] === $peer->id
+                && $event->payload['muted'] === true;
+        });
+
+        $this->postJson(route('messages.call.signal', ['chatType' => 'group', 'chatId' => $group->id]), [
+            'action' => 'end_call',
+            'call_id' => 'meet_1',
+            'call_type' => 'meet',
+        ])
+            ->assertOk()
+            ->assertJsonPath('session_ended', true);
+
+        $this->getJson(route('messages.call.active', ['chatType' => 'group', 'chatId' => $group->id]))
+            ->assertOk()
+            ->assertJsonPath('active', null);
     }
 }

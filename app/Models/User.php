@@ -31,6 +31,7 @@ class User extends Authenticatable
         'tenant_id',
         'tenant_role_id',
         'banned_by_id',
+        'avatar_color',
         'e2ee_public_key',
         'e2ee_private_backup',
     ];
@@ -120,6 +121,25 @@ class User extends Authenticatable
         }
 
         return $this->email;
+    }
+
+    public function avatarInitial(): string
+    {
+        return strtoupper(mb_substr($this->displayLabel(), 0, 1));
+    }
+
+    public function avatarColor(): string
+    {
+        if ($this->avatar_color !== null && $this->avatar_color !== '') {
+            return $this->avatar_color;
+        }
+
+        $palette = [
+            '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e',
+            '#14b8a6', '#0ea5e9', '#6366f1', '#a855f7', '#ec4899',
+        ];
+
+        return $palette[crc32($this->email) % count($palette)];
     }
 
     protected function displayName(): Attribute

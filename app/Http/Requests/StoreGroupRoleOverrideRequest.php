@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests;
 
+use App\Support\Permissions;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreGroupRoleOverrideRequest extends FormRequest
 {
@@ -25,7 +27,7 @@ class StoreGroupRoleOverrideRequest extends FormRequest
         return [
             'tenant_role_id' => 'required|exists:tenant_roles,id',
             'permissions' => 'nullable|array',
-            'permissions.*' => 'string',
+            'permissions.*' => ['string', Rule::in(Permissions::groupScoped())],
         ];
     }
 }

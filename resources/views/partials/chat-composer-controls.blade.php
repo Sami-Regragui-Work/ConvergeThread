@@ -89,8 +89,31 @@
 
     {{-- Guide / preview scroll above; input stays pinned at the bottom of the composer --}}
     <div class="min-h-0 overflow-y-auto overscroll-contain space-y-2">
-        <p x-show="recording" x-cloak
-            class="text-xs text-red-300 px-1">Recording… <span x-text="recordSeconds + 's'"></span> — click mic to stop</p>
+        <p x-show="recording && !recordPaused" x-cloak
+            class="text-xs text-red-300 px-1 flex items-center gap-2 flex-wrap">
+            <span>Recording… <span x-text="recordSeconds + 's'"></span></span>
+            <button type="button" @click="pauseRecording()"
+                class="text-[10px] font-semibold px-2 py-0.5 rounded border border-white/10 text-slate-300 hover:bg-white/5">Pause</button>
+            <button type="button" @click="stopRecording()"
+                class="text-[10px] font-semibold px-2 py-0.5 rounded border border-red-400/30 text-red-300 hover:bg-red-500/10">Stop</button>
+        </p>
+        <p x-show="recording && recordPaused && !recordModifying" x-cloak
+            class="text-xs text-amber-300 px-1 flex items-center gap-2 flex-wrap">
+            <span>Paused at <span x-text="recordSeconds + 's'"></span></span>
+            <button type="button" @click="resumeRecording()"
+                class="text-[10px] font-semibold px-2 py-0.5 rounded border border-white/10 text-slate-300 hover:bg-white/5">Resume</button>
+            <button type="button" @click="openRecordModify()"
+                class="text-[10px] font-semibold px-2 py-0.5 rounded border border-brand-500/40 text-brand-300 hover:bg-brand-500/10"
+                :disabled="!recordChunks.length">Trim / speed</button>
+            <button type="button" @click="stopRecording()"
+                class="text-[10px] font-semibold px-2 py-0.5 rounded border border-red-400/30 text-red-300 hover:bg-red-500/10">Stop</button>
+        </p>
+        <p x-show="recording && recordPaused && recordModifying" x-cloak
+            class="text-xs text-amber-300 px-1 flex items-center gap-2 flex-wrap">
+            <span>Editing recording…</span>
+            <button type="button" @click="continueFromRecordModify()"
+                class="text-[10px] font-semibold px-2 py-0.5 rounded border border-brand-500/40 text-brand-300 hover:bg-brand-500/10">Continue recording</button>
+        </p>
 
         <div x-show="draftFormat === 'markdown' && showMarkdownGuide" x-cloak
             class="rounded-xl border border-white/10 bg-surface-300/90 px-3 py-2.5 text-[11px] text-slate-300 space-y-2">
@@ -207,7 +230,6 @@
                     @keyup="onDraftCaret()"
                     @click="onDraftCaret()"
                     @select="onDraftCaret()"
-                    @paste="onComposerPaste($event)"
                     autocomplete="off"
                     placeholder="{{ $composerPlaceholder }}"
                     :disabled="sending"

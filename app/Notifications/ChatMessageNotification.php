@@ -32,6 +32,8 @@ class ChatMessageNotification extends Notification
             ? 'Encrypted message'
             : str($this->message->content)->limit(80)->toString();
 
+        $author = $this->message->user->display_name ?? $this->message->user->username;
+
         return [
             'type' => 'chat_message',
             'message_id' => $this->message->id,
@@ -39,8 +41,14 @@ class ChatMessageNotification extends Notification
             'chatable_id' => $this->message->chatable_id,
             'chat_label' => $this->chatLabel,
             'stack_count' => $this->stackCount,
-            'author_name' => $this->message->user->display_name ?? $this->message->user->username,
+            'author_name' => $author,
             'preview' => $preview,
+            'items' => [[
+                'message_id' => $this->message->id,
+                'author_name' => $author,
+                'preview' => $preview,
+                'created_at' => $this->message->created_at?->toIso8601String(),
+            ]],
             'url' => route('messages.index', [$this->chatType, $this->message->chatable_id]),
         ];
     }

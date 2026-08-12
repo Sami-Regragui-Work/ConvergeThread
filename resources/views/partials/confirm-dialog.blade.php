@@ -12,8 +12,8 @@
                 </svg>
             </div>
             <div class="text-center space-y-1">
-                <p class="text-white font-semibold" x-text="title"></p>
-                <p class="text-sm text-slate-400" x-text="message"></p>
+                <p class="text-white font-semibold break-words" x-text="title"></p>
+                <p class="text-sm text-slate-400 break-words" x-text="message"></p>
             </div>
             <div class="flex flex-col gap-2 pt-1">
                 <template x-for="(action, index) in actions" :key="index">

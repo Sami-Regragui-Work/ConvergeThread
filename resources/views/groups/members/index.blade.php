@@ -3,9 +3,20 @@
 
 @section('content')
     <div class="max-w-3xl mx-auto space-y-6" data-sync="members,groups,invitations">
-        <div class="flex items-center gap-3 mb-6">
-            <h1 class="text-xl font-bold text-white">Members</h1>
-            <span class="text-xs text-slate-500">{{ $group->name }}</span>
+        <div class="flex items-center justify-between gap-3 mb-6">
+            <div class="flex items-center gap-3">
+                <h1 class="text-xl font-bold text-white">Members</h1>
+                <span class="text-xs text-slate-500">{{ $group->name }}</span>
+            </div>
+            @include('partials.sort-control', [
+                'label' => 'Sort',
+                'options' => [
+                    'joined_at:desc' => 'Recently added',
+                    'joined_at:asc' => 'First added',
+                    'display_name:asc' => 'Name A–Z',
+                    'display_name:desc' => 'Name Z–A',
+                ],
+            ])
         </div>
 
         @can('invite', $group)
@@ -35,35 +46,44 @@
         @endcan
 
         @can('create', [App\Models\GroupMember::class, $group])
+            @php
+                $pickerUsers = $availableUsers->map(fn ($u) => [
+                    'id' => (int) $u->id,
+                    'display_name' => $u->displayLabel(),
+                    'username' => $u->username,
+                    'avatar_color' => $u->avatarColor(),
+                    'initial' => $u->avatarInitial(),
+                ])->values()->all();
+            @endphp
             <div class="bg-surface-200 border border-white/5 rounded-2xl px-6 py-5">
                 <h2 class="text-sm font-semibold text-white mb-4">Add existing user</h2>
-                <form method="POST" action="{{ route('groups.members.store', $group) }}" class="flex gap-3">
+                <form method="POST" action="{{ route('groups.members.store', $group) }}" class="flex items-start gap-3">
                     @csrf
-                    <select name="user_id" required
-                        class="flex-1 bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm">
-                        <option value="">— Select user —</option>
-                        @foreach($availableUsers as $user)
-                            <option value="{{ $user->id }}">{{ $user->display_name ?? $user->email }}</option>
-                        @endforeach
-                    </select>
-                    <button type="submit"
-                        class="bg-brand-500 hover:bg-brand-600 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition">
-                        Add
-                    </button>
+                    <div class="flex-1 min-w-0">
+                        @include('partials.member-picker', ['members' => $pickerUsers, 'name' => 'user_ids'])
+                    </div>
+                    @if($availableUsers->isNotEmpty())
+                        <button type="submit"
+                            class="bg-brand-500 hover:bg-brand-600 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition shrink-0">
+                            Add selected
+                        </button>
+                    @else
+                        <p class="text-xs text-slate-500 py-2.5">Everyone in this tenant is already a member.</p>
+                    @endif
+                    @error('user_ids')<p class="mt-2 text-xs text-red-400 basis-full">{{ $message }}</p>@enderror
                 </form>
-                @error('user_id')<p class="mt-2 text-xs text-red-400">{{ $message }}</p>@enderror
             </div>
         @endcan
 
         <div class="bg-surface-200 border border-white/5 rounded-2xl overflow-hidden">
             <div class="divide-y divide-white/5">
                 @forelse($members as $member)
-                    <div class="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4 hover:bg-white/5 transition group">
-                        <div class="flex items-center gap-4 flex-1 min-w-0">
-                            <div
-                                class="w-9 h-9 rounded-full bg-brand-500/10 text-brand-400 flex items-center justify-center text-sm font-semibold shrink-0">
-                                {{ strtoupper(substr($member->user->displayLabel(), 0, 1)) }}
-                            </div>
+                    <div class="px-5 py-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_6rem] sm:items-center hover:bg-white/5 transition">
+                            <div class="flex items-center gap-4 min-w-0">
+                                <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold shrink-0"
+                                    :style="'background-color: ' + @js($member->user->avatarColor())">
+                                    {{ $member->user->avatarInitial() }}
+                                </div>
                             <div class="min-w-0">
                                 <p class="text-sm text-white font-medium truncate">
                                     {{ $member->user->displayLabel() }}
@@ -78,6 +98,7 @@
                             </div>
                         </div>
 
+                        <div class="flex flex-wrap items-center gap-2">
                         @can('assignTenantRole', [App\Models\GroupMember::class, $group])
                             @php $roles = $assignableByMember[$member->user_id] ?? collect(); @endphp
                             @if($roles->isNotEmpty())
@@ -119,21 +140,25 @@
                                     class="text-xs text-brand-400 hover:text-brand-300 px-2 py-1">Save</button>
                             </form>
                         @endcan
+                        </div>
 
-                        @can('delete', [App\Models\GroupMember::class, $group])
-                            <form method="POST" action="{{ route('groups.members.destroy', $group) }}"
-                                class="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition">
+                        <div class="flex sm:justify-center">
+                        @can('delete', [$member, $group])
+                            <form method="POST" action="{{ route('groups.members.destroy', $group) }}" class="shrink-0">
                                 @csrf @method('DELETE')
                                 <input type="hidden" name="user_id" value="{{ $member->user_id }}">
                                 <button type="button" @click="$dispatch('confirm-action', { message: 'Remove this member?', form: $el.closest('form') })"
-                                    class="p-2 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    class="inline-flex items-center gap-1.5 text-xs font-medium text-red-500/80 hover:text-red-400 hover:bg-red-500/10 px-2.5 py-1.5 rounded-lg transition"
+                                    title="Remove member">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                     </svg>
+                                    Remove
                                 </button>
                             </form>
                         @endcan
+                        </div>
                     </div>
                 @empty
                     <div class="px-5 py-10 text-center text-slate-500 text-sm">No members in this group yet.</div>

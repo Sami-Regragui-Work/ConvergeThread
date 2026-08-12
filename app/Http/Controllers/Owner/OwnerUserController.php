@@ -39,4 +39,20 @@ class OwnerUserController extends Controller
 
         return back()->with('success', 'User unbanned successfully.');
     }
+
+    public function destroy(User $user)
+    {
+        if ($user->isOwner()) {
+            return back()->withErrors(['user' => 'The owner account cannot be removed.']);
+        }
+
+        $tenantId = $user->tenant_id;
+        $label = $user->displayLabel();
+
+        $user->delete();
+
+        WorkspaceSync::bump($tenantId, ['users', 'groups', 'members']);
+
+        return back()->with('success', "User \"{$label}\" has been removed. Their messages and call history were kept.");
+    }
 }

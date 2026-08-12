@@ -20,16 +20,28 @@
                 <h1 class="text-xl font-bold text-white">Invitations</h1>
                 <p class="text-sm text-slate-500 mt-1">Everyone who has been invited, and where things stand.</p>
             </div>
-            @if($hasClosed)
-                <form method="POST" action="{{ route('invitations.manage.clear') }}">
-                    @csrf @method('DELETE')
-                    <button type="button"
-                        @click="$dispatch('confirm-action', { message: 'Permanently remove all accepted, cancelled and expired invitations?', form: $el.closest('form') })"
-                        class="text-xs text-red-400 hover:text-red-300 border border-red-500/30 hover:bg-red-500/10 rounded-lg px-3 py-2 transition">
-                        Clear closed
-                    </button>
-                </form>
-            @endif
+            <div class="flex items-center gap-2">
+                @include('partials.sort-control', [
+                    'label' => 'Sort',
+                    'options' => [
+                        'created_at:desc' => 'Newest',
+                        'created_at:asc' => 'Oldest',
+                        'email:asc' => 'Email A–Z',
+                        'email:desc' => 'Email Z–A',
+                        'expires_at:asc' => 'Expiring soon',
+                    ],
+                ])
+                @if($hasClosed)
+                    <form method="POST" action="{{ route('invitations.manage.clear') }}">
+                        @csrf @method('DELETE')
+                        <button type="button"
+                            @click="$dispatch('confirm-action', { message: 'Permanently remove all accepted, cancelled and expired invitations?', form: $el.closest('form') })"
+                            class="text-xs text-red-400 hover:text-red-300 border border-red-500/30 hover:bg-red-500/10 rounded-lg px-3 py-2 transition">
+                            Clear closed
+                        </button>
+                    </form>
+                @endif
+            </div>
         </div>
 
         @foreach($sections as $key => $label)

@@ -36,14 +36,26 @@
             ),
             currentUserName: @js(auth()->user()->displayLabel()),
             activeCall: @js($activeCall),
+            canMeet: @js($canMeet ?? false),
             iceServers: @js(config('webrtc.ice_servers')),
         })"
-        x-init="init()">
+        x-init="init()"
+        @paste="onComposerPaste($event)"
+        @dragover.prevent="dragOverComposer = true"
+        @dragleave.prevent="dragOverComposer = false"
+        @drop.prevent="onComposerDrop($event)"
+        :class="dragOverComposer ? 'rounded-2xl ring-2 ring-brand-500/40' : ''">
 
         <div class="flex items-center justify-between gap-3 pb-4 border-b border-white/5 mb-4 shrink-0">
             <div class="flex items-center gap-3 min-w-0">
+                @php
+                    $chatAccent = $chatable instanceof App\Models\Group || $chatable instanceof App\Models\Duo
+                        ? $chatable->accentColor()
+                        : null;
+                @endphp
                 <div
-                    class="w-8 h-8 rounded-lg bg-brand-500/10 text-brand-400 flex items-center justify-center text-xs font-bold shrink-0">
+                    class="w-8 h-8 rounded-lg {{ $chatAccent ? '' : 'bg-brand-500/10 text-brand-400' }} flex items-center justify-center text-xs font-bold shrink-0"
+                    @if ($chatAccent) style="background-color: {{ $chatAccent }}" @endif>
                     {{ strtoupper(substr($chatable->name ?? 'M', 0, 1)) }}
                 </div>
                 <div class="min-w-0">
@@ -62,9 +74,15 @@
                 <form method="POST" action="{{ route('messages.mute', [$chatType, $chatId]) }}">
                     @csrf
                     <button type="submit"
-                        class="px-2.5 py-1.5 rounded-lg border text-xs transition {{ $chatMuted ? 'border-amber-500/40 text-amber-400 bg-amber-500/10' : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white' }}"
+                        class="inline-flex items-center justify-center p-2 rounded-lg border transition {{ $chatMuted ? 'border-amber-500/40 text-amber-400 bg-amber-500/10' : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white' }}"
                         title="{{ $chatMuted ? 'Unmute notifications' : 'Mute notifications' }}">
-                        {{ $chatMuted ? 'Unmute' : 'Mute' }}
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M6 8.5a6.5 6.5 0 1 1 13 0c0 6-6 6-6 10a3.5 3.5 0 1 1-7 0"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M15 8.5a2.5 2.5 0 0 0-5 0v1a2 2 0 1 1 0 4"/>
+                            @if($chatMuted)<path stroke-linecap="round" stroke-width="2" d="M3 3l18 18"/>@endif
+                        </svg>
                     </button>
                 </form>
                 <button type="button" @click="openCall('voice')" title="Voice call"
@@ -81,6 +99,13 @@
                             d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                     </svg>
                 </button>
+                <button type="button" x-show="canMeet && participants.length >= 3" @click="openCall('meet')" title="Start a meeting"
+                    class="p-2 rounded-lg border border-white/10 text-slate-400 hover:bg-white/5 hover:text-white transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M16 9.5V7a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h11a1 1 0 001-1v-2.5l4.5 4.5V5L16 9.5z" />
+                    </svg>
+                </button>
             </div>
         </div>
 
@@ -88,13 +113,15 @@
             class="mb-3 shrink-0 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
             <div class="min-w-0">
                 <p class="text-sm text-emerald-200 font-medium"
-                    x-text="(activeCall?.from_user_name || 'Someone') + ' started a ' + (activeCall?.call_type === 'video' ? 'video' : 'voice') + ' call'"></p>
+                    x-text="activeCall?.call_type === 'meet'
+                        ? ((activeCall?.from_user_name || 'Someone') + ' started a meeting')
+                        : ((activeCall?.from_user_name || 'Someone') + ' started a ' + (activeCall?.call_type === 'video' ? 'video' : 'voice') + ' call')"></p>
                 <p class="text-xs text-emerald-300/70"
                     x-text="(activeCall?.participant_count ? (activeCall.participant_count + ' in call · ') : '') + 'Join to connect with people already in the call.'"></p>
             </div>
             <button type="button" @click="joinActiveCall()"
                 class="shrink-0 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold">
-                Join call
+                <span x-text="activeCall?.call_type === 'meet' ? 'Join meeting' : 'Join call'"></span>
             </button>
         </div>
 
@@ -116,7 +143,9 @@
                         ]"
                         :data-message-id="message.id">
                         <div
-                            class="w-7 h-7 rounded-full bg-brand-500/10 text-brand-400 flex items-center justify-center text-xs font-semibold shrink-0 mt-1"
+                            class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 mt-1"
+                            :style="message.user_avatar_color ? 'background-color:' + message.user_avatar_color : ''"
+                            :class="!message.user_avatar_color ? 'bg-brand-500/10 text-brand-400' : ''"
                             x-text="message.user_initial"></div>
                         <div class="max-w-[85%] sm:max-w-[70%] flex flex-col gap-1"
                             :class="message.user_id === currentUserId ? 'items-end' : 'items-start'">
@@ -183,14 +212,7 @@
             :style="hasVideoStage() ? 'flex: 1 1 0%' : null">
             <form x-show="canSend" x-cloak @submit.prevent="sendMessage" enctype="multipart/form-data"
                 class="flex flex-col gap-3 min-h-0 h-full"
-                @paste="onComposerPaste($event)"
-                @dragover.prevent="dragOverComposer = true"
-                @dragleave.prevent="dragOverComposer = false"
-                @drop.prevent="onComposerDrop($event)"
-                :class="[
-                    hasVideoStage() ? 'flex-1' : '',
-                    dragOverComposer ? 'rounded-xl ring-2 ring-brand-500/40 p-1' : '',
-                ]"
+                :class="hasVideoStage() ? 'flex-1' : ''"
                 :style="hasVideoStage() ? 'flex: 1 1 0%; min-height: 0' : null">
                     <div x-show="showSelectedPicker" x-cloak
                         class="absolute bottom-full left-0 right-0 mb-2 rounded-xl border border-white/10 bg-surface-300 shadow-xl p-4 space-y-3 z-50 max-h-64 flex flex-col">

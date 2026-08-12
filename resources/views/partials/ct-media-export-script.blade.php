@@ -233,6 +233,42 @@
             throw new Error('Only audio and video can be trimmed or re-timed.');
         }
 
+        async function concatAudioFiles(files) {
+            const list = [...(files || [])].filter(Boolean);
+            if (!list.length) return null;
+            if (list.length === 1) return list[0];
+
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            try {
+                const buffers = [];
+                for (const file of list) {
+                    const ab = await file.arrayBuffer();
+                    const decoded = await audioCtx.decodeAudioData(ab.slice(0));
+                    buffers.push(decoded);
+                }
+                const channels = Math.max(...buffers.map((b) => b.numberOfChannels));
+                const totalLength = buffers.reduce((sum, b) => sum + b.length, 0);
+                const sampleRate = buffers[0].sampleRate;
+                const offline = new OfflineAudioContext(channels, totalLength, sampleRate);
+                let offset = 0;
+                for (const buffer of buffers) {
+                    const source = offline.createBufferSource();
+                    source.buffer = buffer;
+                    source.connect(offline.destination);
+                    source.start(offset);
+                    offset += buffer.length;
+                }
+                const rendered = await offline.startRendering();
+                const blob = encodeWav(rendered);
+                return new File([blob], 'voice-' + Date.now() + '.wav', {
+                    type: 'audio/wav',
+                    lastModified: Date.now(),
+                });
+            } finally {
+                try { await audioCtx.close(); } catch (e) {}
+            }
+        }
+
         function needsProcess(options = {}, duration = null) {
             const rate = clampRate(options.rate ?? 1);
             if (Math.abs(rate - 1) > 0.001) return true;
@@ -247,6 +283,6 @@
             return false;
         }
 
-        return { processAudio, processVideo, processFile, needsProcess, clampRate };
+        return { processAudio, processVideo, processFile, concatAudioFiles, needsProcess, clampRate };
     })();
 </script>

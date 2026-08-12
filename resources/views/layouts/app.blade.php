@@ -325,7 +325,7 @@
             setInterval(() => this.pollWorkspace(true), 4000);
             setInterval(() => this.pollWorkspace(false), 20000);
             window.addEventListener('ct-unread', (e) => {
-                if (typeof e.detail?.count === 'number') this.applyUnread(e.detail.count);
+                if (typeof e.detail?.count === 'number') this.applyUnread(e.detail.count, e.detail.play_sound === true);
             });
             @endauth
         },
@@ -349,6 +349,9 @@
         },
         playNotifSound() {
             if (this.soundsMuted) return;
+            const nowTs = Date.now();
+            if (this._lastNotifSoundAt && nowTs - this._lastNotifSoundAt < 400) return;
+            this._lastNotifSoundAt = nowTs;
             try {
                 const Ctx = window.AudioContext || window.webkitAudioContext;
                 if (!Ctx) return;
@@ -368,7 +371,7 @@
                 setTimeout(() => ctx.close().catch(() => {}), 500);
             } catch (e) {}
         },
-        applyUnread(count) {
+        applyUnread(count, playSound = false) {
             const prev = this.unreadNotifs;
             this.unreadNotifs = count;
             const badge = document.querySelector('[data-notif-badge]');
@@ -376,7 +379,7 @@
                 badge.classList.toggle('hidden', !count);
                 badge.textContent = count > 9 ? '9+' : String(count);
             }
-            if (count > prev) this.playNotifSound();
+            if (count > prev || playSound) this.playNotifSound();
         },
         setupRealtime() {
             if (!window.Echo) return;
@@ -389,7 +392,7 @@
             if (userId) {
                 window.Echo.private('user.' + userId)
                     .listen('.notifications.unread', (e) => {
-                        if (typeof e?.count === 'number') this.applyUnread(e.count);
+                        if (typeof e?.count === 'number') this.applyUnread(e.count, e.play_sound === true);
                     });
             }
             @if(auth()->check() && auth()->user()->isOwner())
@@ -490,6 +493,11 @@
                             Merge Sessions
                         </a>
 
+                        <a href="{{ route('calls.index') }}"
+                            class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white text-sm transition {{ request()->is('calls*') ? 'bg-brand-500/10 text-brand-400' : '' }}">
+                            Calls
+                        </a>
+
                         @can('viewAny', App\Models\TenantRole::class)
                             <a href="{{ route('tenant-roles.index') }}"
                                 class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white text-sm transition {{ request()->is('tenant-roles*') ? 'bg-brand-500/10 text-brand-400' : '' }}">
@@ -524,10 +532,11 @@
 
                 {{-- Sidebar footer: user identity + logout --}}
                 <div class="border-t border-white/5 px-3 py-3 shrink-0">
-                    <div class="flex items-center gap-3 px-2 py-2 mb-1">
+                    <a href="{{ route('profile.index') }}" class="flex items-center gap-3 px-2 py-2 mb-1 hover:bg-white/5 rounded-lg transition {{ request()->is('profile*') ? 'bg-brand-500/10' : '' }}">
                         <div
-                            class="w-7 h-7 rounded-full bg-brand-500/20 text-brand-400 flex items-center justify-center text-xs font-semibold shrink-0">
-                            {{ strtoupper(substr(auth()->user()->display_name ?? auth()->user()->email, 0, 1)) }}
+                            class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
+                            :style="'background-color: ' + @js(auth()->user()->avatarColor())">
+                            {{ auth()->user()->avatarInitial() }}
                         </div>
                         <div class="flex-1 min-w-0">
                             <p class="text-sm text-white font-medium truncate">
@@ -537,7 +546,7 @@
                                 <p class="text-xs text-slate-500 truncate">{{ auth()->user()->email }}</p>
                             @endif
                         </div>
-                    </div>
+                    </a>
                     <form method="POST" action="{{ route('auth.logout') }}">
                         @csrf
                         <button type="submit"

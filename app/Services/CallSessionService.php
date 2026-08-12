@@ -88,6 +88,7 @@ class CallSessionService
             'media_mode' => $payload['media_mode'] ?? 'mesh',
             'from_user_id' => $fromId,
             'from_user_name' => $payload['from_user_name'],
+            'host_user_id' => $fromId,
             'started_at' => now()->toIso8601String(),
             'participants' => [
                 (string) $fromId => now()->timestamp,
@@ -205,32 +206,60 @@ class CallSessionService
         User $caller,
         string $callId,
         string $callType,
+        ?int $callLogId = null,
     ): void {
         $label = $chatable->name ?? ($chatType.' #'.$chatable->id);
         $url = route('messages.index', [$chatType, $chatable->id]).'?join_call=1';
+        $callerName = $caller->displayLabel();
+        $chatableId = (int) $chatable->id;
 
         app(ChatParticipantService::class)
             ->participants($chatable)
             ->filter(fn (User $user) => (int) $user->id !== (int) $caller->id)
-            ->each(function (User $user) use ($caller, $chatType, $chatable, $callId, $callType, $label, $url) {
-                $user->notify(new IncomingCallNotification(
-                    callerName: $caller->displayLabel(),
-                    chatType: $chatType,
-                    chatableId: (int) $chatable->id,
-                    callId: $callId,
-                    callType: $callType,
-                    chatLabel: $label,
-                    url: $url,
-                ));
+            ->each(function (User $user) use ($caller, $chatType, $chatableId, $callId, $callType, $label, $url, $callerName, $callLogId) {
+                $existing = $user->notifications()
+                    ->where('type', IncomingCallNotification::class)
+                    ->whereNull('read_at')
+                    ->where('data->chatable_id', $chatableId)
+                    ->where('data->author_name', $callerName)
+                    ->first();
+
+                if ($existing) {
+                    $data = $existing->data;
+                    $data['stack_count'] = ($data['stack_count'] ?? 1) + 1;
+                    $data['call_id'] = $callId;
+                    $data['call_type'] = $callType;
+                    $data['preview'] = ($callType === 'video' ? 'Video' : 'Voice').' call in '.$label;
+                    $data['url'] = $url;
+                    $data['call_log_id'] = $callLogId;
+                    $existing->update(['data' => $data, 'created_at' => now()]);
+
+                    \App\Events\UnreadNotificationsUpdated::dispatch(
+                        (int) $user->id,
+                        (int) $user->unreadNotifications()->count(),
+                        playSound: true,
+                    );
+                } else {
+                    $user->notify(new IncomingCallNotification(
+                        callerName: $callerName,
+                        chatType: $chatType,
+                        chatableId: $chatableId,
+                        callId: $callId,
+                        callType: $callType,
+                        chatLabel: $label,
+                        url: $url,
+                        callLogId: $callLogId,
+                    ));
+                }
 
                 UserIncomingCall::dispatch((int) $user->id, [
                     'call_id' => $callId,
                     'call_type' => $callType,
                     'chat_type' => $chatType,
-                    'chat_id' => (int) $chatable->id,
+                    'chat_id' => $chatableId,
                     'chat_label' => $label,
                     'from_user_id' => (int) $caller->id,
-                    'from_user_name' => $caller->displayLabel(),
+                    'from_user_name' => $callerName,
                     'url' => $url,
                 ]);
             });

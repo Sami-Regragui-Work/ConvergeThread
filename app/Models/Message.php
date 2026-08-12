@@ -2,12 +2,11 @@
 
 namespace App\Models;
 
-use App\Models\MessageAttachment;
-use App\Models\MessageMention;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Support\Facades\Storage;
 
 class Message extends Model
 {
@@ -97,9 +96,10 @@ class Message extends Model
             return [
                 'id' => $this->id,
                 'user_id' => $this->user_id,
-                'user_name' => $this->user->display_name ?? $this->user->email,
-                'user_role_color' => $this->user->tenantRole?->color,
-                'user_initial' => strtoupper(substr($this->user->display_name ?? $this->user->email, 0, 1)),
+                'user_name' => $this->authorName(),
+                'user_role_color' => $this->user?->tenantRole?->color,
+                'user_initial' => $this->authorInitial(),
+                'user_avatar_color' => $this->user?->avatarColor(),
                 'content' => null,
                 'content_html' => null,
                 'is_encrypted' => false,
@@ -149,8 +149,8 @@ class Message extends Model
             ->all();
 
         if ($attachmentPayload === [] && $legacyFileUrl) {
-            $legacySize = $this->file_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($this->file_path)
-                ? \Illuminate\Support\Facades\Storage::disk('public')->size($this->file_path)
+            $legacySize = $this->file_path && Storage::disk('public')->exists($this->file_path)
+                ? Storage::disk('public')->size($this->file_path)
                 : null;
 
             $attachmentPayload = [[
@@ -174,9 +174,10 @@ class Message extends Model
         return [
             'id' => $this->id,
             'user_id' => $this->user_id,
-            'user_name' => $this->user->display_name ?? $this->user->email,
-            'user_role_color' => $this->user->tenantRole?->color,
-            'user_initial' => strtoupper(substr($this->user->display_name ?? $this->user->email, 0, 1)),
+            'user_name' => $this->authorName(),
+            'user_role_color' => $this->user?->tenantRole?->color,
+            'user_initial' => $this->authorInitial(),
+            'user_avatar_color' => $this->user?->avatarColor(),
             'content' => $this->content,
             'is_encrypted' => (bool) $this->is_encrypted,
             'is_markdown' => (bool) $this->is_markdown,
@@ -198,5 +199,15 @@ class Message extends Model
                 ? $this->mentions()->where('user_id', $viewerId)->whereNull('read_at')->exists()
                 : false,
         ];
+    }
+
+    private function authorName(): string
+    {
+        return $this->user?->displayLabel() ?? 'Former member';
+    }
+
+    private function authorInitial(): string
+    {
+        return $this->user ? $this->user->avatarInitial() : '?';
     }
 }

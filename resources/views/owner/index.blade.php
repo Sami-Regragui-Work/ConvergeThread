@@ -50,9 +50,62 @@
                 <p class="text-xs uppercase tracking-wide text-slate-500">Duos</p>
                 <p class="mt-2 text-2xl font-semibold text-white">{{ $stats['duos_count'] }}</p>
             </div>
+
+            <div class="rounded-2xl border border-white/5 bg-surface-200 px-5 py-4 shadow-xl shadow-black/10">
+                <p class="text-xs uppercase tracking-wide text-slate-500">Pending Registrations</p>
+                <p class="mt-2 text-2xl font-semibold text-white {{ $stats['pending_registrations_count'] > 0 ? 'text-amber-300' : '' }}">{{ $stats['pending_registrations_count'] }}</p>
+            </div>
         </section>
 
         <section class="space-y-6">
+            @if($pendingRegistrations->isNotEmpty())
+                <div class="rounded-2xl border border-white/5 bg-surface-200 p-6 shadow-xl shadow-black/10">
+                    <div class="mb-5">
+                        <h2 class="text-lg font-semibold text-white">Pending Registration Requests</h2>
+                        <p class="mt-1 text-sm text-slate-400">
+                            People waiting for approval to sign in. Pick a tenant to approve an unassigned request into, or reject it.
+                        </p>
+                    </div>
+
+                    <div class="divide-y divide-white/5">
+                        @foreach($pendingRegistrations as $registration)
+                            <div class="py-4 flex flex-col lg:flex-row lg:items-center gap-3">
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-medium text-white break-words">{{ $registration->email }}</p>
+                                    <p class="text-xs text-slate-500 mt-0.5 break-words">
+                                        @if($registration->display_name){{ $registration->display_name }} · @endif
+                                        @if($registration->tenant)
+                                            Joins: <span class="text-slate-400">{{ $registration->tenant->name }}</span> ·
+                                        @else
+                                            Requested slug: <span class="text-slate-400">{{ $registration->tenant_slug ?? '—' }}</span> ·
+                                        @endif
+                                        {{ $registration->created_at->diffForHumans() }}
+                                    </p>
+                                </div>
+                                <form method="POST" action="{{ route('owner.registrations.approve', $registration) }}"
+                                    class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+                                    @csrf
+                                    @if(!$registration->tenant)
+                                        <select name="tenant_id" required
+                                            class="bg-surface-300 border border-white/10 text-white text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition">
+                                            @foreach($tenants->where('id', '!=', 1) as $tenant)
+                                                <option value="{{ $tenant->id }}">{{ $tenant->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    @endif
+                                    <button type="submit" class="text-xs text-emerald-400 hover:text-emerald-300 border border-white/10 rounded-lg px-3 py-2 transition">Approve</button>
+                                </form>
+                                <form method="POST" action="{{ route('owner.registrations.reject', $registration) }}" class="shrink-0">
+                                    @csrf
+                                    <button type="button" @click="$dispatch('confirm-action', { message: 'Reject the registration request for ' + @js($registration->email) + '?', form: $el.closest('form') })"
+                                        class="w-full lg:w-auto text-xs text-red-400 hover:text-red-300 border border-white/10 rounded-lg px-3 py-2 transition">Reject</button>
+                                </form>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
             <div class="rounded-2xl border border-white/5 bg-surface-200 p-6 shadow-xl shadow-black/10">
                     <div class="mb-5 flex items-start justify-between gap-3">
                         <div>
@@ -96,6 +149,17 @@
                         <h2 class="text-lg font-semibold text-white">Tenants</h2>
                         <p class="text-sm text-slate-400">Public info overview.</p>
                     </div>
+                    @include('partials.sort-control', [
+                        'param' => 'tsort',
+                        'dirParam' => 'tdir',
+                        'options' => [
+                            'id:asc' => 'ID A–Z',
+                            'created_at:desc' => 'Newest',
+                            'created_at:asc' => 'Oldest',
+                            'name:asc' => 'Name A–Z',
+                            'users_count:desc' => 'Most users',
+                        ],
+                    ])
                 </div>
 
                 <div class="overflow-x-auto">
@@ -140,15 +204,39 @@
                                             @if ($tenant->id === 1)
                                                 <span class="text-xs text-slate-600">—</span>
                                             @elseif ($tenant->isClosed())
-                                                <form method="POST" action="{{ route('owner.tenants.reopen', $tenant) }}">
-                                                    @csrf @method('DELETE')
-                                                    <button type="submit" class="text-xs text-emerald-400 hover:text-emerald-300">Reopen</button>
-                                                </form>
+                                                <div class="flex items-center gap-3">
+                                                    <form method="POST" action="{{ route('owner.tenants.reopen', $tenant) }}">
+                                                        @csrf @method('DELETE')
+                                                        <button type="submit" class="text-xs text-emerald-400 hover:text-emerald-300">Reopen</button>
+                                                    </form>
+                                                    <form method="POST" action="{{ route('owner.tenants.destroy', $tenant) }}">
+                                                        @csrf @method('DELETE')
+                                                        <button type="button" @click="$dispatch('confirm-action', { message: 'Permanently remove the workspace ' + @js($tenant->name) + ' and all its data?', form: $el.closest('form') })"
+                                                            class="inline-flex items-center gap-1.5 text-xs font-medium text-red-500/80 hover:text-red-400 hover:bg-red-500/10 px-2 py-1 rounded-lg transition">
+                                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                            </svg>
+                                                            Remove</button>
+                                                    </form>
+                                                </div>
                                             @else
-                                                <form method="POST" action="{{ route('owner.tenants.close', $tenant) }}">
-                                                    @csrf
-                                                    <button type="submit" class="text-xs text-red-400 hover:text-red-300">Close</button>
-                                                </form>
+                                                <div class="flex items-center gap-3">
+                                                    <form method="POST" action="{{ route('owner.tenants.close', $tenant) }}">
+                                                        @csrf
+                                                        <button type="submit" class="text-xs text-red-400 hover:text-red-300">Close</button>
+                                                    </form>
+                                                    <form method="POST" action="{{ route('owner.tenants.destroy', $tenant) }}">
+                                                        @csrf @method('DELETE')
+                                                        <button type="button" @click="$dispatch('confirm-action', { message: 'Permanently remove the workspace ' + @js($tenant->name) + ' and all its data?', form: $el.closest('form') })"
+                                                            class="inline-flex items-center gap-1.5 text-xs font-medium text-red-500/80 hover:text-red-400 hover:bg-red-500/10 px-2 py-1 rounded-lg transition">
+                                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                            </svg>
+                                                            Remove</button>
+                                                    </form>
+                                                </div>
                                             @endif
                                         </td>
                                     </tr>
@@ -164,9 +252,23 @@
         </section>
 
         <section class="rounded-2xl border border-white/5 bg-surface-200 shadow-xl shadow-black/10 overflow-hidden">
-            <div class="border-b border-white/5 px-6 py-4">
-                <h2 class="text-lg font-semibold text-white">Users</h2>
-                <p class="text-sm text-slate-400">Users with tenant and ban information.</p>
+            <div class="flex items-center justify-between gap-3 border-b border-white/5 px-6 py-4">
+                <div>
+                    <h2 class="text-lg font-semibold text-white">Users</h2>
+                    <p class="text-sm text-slate-400">Users with tenant and ban information.</p>
+                </div>
+                @include('partials.sort-control', [
+                    'param' => 'usort',
+                    'dirParam' => 'udir',
+                    'options' => [
+                        'id:asc' => 'ID A–Z',
+                        'created_at:desc' => 'Newest',
+                        'created_at:asc' => 'Oldest',
+                        'display_name:asc' => 'Name A–Z',
+                        'email:asc' => 'Email A–Z',
+                        'banned:desc' => 'Banned first',
+                    ],
+                ])
             </div>
 
             <div class="overflow-x-auto">
@@ -188,8 +290,14 @@
                             <tr class="text-slate-300"
                                 x-show="ownerMatch(@js(strtolower(($user->display_name ?? '').' '.($user->username ?? '').' '.($user->email ?? '').' '.($user->tenant?->name ?? '').' '.($user->tenantRole?->name ?? '').' '.$user->id)))">
                                 <td class="px-4 py-3">{{ $user->id }}</td>
-                                <td class="px-4 py-3 font-medium text-white">
-                                    {{ $user->display_name ?? $user->email }}
+                                <td class="px-4 py-3">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
+                                            :style="'background-color: ' + @js($user->avatarColor())">
+                                            {{ $user->avatarInitial() }}
+                                        </div>
+                                        <span class="font-medium text-white">{{ $user->display_name ?? $user->email }}</span>
+                                    </div>
                                 </td>
                                 <td class="px-4 py-3">{{ $user->username }}</td>
                                 <td class="px-4 py-3">{{ $user->email }}</td>
@@ -208,17 +316,30 @@
                                 </td>
                                 <td class="px-4 py-3">
                                     @if(!$user->isOwner())
-                                        @if($user->banned_by_id)
-                                            <form method="POST" action="{{ route('owner.users.unban', $user) }}">
+                                        <div class="flex items-center gap-3">
+                                            @if($user->banned_by_id)
+                                                <form method="POST" action="{{ route('owner.users.unban', $user) }}">
+                                                    @csrf @method('DELETE')
+                                                    <button type="submit" class="inline-block w-14 text-center text-xs text-emerald-400 hover:text-emerald-300">Unban</button>
+                                                </form>
+                                            @else
+                                                <form method="POST" action="{{ route('owner.users.ban', $user) }}">
+                                                    @csrf
+                                                    <button type="submit" class="inline-block w-14 text-center text-xs text-red-400 hover:text-red-300">Ban</button>
+                                                </form>
+                                            @endif
+                                            <form method="POST" action="{{ route('owner.users.destroy', $user) }}">
                                                 @csrf @method('DELETE')
-                                                <button type="submit" class="text-xs text-emerald-400 hover:text-emerald-300">Unban</button>
+                                                <button type="button" @click="$dispatch('confirm-action', { message: 'Permanently remove ' + @js($user->displayLabel()) + '? Their messages and call history will be kept.', form: $el.closest('form') })"
+                                                    class="inline-flex items-center gap-1.5 text-xs font-medium text-red-500/80 hover:text-red-400 hover:bg-red-500/10 px-2 py-1 rounded-lg transition">
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                    </svg>
+                                                    Remove
+                                                </button>
                                             </form>
-                                        @else
-                                            <form method="POST" action="{{ route('owner.users.ban', $user) }}">
-                                                @csrf
-                                                <button type="submit" class="text-xs text-red-400 hover:text-red-300">Ban</button>
-                                            </form>
-                                        @endif
+                                        </div>
                                     @else
                                         <span class="text-xs text-slate-600">—</span>
                                     @endif
@@ -236,9 +357,22 @@
 
         <section class="grid gap-8 2xl:grid-cols-2">
             <div class="rounded-2xl border border-white/5 bg-surface-200 p-6 shadow-xl shadow-black/10">
-                <div class="mb-4">
-                    <h2 class="text-lg font-semibold text-white">Groups</h2>
-                    <p class="text-sm text-slate-400">Group public info and members.</p>
+                <div class="mb-4 flex items-start justify-between gap-3">
+                    <div>
+                        <h2 class="text-lg font-semibold text-white">Groups</h2>
+                        <p class="text-sm text-slate-400">Group public info and members.</p>
+                    </div>
+                    @include('partials.sort-control', [
+                        'param' => 'gsort',
+                        'dirParam' => 'gdir',
+                        'options' => [
+                            'id:asc' => 'ID A–Z',
+                            'created_at:desc' => 'Newest',
+                            'created_at:asc' => 'Oldest',
+                            'name:asc' => 'Name A–Z',
+                            'members_count:desc' => 'Most members',
+                        ],
+                    ])
                 </div>
 
                 <div class="space-y-4">

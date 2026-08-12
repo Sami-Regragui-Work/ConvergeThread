@@ -43,7 +43,7 @@
                     .listen('.call.incoming', (payload) => this.onIncoming(payload))
                     .listen('.notifications.unread', (e) => {
                         if (typeof e?.count === 'number') {
-                            window.dispatchEvent(new CustomEvent('ct-unread', { detail: { count: e.count } }));
+                            window.dispatchEvent(new CustomEvent('ct-unread', { detail: { count: e.count, play_sound: e.play_sound === true } }));
                         }
                     });
             },
