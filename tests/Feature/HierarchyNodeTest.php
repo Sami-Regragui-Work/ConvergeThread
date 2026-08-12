@@ -367,4 +367,92 @@ class HierarchyNodeTest extends TestCase
         $this->assertSame('group', $node->kind);
         $this->assertSame($group->id, $node->group_id);
     }
+
+    public function test_tag_defaults_number_nodes_within_a_level(): void
+    {
+        [$tenant, $founder] = $this->makeTenant();
+
+        $hierarchy = RoleHierarchy::create(['tenant_id' => $tenant->id, 'name' => 'Eng']);
+        $hierarchy->levels()->create(['level' => 0, 'kind' => 'member']);
+        $hierarchy->levels()->create(['level' => 0, 'kind' => 'member']);
+        $hierarchy->levels()->create(['level' => 0, 'kind' => 'member']);
+
+        $view = $this->actingAs($founder)->view('partials.hierarchy-map', [
+            'hierarchy' => $hierarchy,
+            'members' => collect(),
+            'groups' => collect(),
+            'tenantRoles' => collect(),
+        ]);
+
+        $view->assertSee('Top level (1)', false);
+        $view->assertSee('Top level (2)', false);
+        $view->assertSee('Top level (3)', false);
+    }
+
+    public function test_update_tag_persists_and_rejects_empty(): void
+    {
+        [$tenant, $founder] = $this->makeTenant();
+
+        $hierarchy = RoleHierarchy::create(['tenant_id' => $tenant->id, 'name' => 'Eng']);
+        $node = $hierarchy->levels()->create(['level' => 0, 'kind' => 'member']);
+
+        $this->actingAs($founder)->patch(route('hierarchies.levels.tag', $node), ['tag' => '(QA)'])
+            ->assertOk();
+
+        $this->assertSame('(QA)', $node->fresh()->tag);
+
+        $this->actingAs($founder)->patch(route('hierarchies.levels.tag', $node), ['tag' => '   '])
+            ->assertStatus(422);
+
+        $this->assertSame('(QA)', $node->fresh()->tag);
+    }
+
+    public function test_update_tag_rejects_duplicate_within_same_level(): void
+    {
+        [$tenant, $founder] = $this->makeTenant();
+
+        $hierarchy = RoleHierarchy::create(['tenant_id' => $tenant->id, 'name' => 'Eng']);
+        $a = $hierarchy->levels()->create(['level' => 0, 'kind' => 'member']);
+        $b = $hierarchy->levels()->create(['level' => 0, 'kind' => 'member']);
+
+        $this->actingAs($founder)->patch(route('hierarchies.levels.tag', $a), ['tag' => '(founder)'])
+            ->assertOk();
+
+        $this->actingAs($founder)->patch(route('hierarchies.levels.tag', $b), ['tag' => '(founder)'])
+            ->assertStatus(422);
+
+        $this->assertNull($b->fresh()->tag);
+    }
+
+    public function test_update_tag_rejects_colliding_with_default_numbering(): void
+    {
+        [$tenant, $founder] = $this->makeTenant();
+
+        $hierarchy = RoleHierarchy::create(['tenant_id' => $tenant->id, 'name' => 'Eng']);
+        $hierarchy->levels()->create(['level' => 0, 'kind' => 'member']);
+        $b = $hierarchy->levels()->create(['level' => 0, 'kind' => 'member']);
+
+        $this->actingAs($founder)->patch(route('hierarchies.levels.tag', $b), ['tag' => '(1)'])
+            ->assertStatus(422);
+
+        $this->assertNull($b->fresh()->tag);
+    }
+
+    public function test_update_tag_allows_same_tag_on_different_levels(): void
+    {
+        [$tenant, $founder] = $this->makeTenant();
+
+        $hierarchy = RoleHierarchy::create(['tenant_id' => $tenant->id, 'name' => 'Eng']);
+        $top = $hierarchy->levels()->create(['level' => 0, 'kind' => 'member']);
+        $child = $hierarchy->levels()->create(['level' => 1, 'kind' => 'member']);
+
+        $this->actingAs($founder)->patch(route('hierarchies.levels.tag', $top), ['tag' => '(QA)'])
+            ->assertOk();
+
+        $this->actingAs($founder)->patch(route('hierarchies.levels.tag', $child), ['tag' => '(QA)'])
+            ->assertOk();
+
+        $this->assertSame('(QA)', $top->fresh()->tag);
+        $this->assertSame('(QA)', $child->fresh()->tag);
+    }
 }

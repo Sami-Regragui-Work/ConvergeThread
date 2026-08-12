@@ -103,6 +103,7 @@ Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
         Route::patch('levels/{level}/group', [RoleHierarchyController::class, 'setGroup'])->name('levels.group');
         Route::patch('levels/{level}/role', [RoleHierarchyController::class, 'setRole'])->name('levels.role');
         Route::patch('levels/{level}/member', [RoleHierarchyController::class, 'setMember'])->name('levels.member');
+        Route::patch('levels/{level}/tag', [RoleHierarchyController::class, 'updateTag'])->name('levels.tag');
         Route::delete('levels/{level}', [RoleHierarchyController::class, 'destroyLevel'])->name('levels.destroy');
         Route::delete('{hierarchy}', [RoleHierarchyController::class, 'destroy'])->name('destroy');
     });

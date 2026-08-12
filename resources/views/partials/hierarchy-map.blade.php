@@ -8,25 +8,41 @@
 @php
     $levels = $hierarchy->levels;
 
+    // Effective tag per node: the stored tag, or "(n)" numbering same-level
+    // nodes by id so otherwise-identical "Level N" cards can be told apart.
+    $effectiveTags = [];
+    $levels->groupBy('level')->each(function ($group) use (&$effectiveTags) {
+        foreach ($group->sortBy('id')->values() as $i => $level) {
+            $stored = $level->tag === null ? null : trim($level->tag);
+            $effectiveTags[(int) $level->id] = ($stored !== null && $stored !== '')
+                ? $stored
+                : '('.($i + 1).')';
+        }
+    });
+    $displayName = fn (\App\Models\RoleHierarchyLevel $level) => $level->label.' '.$effectiveTags[(int) $level->id];
+
     // Candidate "add parent" targets per node: every node that is not the node
     // itself and not inside its subtree (linking would create a cycle).
-    $linkTargets = $levels->mapWithKeys(function ($level) use ($levels) {
+    $linkTargets = $levels->mapWithKeys(function ($level) use ($levels, $displayName) {
         $subtree = $level->subtreeIds($levels)->map(fn ($id) => (int) $id)->all();
 
         return [(int) $level->id => $levels
             ->reject(fn ($n) => in_array((int) $n->id, $subtree, true))
-            ->map(fn ($n) => ['id' => (int) $n->id, 'name' => $n->label])
+            ->map(fn ($n) => ['id' => (int) $n->id, 'name' => $displayName($n)])
             ->values()
             ->all()];
     });
 
-    $nodes = $levels->map(function ($level) use ($linkTargets) {
+    $nodes = $levels->map(function ($level) use ($linkTargets, $effectiveTags, $displayName) {
         return [
             'id' => (int) $level->id,
             'level' => (int) $level->level,
             'kind' => $level->kind,
             'parent_id' => $level->parent_id === null ? null : (int) $level->parent_id,
             'label' => $level->label,
+            'tag' => $level->tag,
+            'tag_effective' => $effectiveTags[(int) $level->id],
+            'display' => $displayName($level),
             'group_name' => $level->group?->name,
             'group_member_count' => (int) $level->group?->active_members_count ?? 0,
             'role_name' => $level->role?->name,
@@ -44,6 +60,7 @@
                 'group' => route('hierarchies.levels.group', $level),
                 'role' => route('hierarchies.levels.role', $level),
                 'member' => route('hierarchies.levels.member', $level),
+                'tag' => route('hierarchies.levels.tag', $level),
                 'destroy' => route('hierarchies.levels.destroy', $level),
             ],
         ];
@@ -145,14 +162,14 @@
             <svg class="absolute top-0 left-0 overflow-visible" pointer-events="none"
                 :width="worldW" :height="worldH">
                 <defs>
-                    <marker id="edge-arrow-{{ $hierarchy->id }}" markerWidth="9" markerHeight="9" refX="8" refY="4.5"
+                    <marker id="edge-arrow-{{ $hierarchy->id }}" markerWidth="12" markerHeight="12" refX="10" refY="6"
                         orient="auto" markerUnits="userSpaceOnUse">
-                        <path d="M0,0 L9,4.5 L0,9 L2.5,4.5 Z" fill="#94a3b8"></path>
+                        <path d="M1,1 L12,6 L1,11 L3.5,6 Z" fill="#94a3b8"></path>
                     </marker>
                 </defs>
                 <template x-for="node in nodes" :key="'edge-' + node.id">
                     <path x-show="node.parent_id != null" :d="edgeD(node)"
-                        fill="none" stroke="#94a3b8" stroke-opacity="0.85" stroke-width="2.25"
+                        fill="none" stroke="#94a3b8" stroke-opacity="1" stroke-width="2.5"
                         marker-end="url(#edge-arrow-{{ $hierarchy->id }})" />
                 </template>
             </svg>
@@ -170,7 +187,9 @@
                     <div class="flex items-center gap-2">
                         <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-brand-500/20 text-brand-300 text-[11px] font-bold shrink-0"
                             x-text="node.level"></span>
-                        <span class="text-sm font-semibold text-white truncate" x-text="node.label"></span>
+                        <span class="text-sm font-semibold text-white truncate min-w-0 flex-1" x-text="node.label"></span>
+                        <span class="inline-flex shrink-0 items-center px-1.5 py-0.5 rounded bg-brand-500/15 text-brand-300 text-[10px] font-semibold"
+                            x-text="nodeTag(node)"></span>
                         <span class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded shrink-0"
                             :class="node.kind === 'group'
                                 ? 'bg-indigo-500/20 text-indigo-300'
@@ -235,6 +254,24 @@
 
             <p x-show="error" x-cloak class="text-xs text-red-400" x-text="error"></p>
 
+            <div class="bg-surface-200 border border-white/5 rounded-xl p-3 space-y-2">
+                <p class="text-[11px] uppercase tracking-wide text-slate-500">Node tag</p>
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-xs text-slate-400">Level label:</span>
+                    <span class="text-xs font-semibold text-white" x-text="selected().label"></span>
+                    <span class="inline-flex px-1.5 py-0.5 rounded bg-brand-500/15 text-brand-300 text-[10px] font-semibold"
+                        x-text="nodeTag(selected())"></span>
+                    <input type="text" x-model="tagDraft" maxlength="40" @keydown.enter.prevent="saveTag()"
+                        class="flex-1 min-w-32 bg-surface-300 border border-white/10 text-white text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500/50 transition"
+                        placeholder="(1)">
+                    <button type="button" @click="saveTag()" :disabled="busy"
+                        class="text-xs px-2.5 py-1.5 rounded-lg bg-brand-500/20 text-brand-300 hover:bg-brand-500/30 transition disabled:opacity-40">
+                        Save tag
+                    </button>
+                </div>
+                <p class="text-[11px] text-slate-500">Shown next to the level label to tell nodes apart. Must be unique per level.</p>
+            </div>
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {{-- Add child --}}
                 <div class="bg-surface-200 border border-white/5 rounded-xl p-3 space-y-2">
@@ -269,7 +306,7 @@
                             class="bg-surface-300 border border-white/10 text-slate-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500/50">
                             <option value="" disabled x-text="'…or link under existing'"></option>
                             <template x-for="t in selected().link_targets" :key="t.id">
-                                <option :value="t.id" x-text="t.name"></option>
+                                <option :value="t.id" x-text="displayFor(t.id)"></option>
                             </template>
                         </select>
                         <button type="button" @click="addParentExisting()" :disabled="busy || !parentTargetId"
@@ -382,6 +419,7 @@
             typeDraft: 'member',
             typeGroupId: '',
             typeRoleId: '',
+            tagDraft: '',
 
             init() {
                 this.nodes = (payload.nodes || []).map(n => ({
@@ -441,6 +479,7 @@
                 this.parentTargetId = '';
                 this.error = '';
                 this.memberIds = (node.members || []).map(m => m.id);
+                this.tagDraft = node.tag || '';
             },
 
             kindOptions() {
@@ -457,6 +496,45 @@
 
             memberExtra(node) {
                 return Math.max(0, (node.members || []).length - 4);
+            },
+
+            siblingRank(node) {
+                const sibs = this.nodes.filter(o => o.level === node.level).sort((a, b) => a.id - b.id);
+                return sibs.findIndex(o => o.id === node.id) + 1;
+            },
+
+            nodeTag(node) {
+                const tag = (node.tag || '').trim();
+                return tag || '(' + this.siblingRank(node) + ')';
+            },
+
+            nodeDisplay(node) {
+                return (node.label || '') + ' ' + this.nodeTag(node);
+            },
+
+            displayFor(id) {
+                const n = this.nodeById(id);
+                return n ? this.nodeDisplay(n) : '';
+            },
+
+            async saveTag() {
+                const node = this.selected();
+                if (!node) return;
+                const tag = (this.tagDraft || '').trim();
+                if (!tag) {
+                    this.error = 'Tag cannot be empty.';
+                    return;
+                }
+                const duplicate = this.nodes.find(o => o.id !== node.id && o.level === node.level && this.nodeTag(o) === tag);
+                if (duplicate) {
+                    this.error = 'Another node at this level already uses "'.concat(tag, '".');
+                    return;
+                }
+                const ok = await this.post(node.urls.tag, 'PATCH', { tag });
+                if (!ok) return;
+                node.tag = tag;
+                this.tagDraft = tag;
+                this.error = '';
             },
 
             layout() {
@@ -672,8 +750,7 @@
                 const y1 = p.y + p.h;
                 const x2 = node.x + node.w / 2;
                 const y2 = node.y;
-                const ym = (y1 + y2) / 2;
-                return 'M' + x1 + ',' + y1 + ' C' + x1 + ',' + ym + ' ' + x2 + ',' + ym + ' ' + x2 + ',' + y2;
+                return 'M' + x1 + ',' + y1 + ' L' + x2 + ',' + y2;
             },
 
             worldStyle() {
