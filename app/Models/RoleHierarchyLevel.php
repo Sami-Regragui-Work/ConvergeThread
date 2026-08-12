@@ -16,6 +16,7 @@ class RoleHierarchyLevel extends Model
         'parent_id',
         'level',
         'label',
+        'tag',
         'kind',
         'group_id',
         'role_id',

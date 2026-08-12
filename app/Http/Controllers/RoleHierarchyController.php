@@ -283,6 +283,46 @@ class RoleHierarchyController extends Controller
         return back()->with('success', 'Node removed.');
     }
 
+    public function updateTag(Request $request, RoleHierarchyLevel $level)
+    {
+        $user = Auth::user();
+        abort_unless($this->canManage($user), 403);
+        $this->assertOwnsHierarchy($level, $user);
+
+        $tag = trim((string) ($request->validate([
+            'tag' => 'nullable|string|max:40',
+        ])['tag'] ?? ''));
+
+        if ($tag === '') {
+            return response()->json(['message' => 'Tag cannot be empty.'], 422);
+        }
+
+        $all = RoleHierarchyLevel::where('role_hierarchy_id', $level->role_hierarchy_id)
+            ->where('level', $level->level)
+            ->orderBy('id')
+            ->get(['id', 'tag']);
+
+        foreach ($all as $i => $sibling) {
+            if ((int) $sibling->id === (int) $level->id) {
+                continue;
+            }
+
+            $effective = $sibling->tag !== null && trim($sibling->tag) !== ''
+                ? trim($sibling->tag)
+                : '('.($i + 1).')';
+
+            if ($effective === $tag) {
+                return response()->json(['message' => 'Another node at this level already uses "'.$tag.'".'], 422);
+            }
+        }
+
+        $level->update(['tag' => $tag]);
+
+        WorkspaceSync::bump($user->tenant_id, ['hierarchies']);
+
+        return response()->json(['ok' => true, 'tag' => $tag]);
+    }
+
     public function destroy(RoleHierarchy $hierarchy)
     {
         $user = Auth::user();
