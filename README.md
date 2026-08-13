@@ -1,76 +1,33 @@
-# ConvergeThread
+# ConvergeThread Documentation
 
-Laravel 12 collaboration platform — session-auth web monolith with groups, duos, merge sessions, and threaded messaging.
+This folder is the **working source of truth** for development.
 
-## Requirements
+## Documents
 
-- PHP 8.2+ (8.5 recommended)
-- Composer
-- MySQL 8+ (or MariaDB)
-- Optional: Node.js 20+ (only if you use Vite assets; the MVP UI loads Tailwind and Alpine from CDN)
+| File | Purpose |
+|------|---------|
+| [architecture.md](./architecture.md) | Stack, rules, layers, routes, invariants |
+| [roadmap.md](./roadmap.md) | Phases, SOW checklist, execution order |
+| [todo.md](./todo.md) | Done vs pending backlog (big-ticket items) |
+| [known-limitations.md](./known-limitations.md) | E2EE / WebRTC caveats and how to fix them |
+| [user-flows.md](./user-flows.md) | End-user journeys |
+| [erd.dbml](./erd.dbml) | Database schema (dbdiagram syntax) |
+| [branching.md](./branching.md) | Git branch discipline |
 
-## Install
+## Ground truth (scope)
 
-```bash
-git clone <repository-url> ConvergeThread
-cd ConvergeThread
-composer install
-cp .env.example .env
-php artisan key:generate
-```
+- `Full_Project_functional_scope(1)(1).docx` — full product intent
+- `S.O.W_fil_rouge_Sami_Regragui_-MVP(1)(1).docx` — MVP contract
 
-Configure MySQL in `.env`:
+## Conventions
 
-```env
-DB_CONNECTION=mysql
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_DATABASE=converge_thread
-DB_USERNAME=root
-DB_PASSWORD=your_password
-```
+- Laravel 12 web monolith: session auth, Blade, redirects, flash messages
+- PHP 8.5 target
+- Controllers stay thin; services own domain logic; policies authorize
+- After Form Request validation: `$credentials = $request->validated()` then use `$credentials['field']`
 
-Create the database, then migrate and seed:
+When docs conflict with code, **code wins** — update these files to match.
 
-```bash
-# create DB once, e.g. mysql -e "CREATE DATABASE converge_thread CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-php artisan migrate:fresh --seed
-php artisan storage:link
-```
+## Git
 
-## Run
-
-```bash
-php artisan serve
-```
-
-Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
-
-After seeding, sign in with the owner account from `database/seeders/Permanents/OwnerSeeder.php` (check that file for the seeded email/password), or register into the default workspace tenant.
-
-For message attachments, ensure `storage/app/public` is writable and the `public/storage` link exists (`php artisan storage:link`).
-
-## Tests
-
-```bash
-php artisan test
-```
-
-## Stack
-
-- PHP, Laravel 12
-- Blade + Tailwind (CDN) + Alpine.js
-- Session authentication (`web` guard)
-- Poll-based chat updates (`BROADCAST_CONNECTION=log` by default)
-
-## Documentation
-
-Project docs live in [`references/`](./references/README.md) on this branch (`docs/project-documentation`). On `main`, that folder is gitignored for local use.
-
-Start with `references/README.md` and `references/todo.md`.
-
-Scope `.docx` files stay local in `references/` (see `references/.gitignore`).
-
-## Branching
-
-Feature work uses `feature/*` branches merged into `main`. See [references/branching.md](./references/branching.md).
+Tracked on branch **`docs/project-documentation`** only. On `main`, `references/` is gitignored so local copies stay private alongside the `.docx` files.
