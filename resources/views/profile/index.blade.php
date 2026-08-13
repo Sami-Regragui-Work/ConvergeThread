@@ -122,13 +122,17 @@
         </div>
 
         {{-- Danger zone --}}
-        @if(!$user->isOwner())
-            <div class="bg-red-500/5 border border-red-500/20 rounded-2xl p-6">
-                <h2 class="text-sm font-semibold text-red-300 mb-1">Danger zone</h2>
-                <p class="text-sm text-slate-500 mb-4">
+        <div class="bg-red-500/5 border border-red-500/20 rounded-2xl p-6">
+            <h2 class="text-sm font-semibold text-red-300 mb-1">Danger zone</h2>
+            <p class="text-sm text-slate-500 mb-4">
+                @if($user->isOwner())
+                    Platform owner accounts cannot be deleted.
+                @else
                     Deleting your account is permanent. Your membership in groups and duos ends, and you'll be
                     signed out. Your messages and call history are kept.
-                </p>
+                @endif
+            </p>
+            @if(!$user->isOwner())
                 <form method="POST" action="{{ route('profile.destroy') }}"
                     @submit.prevent="$dispatch('confirm-action', {
                         title: 'Delete your account?',
@@ -151,7 +155,7 @@
                     </div>
                     @error('current_password')<p class="mt-2 text-xs text-red-400 break-words">{{ $message }}</p>@enderror
                 </form>
-            </div>
-        @endif
+            @endif
+        </div>
     </div>
 @endsection

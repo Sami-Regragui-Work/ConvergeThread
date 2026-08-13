@@ -34,6 +34,10 @@ class WorkspaceMemberController extends Controller
 
         $canManage = $this->tenantPermissionService->canManageWorkspaceMembers($user);
 
+        $tenantRoles = $canManage
+            ? TenantRole::assignableForInviter($user)
+            : collect();
+
         [$sort, $dir] = $this->resolveSort(
             $request,
             ['display_name', 'email', 'created_at'],
@@ -65,6 +69,13 @@ class WorkspaceMemberController extends Controller
             })
             : collect();
 
+        $protectedMemberIds = $canManage
+            ? $members->filter(function (User $member) use ($user) {
+                return $member->id !== $user->id
+                    && $this->roleHierarchyService->isTenantFounder($member);
+            })->pluck('id')
+            : collect();
+
         $pendingInvitations = $canManage
             ? Invitation::query()
                 ->where('tenant_id', $user->tenant_id)
@@ -87,9 +98,11 @@ class WorkspaceMemberController extends Controller
             'members',
             'assignableByMember',
             'removableByMember',
+            'protectedMemberIds',
             'pendingInvitations',
             'pendingRegistrations',
             'canManage',
+            'tenantRoles',
         ));
     }
 

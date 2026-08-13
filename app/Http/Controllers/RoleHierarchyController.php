@@ -61,6 +61,15 @@ class RoleHierarchyController extends Controller
         ));
     }
 
+    public function map(RoleHierarchy $hierarchy)
+    {
+        $user = Auth::user();
+        abort_unless($this->canManage($user), 403);
+        abort_unless((int) $hierarchy->tenant_id === (int) $user->tenant_id, 404);
+
+        return response()->json($this->roleHierarchyService->mapPayload($hierarchy));
+    }
+
     public function store(Request $request)
     {
         $user = Auth::user();
@@ -151,7 +160,13 @@ class RoleHierarchyController extends Controller
         $conflicts = $this->roleHierarchyService->linkNode($level, $parent);
 
         if ($conflicts) {
-            return back()->withErrors(['hierarchies' => implode(' ', $conflicts)]);
+            $message = implode(' ', $conflicts);
+
+            if ($request->wantsJson()) {
+                return response()->json(['message' => $message], 422);
+            }
+
+            return back()->withErrors(['hierarchies' => $message]);
         }
 
         WorkspaceSync::bump($user->tenant_id, ['hierarchies']);
@@ -196,8 +211,13 @@ class RoleHierarchyController extends Controller
 
         if ($rejected) {
             $names = User::whereIn('id', $rejected)->pluck('display_name')->join(', ');
+            $message = 'Could not add '.$names.': already sit in an ancestor/descendant position.';
 
-            return back()->withErrors(['hierarchies' => 'Could not add '.$names.': already sit in an ancestor/descendant position.']);
+            if ($request->wantsJson()) {
+                return response()->json(['message' => $message], 422);
+            }
+
+            return back()->withErrors(['hierarchies' => $message]);
         }
 
         return back()->with('success', 'Node members updated.');
@@ -224,8 +244,13 @@ class RoleHierarchyController extends Controller
 
         if ($rejected) {
             $names = User::whereIn('id', $rejected)->pluck('display_name')->join(', ');
+            $message = 'Could not attach '.$group->name.': '.$names.' already sit in an ancestor/descendant position.';
 
-            return back()->withErrors(['hierarchies' => 'Could not attach '.$group->name.': '.$names.' already sit in an ancestor/descendant position.']);
+            if ($request->wantsJson()) {
+                return response()->json(['message' => $message], 422);
+            }
+
+            return back()->withErrors(['hierarchies' => $message]);
         }
 
         return back()->with('success', 'Group node updated.');
@@ -251,7 +276,13 @@ class RoleHierarchyController extends Controller
         WorkspaceSync::bump($user->tenant_id, ['hierarchies']);
 
         if ($rejected) {
-            return back()->withErrors(['hierarchies' => 'Could not attach role: it already sits in an ancestor/descendant position.']);
+            $message = 'Could not attach role: it already sits in an ancestor/descendant position.';
+
+            if ($request->wantsJson()) {
+                return response()->json(['message' => $message], 422);
+            }
+
+            return back()->withErrors(['hierarchies' => $message]);
         }
 
         return back()->with('success', 'Role node updated.');

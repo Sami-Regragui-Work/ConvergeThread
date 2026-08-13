@@ -36,7 +36,7 @@
                         </button>
                     </form>
                 @endcan
-                @if(auth()->user()->id !== (int) $group->creator_id)
+                @if((int) auth()->id() !== (int) $group->creator_id)
                     <form method="POST" action="{{ route('groups.leave', $group) }}">
                         @csrf
                         <button type="button" @click="$dispatch('confirm-action', { message: 'Leave this group?', form: $el.closest('form') })"
@@ -56,7 +56,10 @@
 
             <div class="bg-surface-200 border border-white/5 rounded-2xl overflow-hidden">
                 <div class="px-5 py-4 border-b border-white/5 flex items-center justify-between">
-                    <h2 class="text-sm font-semibold text-white">Members</h2>
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-sm font-semibold text-white">Members</h2>
+                        @include('partials.help-icon', ['hint' => 'People in this group and their roles.', 'position' => 'bottom'])
+                    </div>
                     @can('create', [App\Models\GroupMember::class, $group])
                         <a href="{{ route('groups.members.index', $group) }}"
                             class="text-xs text-brand-400 hover:text-brand-300 transition">Manage</a>
@@ -65,6 +68,9 @@
                             class="text-xs text-slate-400 hover:text-slate-300 transition">View</a>
                     @endcan
                 </div>
+                <p class="px-5 pt-3 pb-2 text-xs text-slate-400">
+                    People in this group and their group roles. Manage lets you add or remove members and assign roles, respecting the workspace hierarchy.
+                </p>
                 <div class="divide-y divide-white/5">
                     @forelse($group->activeMembers as $member)
                         <div class="px-5 py-3 flex items-center gap-3">

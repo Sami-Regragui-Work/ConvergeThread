@@ -15,8 +15,7 @@ class MentionedInChatNotification extends Notification
         public readonly Message $message,
         public readonly string $chatType,
         public readonly string $mentionType,
-    ) {
-    }
+    ) {}
 
     public function via(object $notifiable): array
     {
@@ -37,6 +36,7 @@ class MentionedInChatNotification extends Notification
             'chatable_id' => $this->message->chatable_id,
             'mention_type' => $this->mentionType,
             'author_name' => $this->message->user->display_name ?? $this->message->user->username,
+            'author_id' => (int) $this->message->user_id,
             'preview' => $preview,
         ];
     }

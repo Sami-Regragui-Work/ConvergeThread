@@ -480,4 +480,86 @@ class RoleHierarchyService
 
         return null;
     }
+
+    /**
+     * Serializable payload for the interactive hierarchy map. Shared by the
+     * server-rendered partial and the JSON refresh endpoint so the client can
+     * mutate nodes without reloading the page.
+     *
+     * @return array{id:int,name:string,kind:string,nodes:array<int,array<string,mixed>>}
+     */
+    public function mapPayload(RoleHierarchy $hierarchy): array
+    {
+        $hierarchy->loadMissing(['levels' => fn ($q) => $q
+            ->with(['members:id,display_name,username,email,avatar_color', 'group:id,name', 'role:id,name'])
+            ->orderBy('level')->orderBy('id')]);
+
+        $levels = $hierarchy->levels;
+
+        // Effective tag per node: the stored tag, or "(n)" numbering same-level
+        // nodes by id so otherwise-identical "Level N" cards can be told apart.
+        $effectiveTags = [];
+        $levels->groupBy('level')->each(function ($group) use (&$effectiveTags) {
+            foreach ($group->sortBy('id')->values() as $i => $level) {
+                $stored = $level->tag === null ? null : trim($level->tag);
+                $effectiveTags[(int) $level->id] = ($stored !== null && $stored !== '')
+                    ? $stored
+                    : '('.($i + 1).')';
+            }
+        });
+        $displayName = fn (RoleHierarchyLevel $level) => $level->label.' '.$effectiveTags[(int) $level->id];
+
+        // Candidate "add parent" targets per node: every node that is not the node
+        // itself and not inside its subtree (linking would create a cycle).
+        $linkTargets = $levels->mapWithKeys(function ($level) use ($levels, $displayName) {
+            $subtree = $level->subtreeIds($levels)->map(fn ($id) => (int) $id)->all();
+
+            return [(int) $level->id => $levels
+                ->reject(fn ($n) => in_array((int) $n->id, $subtree, true))
+                ->map(fn ($n) => ['id' => (int) $n->id, 'name' => $displayName($n)])
+                ->values()
+                ->all()];
+        });
+
+        $nodes = $levels->map(function ($level) use ($linkTargets, $effectiveTags, $displayName) {
+            return [
+                'id' => (int) $level->id,
+                'level' => (int) $level->level,
+                'kind' => $level->kind,
+                'parent_id' => $level->parent_id === null ? null : (int) $level->parent_id,
+                'label' => $level->label,
+                'tag' => $level->tag,
+                'tag_effective' => $effectiveTags[(int) $level->id],
+                'display' => $displayName($level),
+                'group_name' => $level->group?->name,
+                'group_member_count' => (int) ($level->group?->active_members_count ?? 0),
+                'role_name' => $level->role?->name,
+                'role_id' => $level->role_id === null ? null : (int) $level->role_id,
+                'members' => $level->members->map(fn ($m) => [
+                    'id' => (int) $m->id,
+                    'name' => $m->displayLabel(),
+                    'initial' => $m->avatarInitial(),
+                    'color' => $m->avatarColor(),
+                ])->values()->all(),
+                'link_targets' => $linkTargets[(int) $level->id],
+                'urls' => [
+                    'link' => route('hierarchies.levels.link', $level),
+                    'addParent' => route('hierarchies.levels.add-parent', $level),
+                    'members' => route('hierarchies.levels.members', $level),
+                    'group' => route('hierarchies.levels.group', $level),
+                    'role' => route('hierarchies.levels.role', $level),
+                    'member' => route('hierarchies.levels.member', $level),
+                    'tag' => route('hierarchies.levels.tag', $level),
+                    'destroy' => route('hierarchies.levels.destroy', $level),
+                ],
+            ];
+        })->values()->all();
+
+        return [
+            'id' => (int) $hierarchy->id,
+            'name' => $hierarchy->name,
+            'kind' => $hierarchy->kind,
+            'nodes' => $nodes,
+        ];
+    }
 }

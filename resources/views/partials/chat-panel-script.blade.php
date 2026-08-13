@@ -99,6 +99,19 @@
             activeMentionIndex: -1,
             selectedUserIds: [],
             selectedSearch: '',
+            userMutes: config.userMutes ?? {},
+            expandedMessages: {},
+            userMutesUrl: config.userMutesUrl ?? null,
+            chatMuted: config.chatMuted ?? false,
+            chatMuteUrl: config.chatMuteUrl ?? null,
+            chatMuteBusy: false,
+            muteSearch: '',
+            muteSelectedIds: [],
+            showMuteOptions: false,
+            muteOptionsFor: [],
+            muteDraft: { notifications: false, calls: false, shrink: false },
+            muteSaving: false,
+            muteSaveError: '',
             editingId: null,
             editDraft: '',
             editKeepAttachments: [],
@@ -122,6 +135,7 @@
             localMuted: false,
             localVideoOff: false,
             localDeafened: false,
+            deafenPeerIds: {},
             sharingScreen: false,
             cameraTrack: null,
             screenTrack: null,
@@ -154,6 +168,12 @@
 
                 this.scrollToBottom();
                 this.$nextTick(() => this.focusDraft());
+                document.addEventListener('keydown', this._onChatKeydown);
+                try {
+                    const raw = localStorage.getItem('ct_muted_peers');
+                    const parsed = raw ? JSON.parse(raw) : null;
+                    if (parsed && typeof parsed === 'object') this.deafenPeerIds = parsed;
+                } catch (e) {}
                 this.setupRealtime();
                 this.pollTimer = setInterval(() => this.poll(), this.echoBound ? 15000 : 3000);
                 this.callPollTimer = setInterval(() => this.refreshActiveCall(), 8000);
@@ -176,6 +196,7 @@
 
             destroy() {
                 if (window.__ctSuppressGlobalCall) window.__ctSuppressGlobalCall = null;
+                document.removeEventListener('keydown', this._onChatKeydown);
                 if (this.pollTimer) clearInterval(this.pollTimer);
                 if (this.callPollTimer) clearInterval(this.callPollTimer);
                 if (this.callHeartbeatTimer) clearInterval(this.callHeartbeatTimer);
@@ -1475,6 +1496,142 @@
                 return person?.display_name || person?.username || ('User #' + id);
             },
 
+            otherParticipants() {
+                return (this.participants || []).filter(p => Number(p.id) !== Number(this.currentUserId));
+            },
+
+            filteredForMute() {
+                const q = (this.muteSearch || '').toLowerCase();
+                return this.otherParticipants().filter(p => {
+                    if (!q) return true;
+                    return (p.display_name || '').toLowerCase().includes(q)
+                        || (p.username || '').toLowerCase().includes(q);
+                });
+            },
+
+            toggleMuteSelected(id) {
+                const n = Number(id);
+                this.muteSelectedIds = this.muteSelectedIds.includes(n)
+                    ? this.muteSelectedIds.filter(x => x !== n)
+                    : [...this.muteSelectedIds, n];
+            },
+
+            selectAllMuteFiltered() {
+                const ids = this.filteredForMute().map(p => Number(p.id));
+                this.muteSelectedIds = [...new Set([...this.muteSelectedIds, ...ids])];
+            },
+
+            unselectAllMuteFiltered() {
+                const ids = this.filteredForMute().map(p => Number(p.id));
+                this.muteSelectedIds = this.muteSelectedIds.filter(x => !ids.includes(x));
+            },
+
+            muteFlagsFor(id) {
+                return this.userMutes[Number(id)] ?? null;
+            },
+
+            hasUserMuteFlags(id) {
+                const f = this.muteFlagsFor(id);
+                return !!f && (!!f.notifications || !!f.calls || !!f.shrink);
+            },
+
+            openMuteOptions(ids) {
+                const list = Array.from(new Set((ids || []).map(Number)))
+                    .filter(id => Number(id) !== Number(this.currentUserId));
+                if (!list.length) return;
+                this.muteOptionsFor = list;
+                const flags = this.muteFlagsFor(list[0]);
+                this.muteDraft = {
+                    notifications: !!flags?.notifications,
+                    calls: !!flags?.calls,
+                    shrink: !!flags?.shrink,
+                };
+                this.muteSaveError = '';
+                this.showMuteOptions = true;
+            },
+
+            closeMuteOptions() {
+                this.showMuteOptions = false;
+                this.muteOptionsFor = [];
+                this.muteSaveError = '';
+            },
+
+            muteOptionsTitle() {
+                if (this.muteOptionsFor.length === 1) {
+                    return 'Mute ' + this.participantLabel(this.muteOptionsFor[0]);
+                }
+                return 'Mute ' + this.muteOptionsFor.length + ' people';
+            },
+
+            async saveUserMutes() {
+                if (!this.muteOptionsFor.length || !this.userMutesUrl) return;
+                this.muteSaving = true;
+                this.muteSaveError = '';
+                try {
+                    const res = await fetch(this.userMutesUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content,
+                        },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({
+                            user_ids: this.muteOptionsFor,
+                            notifications: this.muteDraft.notifications,
+                            calls: this.muteDraft.calls,
+                            shrink: this.muteDraft.shrink,
+                        }),
+                    });
+                    if (!res.ok) {
+                        let msg = 'Could not save mute preferences.';
+                        try { msg = (await res.json()).message || msg; } catch (e) {}
+                        throw new Error(msg);
+                    }
+                    const data = await res.json();
+                    this.userMutes = { ...this.userMutes, ...(data.mutes ?? {}) };
+                    this.muteSelectedIds = [];
+                    this.closeMuteOptions();
+                } catch (err) {
+                    this.muteSaveError = err?.message || 'Could not save mute preferences.';
+                } finally {
+                    this.muteSaving = false;
+                }
+            },
+
+            async toggleChatMute() {
+                if (!this.chatMuteUrl || this.chatMuteBusy) return;
+                this.chatMuteBusy = true;
+                const prev = this.chatMuted;
+                this.chatMuted = !prev;
+                try {
+                    const res = await fetch(this.chatMuteUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content,
+                        },
+                        credentials: 'same-origin',
+                    });
+                    if (!res.ok) throw new Error('Could not toggle chat notifications.');
+                    const data = await res.json().catch(() => ({}));
+                    this.chatMuted = data.muted ?? !prev;
+                } catch (err) {
+                    this.chatMuted = prev;
+                } finally {
+                    this.chatMuteBusy = false;
+                }
+            },
+
+            isMessageShrunk(message) {
+                const f = message?.user_id ? this.userMutes[Number(message.user_id)] : null;
+                return !!f && !!f.shrink && !this.expandedMessages[message.id];
+            },
+
+            expandMessage(message) {
+                this.expandedMessages = { ...this.expandedMessages, [message.id]: true };
+            },
+
             toggleMentionMenu() {
                 this.showMentionMenu = !this.showMentionMenu;
                 this.mentionFilter = '';
@@ -2721,6 +2878,7 @@
                     this.files.push(file);
                     this.filePreviews.push(this.buildPreview(file));
                 }
+                this.$nextTick(() => this.focusDraft());
             },
 
             onFilesChange(event) {
@@ -2764,6 +2922,19 @@
                 await this.startRecording();
             },
 
+            createRecorder(stream) {
+                const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                    ? 'audio/webm;codecs=opus'
+                    : (MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '');
+                const recorder = mime
+                    ? new MediaRecorder(stream, { mimeType: mime })
+                    : new MediaRecorder(stream);
+                recorder.ondataavailable = (e) => {
+                    if (e.data && e.data.size) this.recordChunks.push(e.data);
+                };
+                return recorder;
+            },
+
             async startRecording() {
                 if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
                     this.sendError = 'Audio recording is not supported in this browser.';
@@ -2771,21 +2942,13 @@
                 }
                 try {
                     this.recordStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-                        ? 'audio/webm;codecs=opus'
-                        : (MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '');
-                    this.mediaRecorder = mime
-                        ? new MediaRecorder(this.recordStream, { mimeType: mime })
-                        : new MediaRecorder(this.recordStream);
                     this.recordChunks = [];
                     this.recordSegments = [];
                     this.recordPartialIndex = -1;
                     this.recordPaused = false;
                     this.recordModifying = false;
-                    this.mediaRecorder.ondataavailable = (e) => {
-                        if (e.data && e.data.size) this.recordChunks.push(e.data);
-                    };
-                    this.mediaRecorder.start(500);
+                    this.mediaRecorder = this.createRecorder(this.recordStream);
+                    this.mediaRecorder.start();
                     this.recording = true;
                     this.recordSeconds = 0;
                     this.startRecordTimer();
@@ -2816,23 +2979,54 @@
             },
 
             resumeRecording() {
-                if (this.mediaRecorder && this.mediaRecorder.state === 'paused') {
-                    try { this.mediaRecorder.resume(); } catch (e) {}
-                    this.recordPaused = false;
-                    this.recordModifying = false;
-                    this.startRecordTimer();
-                }
+                if (!this.mediaRecorder) return;
+                try {
+                    if (this.mediaRecorder.state === 'paused') this.mediaRecorder.resume();
+                    else if (this.mediaRecorder.state === 'inactive') this.mediaRecorder.start();
+                } catch (e) {}
+                this.recordPaused = false;
+                this.recordModifying = false;
+                this.startRecordTimer();
             },
 
-            openRecordModify() {
-                if (!this.recordPaused || this.recordModifying || !this.recordChunks.length) return;
-                const type = this.mediaRecorder?.mimeType || 'audio/webm';
+            async openRecordModify() {
+                if (!this.recordPaused || this.recordModifying) return;
+                this.recordModifying = true;
+                const recorder = this.mediaRecorder;
+                if (recorder && recorder.state === 'paused') {
+                    await new Promise((resolve) => {
+                        recorder.ondataavailable = (e) => {
+                            if (e.data && e.data.size) this.recordChunks.push(e.data);
+                            resolve();
+                        };
+                        recorder.onstop = () => resolve();
+                        try {
+                            recorder.resume();
+                            recorder.stop();
+                        } catch (e) { resolve(); }
+                    });
+                }
+                if (!this.recording) {
+                    this.recordModifying = false;
+                    return;
+                }
+                if (!this.recordChunks.length) {
+                    this.recordModifying = false;
+                    return;
+                }
+                const type = recorder?.mimeType || 'audio/webm';
                 const blob = new Blob(this.recordChunks, { type });
                 this.recordChunks = [];
-                const file = new File([blob], `voice-${Date.now()}.webm`, { type });
+                let file = new File([blob], `voice-${Date.now()}.webm`, { type });
+                if (window.CtMediaExport) {
+                    try {
+                        file = await window.CtMediaExport.processAudio(file);
+                    } catch (e) { /* browser cannot decode webm/opus — keep the raw take */ }
+                }
                 this.files.push(file);
                 this.filePreviews.push(this.buildPreview(file));
                 this.recordPartialIndex = this.filePreviews.length - 1;
+                if (recorder && this.recordStream) this.mediaRecorder = this.createRecorder(this.recordStream);
                 this.recordModifying = true;
             },
 
@@ -2840,7 +3034,7 @@
                 const index = this.recordPartialIndex;
                 const preview = index >= 0 ? this.filePreviews[index] : null;
                 let baked = preview?.sourceFile;
-                if (preview && window.CtMediaExport && this.stagedMediaIsDirty(preview)) {
+                if (preview && window.CtMediaExport) {
                     baked = await window.CtMediaExport.processAudio(preview.sourceFile, {
                         rate: preview.rate || 1,
                         trimStart: preview.trimStart || 0,
@@ -2856,37 +3050,70 @@
 
             async finalizeRecording() {
                 const segments = [...this.recordSegments];
-                if (this.recordPartialIndex >= 0) {
-                    const preview = this.filePreviews[this.recordPartialIndex];
+                const partialIndex = this.recordPartialIndex;
+                let partial = null;
+
+                if (partialIndex >= 0) {
+                    const preview = this.filePreviews[partialIndex];
                     if (preview) {
-                        let baked = preview.sourceFile;
-                        if (window.CtMediaExport && this.stagedMediaIsDirty(preview)) {
-                            baked = await window.CtMediaExport.processAudio(preview.sourceFile, {
+                        let base = preview.sourceFile;
+                        if (this.recordChunks.length && window.CtMediaExport) {
+                            const tail = new Blob(this.recordChunks, { type: this.mediaRecorder?.mimeType || 'audio/webm' });
+                            const merged = await window.CtMediaExport.concatAudioFiles([base, tail]).catch(() => null);
+                            if (merged) {
+                                base = merged;
+                                this.recordChunks = [];
+                            }
+                        }
+                        let baked = base;
+                        if (window.CtMediaExport) {
+                            baked = await window.CtMediaExport.processAudio(base, {
                                 rate: preview.rate || 1,
                                 trimStart: preview.trimStart || 0,
                                 trimEnd: preview.trimEnd,
-                            }).catch(() => preview.sourceFile);
+                            }).catch(() => base);
                         }
-                        segments.push(baked);
-                        this.removeFile(this.recordPartialIndex);
+                        if (baked) partial = baked;
                     }
                     this.recordPartialIndex = -1;
                 }
 
-                const finalBlob = this.recordChunks.length
-                    ? new Blob(this.recordChunks, { type: this.mediaRecorder?.mimeType || 'audio/webm' })
-                    : null;
+                if (partial) segments.push(partial);
 
-                if (!segments.length) {
-                    if (finalBlob && finalBlob.size > 0) {
-                        this.addFiles([new File([finalBlob], `voice-${Date.now()}.webm`, { type: finalBlob.type })]);
+                let result = null;
+                if (this.recordChunks.length) {
+                    const tailBlob = new Blob(this.recordChunks, { type: this.mediaRecorder?.mimeType || 'audio/webm' });
+                    if (segments.length === 0) {
+                        result = tailBlob;
+                    } else if (window.CtMediaExport) {
+                        const tailWav = await window.CtMediaExport.processAudio(tailBlob).catch(() => null);
+                        if (tailWav) segments.push(tailWav);
                     }
-                } else {
-                    if (finalBlob && finalBlob.size > 0) segments.push(finalBlob);
-                    const merged = window.CtMediaExport
-                        ? await window.CtMediaExport.concatAudioFiles(segments)
-                        : segments[0];
-                    if (merged) this.addFiles([merged]);
+                    this.recordChunks = [];
+                }
+
+                if (!result) {
+                    if (segments.length === 1) {
+                        result = segments[0];
+                    } else if (segments.length > 1) {
+                        result = window.CtMediaExport
+                            ? await window.CtMediaExport.concatAudioFiles(segments).catch(() => null)
+                            : segments[0];
+                    }
+                }
+
+                if (partialIndex >= 0) this.removeFile(partialIndex);
+
+                if (result) {
+                    this.addFiles([result]);
+                } else if (segments.length > 0) {
+                    // Never dump multiple segments as separate attachments — that was the
+                    // "edited + original" duplicate-audio bug. Fall back to a single file
+                    // (the earliest part) and warn if anything had to be dropped.
+                    this.addFiles([segments[0]]);
+                    if (segments.length > 1) {
+                        this.sendError = 'Part of the edited recording could not be merged and was skipped.';
+                    }
                 }
 
                 this.recordChunks = [];
@@ -2905,7 +3132,10 @@
                     };
                     await new Promise((resolve) => {
                         recorder.onstop = () => resolve();
-                        try { recorder.stop(); } catch (e) { resolve(); }
+                        try {
+                            if (recorder.state === 'paused') recorder.resume();
+                            recorder.stop();
+                        } catch (e) { resolve(); }
                     });
                 }
                 await this.finalizeRecording();
@@ -2942,6 +3172,7 @@
                 this.editFiles = [];
                 this.editFilePreviews = [];
                 this.editError = '';
+                this.$nextTick(() => document.querySelector('[x-model="editDraft"]')?.focus());
             },
 
             cancelEdit() {
@@ -2956,6 +3187,62 @@
                 this.editFilePreviews = [];
                 this.editError = '';
                 if (this.$refs.editFileInput) this.$refs.editFileInput.value = '';
+            },
+
+            _onChatKeydown: (e) => {
+                const t = e.target;
+                const inEditField = t && t.matches && t.matches('[x-model="editDraft"]');
+                const inOverlay = t && t.closest && t.closest('.fixed, [data-chat-overlay], [data-chat-media-player]');
+                const inFormField = t && t.matches && t.matches('input, textarea, select, [contenteditable="true"]');
+                const typingInEditor = e.isComposing || e.ctrlKey || e.metaKey || e.altKey;
+
+                if (this.editingId !== null) {
+                    if (inEditField && e.key === 'Enter' && !e.repeat) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        this.saveEdit(this.editingId);
+                    } else if (e.key === 'Escape' && !inOverlay) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        this.cancelEdit();
+                    }
+                    return;
+                }
+
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.repeat) {
+                    const tag = t && t.tagName;
+                    const isAttachInput = tag === 'INPUT' && t.type === 'file';
+                    if ((tag === 'BUTTON' || tag === 'LABEL' || isAttachInput) && !inOverlay) {
+                        e.preventDefault();
+                        t.click();
+                    }
+                    return;
+                }
+
+                if (e.key === 'Enter' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+                    const tag = t && t.tagName;
+                    const isAttachInput = tag === 'INPUT' && t.type === 'file';
+                    if ((tag === 'BUTTON' || tag === 'LABEL' || isAttachInput) && !inOverlay
+                        && !this.showMentionMenu && !this.showCodeSuggest
+                        && !this.fenceEditorActive && !this.recording) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!this.sending && (this.draft.trim() || this.files.length)) {
+                            this.sendMessage();
+                        }
+                    }
+                    return;
+                }
+
+                if (e.key.length === 1 && !typingInEditor && !inOverlay && !inFormField
+                    && !this.showMentionMenu && !this.showCodeSuggest
+                    && !this.fenceEditorActive && !this.recording && !this.showCallModal) {
+                    const el = this.$refs.draftInput;
+                    if (!el) return;
+                    e.preventDefault();
+                    el.focus();
+                    document.execCommand('insertText', false, e.key);
+                }
             },
 
             canSaveEdit() {
@@ -3796,6 +4083,23 @@
                             pub?.track?.setVolume?.(this.localDeafened ? 0 : 1);
                         });
                     });
+                } catch (e) {}
+            },
+
+            toggleDeafenPeer(uid) {
+                const key = Number(uid);
+                const next = !this.deafenPeerIds[key];
+                this.deafenPeerIds = { ...this.deafenPeerIds, [key]: next };
+                try {
+                    localStorage.setItem('ct_muted_peers', JSON.stringify(this.deafenPeerIds));
+                } catch (e) {}
+                try {
+                    const participant = this.livekitRoom?.remoteParticipants?.get?.(String(key));
+                    if (participant) {
+                        participant.audioTrackPublications.forEach((pub) => {
+                            pub?.track?.setVolume?.(next ? 0 : 1);
+                        });
+                    }
                 } catch (e) {}
             },
 

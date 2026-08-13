@@ -15,6 +15,7 @@ use App\Models\TenantRole;
 use App\Models\User;
 use App\Services\CallSessionService;
 use App\Services\ChatParticipantService;
+use App\Services\ChatUserMuteService;
 use App\Services\GroupPermissionService;
 use App\Services\MentionService;
 use App\Services\MessageService;
@@ -38,6 +39,7 @@ class MessageController extends Controller
         private readonly MessageService $messageService,
         private readonly MentionService $mentionService,
         private readonly NotificationStackService $notificationStackService,
+        private readonly ChatUserMuteService $chatUserMuteService,
     ) {}
 
     private function payload(
@@ -242,6 +244,11 @@ class MessageController extends Controller
             $chatable->getMorphClass(),
             $chatable->id,
         );
+        $userMutes = $this->chatUserMuteService->flagsForChat(
+            $user,
+            $chatable->getMorphClass(),
+            (int) $chatable->id,
+        );
         $activeCall = app(CallSessionService::class)->active($chatType, (int) $chatId);
 
         return view('messages.index', compact(
@@ -253,6 +260,7 @@ class MessageController extends Controller
             'mentionIds',
             'mentionSuggestions',
             'chatMuted',
+            'userMutes',
             'activeCall',
         ))->with('canMeet', $this->canStartMeet($chatType, $chatable, $user));
     }
@@ -497,6 +505,11 @@ class MessageController extends Controller
         $mentionSuggestions = $this->mentionSuggestions($chatable, $participants, $user->id, $chatType, $user->tenant_id);
         $parentPayload = $this->payload($thread['message'], $user->id, $renderContext, $chatType, $chatable);
         $threadMuted = $this->notificationStackService->isThreadMuted($user, $message->id);
+        $userMutes = $this->chatUserMuteService->flagsForChat(
+            $user,
+            $chatable->getMorphClass(),
+            (int) $chatable->id,
+        );
         $activeCall = app(CallSessionService::class)->active($chatType, (int) $message->chatable_id);
 
         return view('messages.thread', array_merge($thread, [
@@ -507,6 +520,7 @@ class MessageController extends Controller
             'mentionSuggestions' => $mentionSuggestions,
             'parentPayload' => $parentPayload,
             'threadMuted' => $threadMuted,
+            'userMutes' => $userMutes,
             'activeCall' => $activeCall,
             'canMeet' => $this->canStartMeet($chatType, $chatable, $user),
         ]));
@@ -573,7 +587,7 @@ class MessageController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    public function toggleMute(string $chatType, int $chatId)
+    public function toggleMute(Request $request, string $chatType, int $chatId)
     {
         $user = Auth::user();
         $chatable = $this->resolveChatable($user, $chatType, $chatId);
@@ -585,6 +599,10 @@ class MessageController extends Controller
             $chatable->id,
         );
 
+        if ($request->expectsJson()) {
+            return response()->json(['muted' => (bool) $muted]);
+        }
+
         return back()->with('success', $muted ? 'Chat notifications muted.' : 'Chat notifications unmuted.');
     }
 
@@ -595,5 +613,58 @@ class MessageController extends Controller
         $muted = $this->notificationStackService->toggleThreadMute(Auth::user(), $message->id);
 
         return back()->with('success', $muted ? 'Thread notifications muted.' : 'Thread notifications unmuted.');
+    }
+
+    public function saveUserMute(Request $request, string $chatType, int $chatId)
+    {
+        $user = Auth::user();
+        $chatable = $this->resolveChatable($user, $chatType, $chatId);
+
+        Gate::authorize('viewAny', [Message::class, $chatable]);
+
+        $participantIds = app(ChatParticipantService::class)
+            ->participants($chatable)
+            ->reject(fn (User $p) => (int) $p->id === (int) $user->id)
+            ->pluck('id')
+            ->all();
+
+        $credentials = $request->validate([
+            'user_ids' => ['required', 'array', 'min:1'],
+            'user_ids.*' => ['integer'],
+            'notifications' => ['sometimes', 'boolean'],
+            'calls' => ['sometimes', 'boolean'],
+            'shrink' => ['sometimes', 'boolean'],
+        ]);
+
+        $targetIds = collect($credentials['user_ids'])
+            ->map('intval')
+            ->filter(fn (int $id) => in_array($id, $participantIds, true))
+            ->values()
+            ->all();
+
+        abort_if($targetIds === [], 422, 'Select at least one participant to mute.');
+
+        $muteNotifications = (bool) ($credentials['notifications'] ?? false);
+        $muteCalls = (bool) ($credentials['calls'] ?? false);
+        $shrinkMessages = (bool) ($credentials['shrink'] ?? false);
+
+        $flags = [];
+        foreach ($targetIds as $targetId) {
+            $flags[$targetId] = $this->chatUserMuteService->save(
+                $user,
+                $targetId,
+                $chatable->getMorphClass(),
+                (int) $chatable->id,
+                $muteNotifications,
+                $muteCalls,
+                $shrinkMessages,
+            );
+        }
+
+        if ($request->wantsJson()) {
+            return response()->json(['ok' => true, 'mutes' => $flags]);
+        }
+
+        return back()->with('success', 'Mute preferences saved.');
     }
 }

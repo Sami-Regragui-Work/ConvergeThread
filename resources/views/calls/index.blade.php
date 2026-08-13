@@ -4,9 +4,11 @@
 @section('content')
     <div class="max-w-4xl mx-auto space-y-6">
         <div class="flex items-center justify-between gap-4">
-            <h1 class="text-xl font-bold text-white">Calls</h1>
+            <div class="flex items-center gap-2">
+                <h1 class="text-xl font-bold text-white">Calls</h1>
+                @include('partials.help-icon', ['hint' => 'Your call history across every chat.', 'position' => 'bottom'])
+            </div>
             @include('partials.sort-control', [
-                'label' => 'Sort',
                 'options' => [
                     'started_at:desc' => 'Recent',
                     'started_at:asc' => 'Oldest',
@@ -16,6 +18,10 @@
                 ],
             ])
         </div>
+
+        <p class="text-sm text-slate-400 -mt-2">
+            Every voice, video, and meet session you took part in, with who called, when, and whether it was answered, missed, declined, left, or canceled. Open a call for the full timeline and its total duration.
+        </p>
 
         @if($logs->isEmpty())
             <div class="bg-surface-200 border border-white/5 rounded-2xl p-12 text-center">
@@ -61,12 +67,14 @@
                             </p>
                         </div>
                         @php
-                            $badge = match ($log->status) {
+                            $badge = match ($log->statusFor(auth()->id())) {
                                 'ongoing' => ['Ongoing', 'bg-amber-500/10 text-amber-400'],
                                 'completed' => ['Completed', 'bg-emerald-500/10 text-emerald-400'],
+                                'canceled' => ['Canceled', 'bg-slate-500/10 text-slate-400'],
+                                'left' => ['Left', 'bg-slate-500/10 text-slate-400'],
                                 'missed' => ['Missed', 'bg-red-500/10 text-red-400'],
                                 'declined' => ['Declined', 'bg-slate-500/10 text-slate-400'],
-                                default => [$log->status, 'bg-white/5 text-slate-400'],
+                                default => [$log->statusFor(auth()->id()), 'bg-white/5 text-slate-400'],
                             };
                         @endphp
                         <span class="shrink-0 inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold {{ $badge[1] }}">

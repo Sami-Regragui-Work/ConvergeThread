@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Events\UnreadNotificationsUpdated;
 use App\Events\UserIncomingCall;
 use App\Models\Duo;
 use App\Models\Group;
@@ -14,6 +15,10 @@ use Illuminate\Validation\ValidationException;
 class CallSessionService
 {
     private const TTL_SECONDS = 90;
+
+    public function __construct(
+        private readonly ChatUserMuteService $chatUserMuteService,
+    ) {}
 
     public function cacheKey(string $chatType, int $chatId): string
     {
@@ -215,7 +220,8 @@ class CallSessionService
 
         app(ChatParticipantService::class)
             ->participants($chatable)
-            ->filter(fn (User $user) => (int) $user->id !== (int) $caller->id)
+            ->filter(fn (User $user) => (int) $user->id !== (int) $caller->id
+                && ! $this->chatUserMuteService->isMuted($user, (int) $caller->id, $chatType, $chatableId, 'calls'))
             ->each(function (User $user) use ($caller, $chatType, $chatableId, $callId, $callType, $label, $url, $callerName, $callLogId) {
                 $existing = $user->notifications()
                     ->where('type', IncomingCallNotification::class)
@@ -229,12 +235,12 @@ class CallSessionService
                     $data['stack_count'] = ($data['stack_count'] ?? 1) + 1;
                     $data['call_id'] = $callId;
                     $data['call_type'] = $callType;
-                    $data['preview'] = ($callType === 'video' ? 'Video' : 'Voice').' call in '.$label;
+                    $data['preview'] = ($callType === 'video' ? 'Video' : ($callType === 'meet' ? 'Meeting' : 'Voice')).' call in '.$label;
                     $data['url'] = $url;
                     $data['call_log_id'] = $callLogId;
                     $existing->update(['data' => $data, 'created_at' => now()]);
 
-                    \App\Events\UnreadNotificationsUpdated::dispatch(
+                    UnreadNotificationsUpdated::dispatch(
                         (int) $user->id,
                         (int) $user->unreadNotifications()->count(),
                         playSound: true,
@@ -252,16 +258,18 @@ class CallSessionService
                     ));
                 }
 
-                UserIncomingCall::dispatch((int) $user->id, [
-                    'call_id' => $callId,
-                    'call_type' => $callType,
-                    'chat_type' => $chatType,
-                    'chat_id' => $chatableId,
-                    'chat_label' => $label,
-                    'from_user_id' => (int) $caller->id,
-                    'from_user_name' => $callerName,
-                    'url' => $url,
-                ]);
+                if ($callType !== 'meet') {
+                    UserIncomingCall::dispatch((int) $user->id, [
+                        'call_id' => $callId,
+                        'call_type' => $callType,
+                        'chat_type' => $chatType,
+                        'chat_id' => $chatableId,
+                        'chat_label' => $label,
+                        'from_user_id' => (int) $caller->id,
+                        'from_user_name' => $callerName,
+                        'url' => $url,
+                    ]);
+                }
             });
     }
 }

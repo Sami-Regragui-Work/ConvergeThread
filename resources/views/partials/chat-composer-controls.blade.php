@@ -34,7 +34,7 @@
                 <button type="button" @click="removeFile(index)"
                     class="shrink-0 text-[11px] text-slate-400 hover:text-red-300 px-1">Remove</button>
             </div>
-            <div class="min-h-0 flex flex-col" :class="preview.isVideo ? 'flex-1' : ''"
+            <div class="min-h-0 flex flex-col" :class="preview.isVideo ? 'flex-1' : ''" data-chat-media-player
                 x-data="ctMediaPlayer({
                     src: preview.url,
                     kind: preview.isVideo ? 'video' : 'audio',
@@ -103,8 +103,7 @@
             <button type="button" @click="resumeRecording()"
                 class="text-[10px] font-semibold px-2 py-0.5 rounded border border-white/10 text-slate-300 hover:bg-white/5">Resume</button>
             <button type="button" @click="openRecordModify()"
-                class="text-[10px] font-semibold px-2 py-0.5 rounded border border-brand-500/40 text-brand-300 hover:bg-brand-500/10"
-                :disabled="!recordChunks.length">Trim / speed</button>
+                class="text-[10px] font-semibold px-2 py-0.5 rounded border border-brand-500/40 text-brand-300 hover:bg-brand-500/10">Trim / speed</button>
             <button type="button" @click="stopRecording()"
                 class="text-[10px] font-semibold px-2 py-0.5 rounded border border-red-400/30 text-red-300 hover:bg-red-500/10">Stop</button>
         </p>
@@ -113,6 +112,8 @@
             <span>Editing recording…</span>
             <button type="button" @click="continueFromRecordModify()"
                 class="text-[10px] font-semibold px-2 py-0.5 rounded border border-brand-500/40 text-brand-300 hover:bg-brand-500/10">Continue recording</button>
+            <button type="button" @click="stopRecording()"
+                class="text-[10px] font-semibold px-2 py-0.5 rounded border border-red-400/30 text-red-300 hover:bg-red-500/10">Stop</button>
         </p>
 
         <div x-show="draftFormat === 'markdown' && showMarkdownGuide" x-cloak

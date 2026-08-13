@@ -32,6 +32,7 @@
                     $badge = match ($callLog->status) {
                         'ongoing' => ['Ongoing', 'bg-amber-500/10 text-amber-400'],
                         'completed' => ['Completed', 'bg-emerald-500/10 text-emerald-400'],
+                        'canceled' => ['Canceled', 'bg-slate-500/10 text-slate-400'],
                         'missed' => ['Missed', 'bg-red-500/10 text-red-400'],
                         'declined' => ['Declined', 'bg-slate-500/10 text-slate-400'],
                         default => [$callLog->status, 'bg-white/5 text-slate-400'],

@@ -61,9 +61,12 @@
             @if($pendingRegistrations->isNotEmpty())
                 <div class="rounded-2xl border border-white/5 bg-surface-200 p-6 shadow-xl shadow-black/10">
                     <div class="mb-5">
-                        <h2 class="text-lg font-semibold text-white">Pending Registration Requests</h2>
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-lg font-semibold text-white">Pending Registration Requests</h2>
+                            @include('partials.help-icon', ['hint' => 'Approve people who registered without an invitation.', 'position' => 'bottom'])
+                        </div>
                         <p class="mt-1 text-sm text-slate-400">
-                            People waiting for approval to sign in. Pick a tenant to approve an unassigned request into, or reject it.
+                            People waiting for approval to sign in. Requests for a new workspace create it with the title they chose; unassigned requests can also be approved into an existing workspace.
                         </p>
                     </div>
 
@@ -77,24 +80,46 @@
                                         @if($registration->tenant)
                                             Joins: <span class="text-slate-400">{{ $registration->tenant->name }}</span> ·
                                         @else
-                                            Requested slug: <span class="text-slate-400">{{ $registration->tenant_slug ?? '—' }}</span> ·
+                                            New workspace: <span class="text-slate-400">{{ $registration->tenant_name ?: '—' }}</span>
+                                            (slug <span class="text-slate-400">{{ $registration->tenant_slug ?? '—' }}</span>) ·
                                         @endif
                                         {{ $registration->created_at->diffForHumans() }}
                                     </p>
                                 </div>
-                                <form method="POST" action="{{ route('owner.registrations.approve', $registration) }}"
-                                    class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
-                                    @csrf
-                                    @if(!$registration->tenant)
-                                        <select name="tenant_id" required
-                                            class="bg-surface-300 border border-white/10 text-white text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition">
-                                            @foreach($tenants->where('id', '!=', 1) as $tenant)
-                                                <option value="{{ $tenant->id }}">{{ $tenant->name }}</option>
-                                            @endforeach
-                                        </select>
-                                    @endif
-                                    <button type="submit" class="text-xs text-emerald-400 hover:text-emerald-300 border border-white/10 rounded-lg px-3 py-2 transition">Approve</button>
-                                </form>
+
+                                @if(!$registration->tenant)
+                                    <div x-data="{ intoExisting: false }" class="flex flex-col gap-2 shrink-0 w-full lg:w-auto">
+                                        <form method="POST" action="{{ route('owner.registrations.approve', $registration) }}">
+                                            @csrf
+                                            <button type="submit"
+                                                class="w-full lg:w-auto text-xs font-semibold text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 bg-emerald-500/10 rounded-lg px-3 py-2 transition">
+                                                Approve &amp; create workspace
+                                            </button>
+                                        </form>
+                                        <button type="button" @click="intoExisting = !intoExisting" x-cloak
+                                            class="text-xs text-slate-400 hover:text-white border border-white/10 rounded-lg px-3 py-2 transition">
+                                            <span x-text="intoExisting ? 'Hide existing workspace choice' : 'Approve into an existing workspace instead'"></span>
+                                        </button>
+                                        <form method="POST" action="{{ route('owner.registrations.approve', $registration) }}" x-show="intoExisting" x-cloak
+                                            class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                                            @csrf
+                                            <select name="tenant_id" required
+                                                class="bg-surface-300 border border-white/10 text-white text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition">
+                                                <option value="" disabled selected>Choose a workspace…</option>
+                                                @foreach($tenants->where('id', '!=', 1) as $tenant)
+                                                    <option value="{{ $tenant->id }}">{{ $tenant->name }}</option>
+                                                @endforeach
+                                            </select>
+                                            <button type="submit" class="text-xs text-emerald-400 hover:text-emerald-300 border border-white/10 rounded-lg px-3 py-2 transition">Approve</button>
+                                        </form>
+                                    </div>
+                                @else
+                                    <form method="POST" action="{{ route('owner.registrations.approve', $registration) }}" class="shrink-0">
+                                        @csrf
+                                        <button type="submit" class="w-full lg:w-auto text-xs text-emerald-400 hover:text-emerald-300 border border-white/10 rounded-lg px-3 py-2 transition">Approve</button>
+                                    </form>
+                                @endif
+
                                 <form method="POST" action="{{ route('owner.registrations.reject', $registration) }}" class="shrink-0">
                                     @csrf
                                     <button type="button" @click="$dispatch('confirm-action', { message: 'Reject the registration request for ' + @js($registration->email) + '?', form: $el.closest('form') })"
@@ -202,7 +227,23 @@
                                         </td>
                                         <td class="px-4 py-3">
                                             @if ($tenant->id === 1)
-                                                <span class="text-xs text-slate-600">—</span>
+                                                <div class="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
+                                                    <form method="POST" action="{{ route('owner.tenants.close', $tenant) }}">
+                                                        @csrf
+                                                        <button type="submit" disabled title="The seed workspace cannot be closed"
+                                                            class="text-xs text-red-400 opacity-50 cursor-not-allowed">Close</button>
+                                                    </form>
+                                                    <form method="POST" action="{{ route('owner.tenants.destroy', $tenant) }}">
+                                                        @csrf @method('DELETE')
+                                                        <button type="button" disabled title="The seed workspace cannot be removed"
+                                                            class="inline-flex items-center gap-1.5 text-xs font-medium text-red-500/80 opacity-50 cursor-not-allowed px-2 py-1 rounded-lg">
+                                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                            </svg>
+                                                            Remove</button>
+                                                    </form>
+                                                </div>
                                             @elseif ($tenant->isClosed())
                                                 <div class="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
                                                     <form method="POST" action="{{ route('owner.tenants.reopen', $tenant) }}">
@@ -341,7 +382,23 @@
                                             </form>
                                         </div>
                                     @else
-                                        <span class="text-xs text-slate-600">—</span>
+                                        <div class="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
+                                            @if($user->banned_by_id)
+                                                <button type="button" disabled title="The platform owner account cannot be managed"
+                                                    class="inline-block w-14 text-center text-xs text-emerald-400 opacity-50 cursor-not-allowed">Unban</button>
+                                            @else
+                                                <button type="button" disabled title="The platform owner account cannot be managed"
+                                                    class="inline-block w-14 text-center text-xs text-red-400 opacity-50 cursor-not-allowed">Ban</button>
+                                            @endif
+                                            <button type="button" disabled title="The platform owner account cannot be removed"
+                                                class="inline-flex items-center gap-1.5 text-xs font-medium text-red-500/80 opacity-50 cursor-not-allowed px-2 py-1 rounded-lg">
+                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                                Remove
+                                            </button>
+                                        </div>
                                     @endif
                                 </td>
                             </tr>

@@ -2,17 +2,18 @@
 
 namespace App\Models;
 
+use App\Support\DisplayName;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use App\Support\DisplayName;
+use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
  * @property string $slug
  * @property string|null $admin_email
- * @property \Illuminate\Support\Carbon|null $created_at
- * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
  *
  * @method mixed getKey()
  */
@@ -20,6 +21,7 @@ class Tenant extends Model
 {
     protected $fillable = [
         'slug',
+        'name',
         'admin_email',
     ];
 
@@ -75,6 +77,7 @@ class Tenant extends Model
 
     public function getNameAttribute(): string
     {
-        return DisplayName::capitalizeFirst(str_replace('_', ' ', $this->slug)) ?? $this->slug;
+        return $this->attributes['name']
+            ?? DisplayName::capitalizeFirst(str_replace('_', ' ', $this->slug)) ?? $this->slug;
     }
 }

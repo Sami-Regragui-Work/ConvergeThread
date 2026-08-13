@@ -25,8 +25,7 @@ class CallController extends Controller
         private readonly CallSessionService $callSessions,
         private readonly CallLogService $callLogs,
         private readonly LiveKitTokenService $liveKit,
-    ) {
-    }
+    ) {}
 
     public function signal(Request $request, string $chatType, int $chatId)
     {
@@ -98,16 +97,14 @@ class CallController extends Controller
                 $chatLabel,
             );
             $this->callSessions->rememberInvite($chatType, $chatId, $payload);
-            if ($data['call_type'] !== 'meet') {
-                $this->callSessions->notifyParticipants(
-                    $chatable,
-                    $chatType,
-                    $user,
-                    $data['call_id'],
-                    $data['call_type'],
-                    $callLog->id,
-                );
-            }
+            $this->callSessions->notifyParticipants(
+                $chatable,
+                $chatType,
+                $user,
+                $data['call_id'],
+                $data['call_type'],
+                $callLog->id,
+            );
         } elseif ($data['action'] === 'join') {
             $this->callSessions->markParticipant($chatType, $chatId, (int) $user->id, $data['call_id']);
             $this->callSessions->touch($chatType, $chatId);

@@ -2,16 +2,21 @@
 
 namespace App\Services;
 
+use App\Events\UnreadNotificationsUpdated;
 use App\Models\ChatMute;
 use App\Models\Message;
 use App\Models\ThreadMute;
 use App\Models\User;
 use App\Notifications\ChatMessageNotification;
 use App\Support\MessageEncryption;
-use Illuminate\Support\Facades\DB;
+use App\Support\WorkspaceSync;
 
 class NotificationStackService
 {
+    public function __construct(
+        private readonly ChatUserMuteService $chatUserMuteService,
+    ) {}
+
     public function notifyChatMessage(
         Message $message,
         string $chatType,
@@ -23,6 +28,16 @@ class NotificationStackService
         }
 
         if ($message->parent_id && $this->isThreadMuted($recipient, $message->parent_id)) {
+            return;
+        }
+
+        if ($message->user_id && $this->chatUserMuteService->isMuted(
+            $recipient,
+            (int) $message->user_id,
+            $message->chatable_type,
+            (int) $message->chatable_id,
+            'notifications',
+        )) {
             return;
         }
 
@@ -45,11 +60,13 @@ class NotificationStackService
 
             $data['preview'] = $preview;
             $data['author_name'] = $author;
+            $data['author_id'] = (int) $message->user_id;
 
             $data['items'] = $data['items'] ?? [];
             $data['items'][] = [
                 'message_id' => $message->id,
                 'author_name' => $author,
+                'author_id' => (int) $message->user_id,
                 'preview' => $preview,
                 'created_at' => $message->created_at?->toIso8601String(),
             ];
@@ -57,14 +74,14 @@ class NotificationStackService
 
             $existing->update(['data' => $data, 'created_at' => now()]);
 
-            \App\Events\UnreadNotificationsUpdated::dispatch(
+            UnreadNotificationsUpdated::dispatch(
                 (int) $recipient->id,
                 (int) $recipient->unreadNotifications()->count(),
                 playSound: true,
             );
 
             if ($recipient->tenant_id) {
-                \App\Support\WorkspaceSync::bump((int) $recipient->tenant_id, ['notifications']);
+                WorkspaceSync::bump((int) $recipient->tenant_id, ['notifications']);
             }
 
             return;

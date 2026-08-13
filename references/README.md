@@ -1,27 +1,36 @@
 # Project References
 
-This folder holds the two scope documents that belong with this deliverable
-branch (`main`):
+This folder holds the working references for ConvergeThread. They are **not**
+committed on `main` (gitignored locally); a full updated copy is tracked on the
+`docs/project-documentation` branch.
 
-- `Full_Project_functional_scope(1)(1).docx` — full functional scope
-- `S.O.W_fil_rouge_Sami_Regragui_-MVP(1)(1).docx` — Statement of Work (MVP contract)
+## Scope documents (archived)
 
-## Where the working references live
+The original scope documents were archived **outside the project** on
+2026-08-13 (binary `.docx` cannot be read in-repo, and they were stale):
 
-The **living, current** references (architecture, ERD, roadmap, todo, known
-limitations, user flows, session context) are **not** committed on `main`.
-They are kept:
+- `/home/frogsam/D/YouCode/Fil_Rouge/docs-archive/Full_Project_functional_scope(1)(1).docx` — full functional scope
+- `/home/frogsam/D/YouCode/Fil_Rouge/docs-archive/S.O.W_fil_rouge_Sami_Regragui_-MVP(1)(1).docx` — Statement of Work (MVP contract)
 
-1. **Locally on the `dev` branch** under `references/` (gitignored, always the
-   freshest copy), and
-2. **Tracked on the `docs/project-documentation` branch** as the canonical
-   shared copy.
+If they are needed again, the archive path above is the canonical copy.
+
+## Contents
+
+- `AGENTS.md` — persistent project rules (session entry point; formerly at repo root)
+- `LIVE_LOG.md` — current session's thinking/actions (start here mid-session)
+- `context.md` — fresh-session entry point
+- `todo.md` — triaged backlog + confirmed bugs
+- `architecture.md`, `roadmap.md`, `known-limitations.md`, `user-flows.md`, `erd.dbml` — supporting docs
+- `SESSION_NOTES_2026-08-11.md` — older session notes
 
 ## Suggested reading order
 
-1. `Full_Project_functional_scope(1)(1).docx` — the product scope
-2. `S.O.W_fil_rouge_Sami_Regragui_-MVP(1)(1).docx` — the agreed MVP contract
-3. On `dev` / `docs/project-documentation`: `references/README.md` → context →
-   architecture → ERD → roadmap → todo → known-limitations → user-flows
+1. `context.md`
+2. `todo.md` → `LIVE_LOG.md`
+3. `architecture.md` → `roadmap.md` → `known-limitations.md` → `user-flows.md`
 
-This `README.md` and the two `.docx` files are the only content committed here.
+## Git note
+
+`main` carries **no working references** — only this folder's `README.md` is
+committed there; the rest live on `dev` (local) and `docs/project-documentation`
+(canonical shared copy).

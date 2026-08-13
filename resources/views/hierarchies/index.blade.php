@@ -5,7 +5,10 @@
     <div class="max-w-6xl mx-auto space-y-6" data-sync="hierarchies,members">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-                <h1 class="text-xl font-bold text-white">Hierarchies</h1>
+                <div class="flex items-center gap-2">
+                    <h1 class="text-xl font-bold text-white">Hierarchies</h1>
+                    @include('partials.help-icon', ['hint' => 'Build interactive trees of who manages whom. See "How it works" below for the full walkthrough.', 'position' => 'bottom'])
+                </div>
                 <p class="text-sm text-slate-500 mt-1">Interactive node trees for who manages whom. Members may appear in several unrelated branches, but never twice on the same root→leaf path.</p>
             </div>
             <button type="button" @click="window.__openHierarchyCreate?.()"
@@ -14,7 +17,9 @@
             </button>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6" x-data="{ tab: 'member' }">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6"
+            x-data="{ tab: localStorage.getItem('ct_hierarchies_tab') || 'member' }"
+            x-effect="localStorage.setItem('ct_hierarchies_tab', tab)">
             <div class="lg:col-span-3 space-y-6">
                 <div class="bg-surface-200 border border-white/5 rounded-2xl p-2 flex gap-1">
                     <button type="button" @click="tab = 'member'"

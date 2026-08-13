@@ -18,8 +18,7 @@ class IncomingCallNotification extends Notification
         public readonly string $chatLabel,
         public readonly string $url,
         public readonly ?int $callLogId = null,
-    ) {
-    }
+    ) {}
 
     public function via(object $notifiable): array
     {
@@ -28,7 +27,9 @@ class IncomingCallNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
-        $kind = $this->callType === 'video' ? 'Video' : 'Voice';
+        $kind = $this->callType === 'video'
+            ? 'Video'
+            : ($this->callType === 'meet' ? 'Meeting' : 'Voice');
 
         return [
             'type' => 'incoming_call',

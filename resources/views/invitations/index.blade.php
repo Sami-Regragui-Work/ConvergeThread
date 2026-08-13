@@ -22,7 +22,6 @@
             </div>
             <div class="flex items-center gap-2">
                 @include('partials.sort-control', [
-                    'label' => 'Sort',
                     'options' => [
                         'created_at:desc' => 'Newest',
                         'created_at:asc' => 'Oldest',
@@ -70,7 +69,11 @@
                                     </p>
                                     <p class="text-xs text-slate-500">
                                         by {{ $invitation->invitedBy?->displayLabel() ?? 'Unknown' }}
-                                        · created {{ $invitation->created_at->diffForHumans() }}
+                                        @if($key === 'pending')
+                                            · expires in {{ $invitation->expires_at?->diffForHumans() }}
+                                        @else
+                                            · created {{ $invitation->created_at->diffForHumans(null, true) }} ago
+                                        @endif
                                     </p>
                                 </div>
                                 <div class="flex items-center gap-2">
@@ -82,11 +85,11 @@
                                     @else
                                         <span class="text-xs text-slate-500">
                                             @if($key === 'accepted')
-                                                Accepted {{ $invitation->accepted_at->diffForHumans() }}
+                                                Accepted {{ $invitation->accepted_at->diffForHumans(null, true) }} ago
                                             @elseif($key === 'cancelled')
-                                                Cancelled {{ $invitation->revoked_at->diffForHumans() }}
+                                                Cancelled {{ $invitation->revoked_at->diffForHumans(null, true) }} ago
                                             @else
-                                                Expired {{ $invitation->expires_at->diffForHumans() }}
+                                                Expired {{ $invitation->expires_at->diffForHumans(null, true) }} ago
                                             @endif
                                         </span>
                                     @endif

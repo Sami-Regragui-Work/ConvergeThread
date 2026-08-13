@@ -9,7 +9,6 @@
                 <span class="text-xs text-slate-500 truncate min-w-0">{{ $group->name }}</span>
             </div>
             @include('partials.sort-control', [
-                'label' => 'Sort',
                 'options' => [
                     'joined_at:desc' => 'Recently added',
                     'joined_at:asc' => 'First added',
@@ -66,7 +65,7 @@
                             'name' => 'user_ids',
                             'statusTrailing' => $availableUsers->isNotEmpty()
                                 ? ''
-                                : '<span class="text-slate-500">Everyone in this tenant is already a member.</span>',
+                                : '<span class="text-xs text-slate-500 ml-1.5">Everyone in this tenant is already a member.</span>',
                         ])
                     </div>
                     @if($availableUsers->isNotEmpty())
@@ -106,24 +105,26 @@
                         <div class="flex flex-wrap items-center gap-2">
                         @can('assignTenantRole', [App\Models\GroupMember::class, $group])
                             @php $roles = $assignableByMember[$member->user_id] ?? collect(); @endphp
-                            @if($roles->isNotEmpty())
                             <form method="POST" action="{{ route('groups.members.assign-tenant-role', $group) }}"
                                 class="flex items-center gap-2">
                                 @csrf @method('PATCH')
                                 <input type="hidden" name="user_id" value="{{ $member->user_id }}">
                                 <select name="tenant_role_id" required
-                                    class="bg-surface-300 border border-white/10 text-white text-xs rounded-lg px-2 py-1.5 max-w-36">
-                                    @foreach($roles as $role)
+                                    @disabled($roles->isEmpty())
+                                    @if($roles->isEmpty()) title="You cannot change this member's workspace role." @endif
+                                    class="bg-surface-300 border border-white/10 text-white text-xs rounded-lg px-2 py-1.5 max-w-36 {{ $roles->isEmpty() ? 'opacity-50 cursor-not-allowed' : '' }}">
+                                    @forelse($roles as $role)
                                         <option value="{{ $role->id }}"
                                             @selected($member->user->tenant_role_id == $role->id)>
                                             {{ $role->name }}
                                         </option>
-                                    @endforeach
+                                    @empty
+                                        <option value="" selected>{{ $member->user->tenantRole?->name ?? 'No role' }}</option>
+                                    @endforelse
                                 </select>
-                                <button type="submit"
-                                    class="text-xs text-brand-400 hover:text-brand-300 px-2 py-1 whitespace-nowrap">Set role</button>
+                                <button type="submit" @disabled($roles->isEmpty())
+                                    class="text-xs text-brand-400 px-2 py-1 whitespace-nowrap {{ $roles->isEmpty() ? 'opacity-50 cursor-not-allowed' : 'hover:text-brand-300' }}">Set role</button>
                             </form>
-                            @endif
                         @endcan
 
                         @can('assignRole', [App\Models\GroupMember::class, $group])
@@ -148,20 +149,39 @@
                         </div>
 
                         <div class="flex sm:justify-center">
-                        @can('delete', [$member, $group])
-                            <form method="POST" action="{{ route('groups.members.destroy', $group) }}" class="shrink-0">
-                                @csrf @method('DELETE')
-                                <input type="hidden" name="user_id" value="{{ $member->user_id }}">
-                                <button type="button" @click="$dispatch('confirm-action', { message: 'Remove this member?', form: $el.closest('form') })"
-                                    class="inline-flex items-center gap-1.5 text-xs font-medium text-red-500/80 hover:text-red-400 hover:bg-red-500/10 px-2.5 py-1.5 rounded-lg transition"
-                                    title="Remove member">
+                        @can('deleteAny', [App\Models\GroupMember::class, $group])
+                            @if(auth()->user()->can('delete', [$member, $group]))
+                                <form method="POST" action="{{ route('groups.members.destroy', $group) }}" class="shrink-0">
+                                    @csrf @method('DELETE')
+                                    <input type="hidden" name="user_id" value="{{ $member->user_id }}">
+                                    <button type="button" @click="$dispatch('confirm-action', { message: 'Remove this member?', form: $el.closest('form') })"
+                                        class="inline-flex items-center gap-1.5 text-xs font-medium text-red-500/80 hover:text-red-400 hover:bg-red-500/10 px-2.5 py-1.5 rounded-lg transition"
+                                        title="Remove member">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                        Remove
+                                    </button>
+                                </form>
+                            @else
+                                @php
+                                    $isSelf = (int) auth()->id() === (int) $member->user_id;
+                                    $removeTitle = $isSelf
+                                        ? 'You cannot remove yourself.'
+                                        : ((int) $group->creator_id === (int) $member->user_id
+                                            ? 'The group creator cannot be removed.'
+                                            : 'You cannot remove someone at your own level or above.');
+                                @endphp
+                                <button type="button" disabled title="{{ $removeTitle }}"
+                                    class="inline-flex items-center gap-1.5 text-xs font-medium text-red-500/80 px-2.5 py-1.5 rounded-lg opacity-50 cursor-not-allowed transition">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                     </svg>
                                     Remove
                                 </button>
-                            </form>
+                            @endif
                         @endcan
                         </div>
                     </div>

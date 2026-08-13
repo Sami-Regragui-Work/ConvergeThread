@@ -8,26 +8,27 @@ use Illuminate\Support\Facades\Auth;
 
 class AuthService
 {
-    public function __construct(private readonly RegistrationService $registrationService)
-    {
-    }
+    public function __construct(private readonly RegistrationService $registrationService) {}
+
     public function register(
         string $email,
         string $password,
         ?string $displayName,
-        ?string $tenantSlug
+        ?string $tenantSlug,
+        ?string $tenantName = null,
     ): RegistrationRequest {
         return $this->registrationService->submit(
             $email,
             $password,
             $displayName,
             $tenantSlug,
+            $tenantName,
         );
     }
 
     public function login(string $email, string $password): User
     {
-        if (!Auth::attempt(compact('email', 'password'), false)) {
+        if (! Auth::attempt(compact('email', 'password'), false)) {
             $this->throwRegistrationStatusMessage($email);
 
             throw new \Exception('Invalid credentials', 401);
@@ -35,7 +36,7 @@ class AuthService
 
         $user = Auth::user();
 
-        if (!$user instanceof User) {
+        if (! $user instanceof User) {
             Auth::logout();
             throw new \Exception('Invalid credentials', 401);
         }

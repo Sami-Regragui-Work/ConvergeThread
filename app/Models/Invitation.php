@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Invitation extends Model
 {
     public $timestamps = false;
+
     protected $fillable = [
         'tenant_id',
         'group_id',
@@ -16,6 +17,7 @@ class Invitation extends Model
         'email',
         'token',
         'expires_at',
+        'created_at',
         'accepted_at',
         'revoked_at',
     ];

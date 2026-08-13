@@ -12,6 +12,7 @@ class RegistrationRequest extends Model
         'email',
         'password',
         'tenant_slug',
+        'tenant_name',
         'tenant_id',
         'display_name',
         'status',

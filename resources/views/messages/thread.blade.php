@@ -17,6 +17,8 @@
             parentId: @js($message->id),
             currentUserId: @js(auth()->id()),
             canSend: @js(auth()->user()->can('create', [App\Models\Message::class, $message->chatable])),
+            userMutes: @js($userMutes),
+            userMutesUrl: @js(route('messages.user-mutes.save', [$chatType, $message->chatable_id])),
             mentionIds: @js($mentionIds),
             showThreadLink: false,
             chatType: @js($chatType),
@@ -54,6 +56,7 @@
             </div>
             <div class="flex items-center gap-2 shrink-0 flex-wrap justify-end">
                 @include('partials.chat-call-ui', ['mode' => 'buttons'])
+                @include('partials.chat-participants-menu')
                 <form method="POST" action="{{ route('messages.thread.mute', $message) }}">
                     @csrf
                     <button type="submit"
@@ -109,7 +112,13 @@
             <template x-if="parentMessage?.is_deleted">
                 <p class="text-sm italic text-slate-400" x-text="'Deleted by ' + (parentMessage.deleted_by_name || 'someone')"></p>
             </template>
-            <template x-if="parentMessage && !parentMessage.is_deleted">
+            <template x-if="parentMessage && !parentMessage.is_deleted && isMessageShrunk(parentMessage)">
+                <button type="button" @click="expandMessage(parentMessage)"
+                    class="w-full text-left text-sm italic text-slate-400 border border-dashed border-white/15 rounded-lg px-3 py-2 hover:border-brand-500/40 hover:text-slate-300 transition">
+                    Sent a message — tap to view
+                </button>
+            </template>
+            <template x-if="parentMessage && !parentMessage.is_deleted && !isMessageShrunk(parentMessage)">
                 <div>
                     <template x-for="message in [parentMessage]" :key="'parent-' + parentMessage.id">
                         <div>
@@ -160,7 +169,14 @@
                                 class="px-4 py-2.5 rounded-2xl text-sm italic border border-white/10 bg-surface-200/80 text-slate-400">
                                 <span x-text="'Deleted by ' + (message.deleted_by_name || 'someone')"></span>
                             </div>
-                            <div x-show="editingId !== message.id && !message.is_deleted" class="px-4 py-2.5 rounded-2xl text-sm break-words transition-shadow"
+                            <template x-if="editingId !== message.id && !message.is_deleted && isMessageShrunk(message)">
+                                <button type="button" @click="expandMessage(message)"
+                                    class="w-full text-left px-4 py-2.5 rounded-2xl text-sm italic border border-dashed border-white/15 bg-surface-200/80 text-slate-400 transition hover:border-brand-500/40 hover:text-slate-300"
+                                    :class="message.user_id === currentUserId ? 'rounded-tr-sm' : 'rounded-tl-sm'">
+                                    Sent a message — tap to view
+                                </button>
+                            </template>
+                            <div x-show="editingId !== message.id && !message.is_deleted && !isMessageShrunk(message)" class="px-4 py-2.5 rounded-2xl text-sm break-words transition-shadow"
                                 :class="message.user_id === currentUserId ? 'bg-brand-500 text-white rounded-tr-sm' : 'bg-surface-100 text-slate-200 rounded-tl-sm'">
                                 @include('partials.chat-attachments')
                                 <template x-if="message.content_html">
@@ -172,7 +188,9 @@
                             </div>
                                 <div class="absolute -top-2 flex gap-1 opacity-0 group-hover/msg:opacity-100 transition"
                                     :class="message.user_id === currentUserId ? '-left-2' : '-right-2'"
-                                    x-show="editingId !== message.id && !message.is_deleted && (message.can_edit || message.can_delete)" x-cloak>
+                                    x-show="editingId !== message.id && !message.is_deleted && (message.can_edit || message.can_delete || message.user_id !== currentUserId)" x-cloak>
+                                    <button type="button" x-show="message.user_id !== currentUserId" @click="openMuteOptions([message.user_id])"
+                                        class="text-[10px] px-1.5 py-0.5 rounded bg-surface-300 border border-white/10 text-slate-400 hover:text-white">Mute</button>
                                     <button type="button" x-show="message.can_edit" @click="startEdit(message)"
                                         class="text-[10px] px-1.5 py-0.5 rounded bg-surface-300 border border-white/10 text-slate-400 hover:text-white">Edit</button>
                                     <button type="button" x-show="message.can_delete" @click="askDelete(message)"

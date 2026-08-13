@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Notifications\RegistrationApprovalRequiredNotification;
 use App\Support\Permissions;
 use App\Support\WorkspaceSync;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
@@ -17,14 +18,14 @@ class RegistrationService
     public function __construct(
         private readonly TenantUserService $tenantUserService,
         private readonly TenantPermissionService $tenantPermissionService,
-    ) {
-    }
+    ) {}
 
     public function submit(
         string $email,
         string $password,
         ?string $displayName,
         ?string $tenantSlug,
+        ?string $tenantName = null,
     ): RegistrationRequest {
         $tenant = $tenantSlug !== null && $tenantSlug !== ''
             ? Tenant::where('slug', $tenantSlug)->first()
@@ -42,6 +43,7 @@ class RegistrationService
             'email' => $email,
             'password' => Hash::make($password),
             'tenant_slug' => $tenant?->slug ?? $tenantSlug,
+            'tenant_name' => $tenant?->name ?? $tenantName,
             'tenant_id' => $tenant?->id,
             'display_name' => $displayName,
             'status' => 'pending',
@@ -55,12 +57,16 @@ class RegistrationService
                 ->get()
                 ->filter(fn (User $u) => $this->tenantPermissionService->hasPermission($u, Permissions::INVITATIONS_CREATE_MEMBER))
                 ->each(fn (User $approver) => $approver->notify(new RegistrationApprovalRequiredNotification($request)));
+
+            WorkspaceSync::bump($tenant->id, ['users', 'members', 'registrations']);
         } else {
             $owner = User::where('tenant_id', 1)->first();
 
             if ($owner) {
                 $owner->notify(new RegistrationApprovalRequiredNotification($request));
             }
+
+            WorkspaceSync::bump(null, ['users', 'tenants', 'registrations']);
         }
 
         return $request;
@@ -70,7 +76,7 @@ class RegistrationService
     {
         abort_unless($request->isPending(), 404);
 
-        $tenant = Tenant::findOrFail($this->authorize($actor, $request, $tenantId));
+        $tenant = $this->resolveTenant($actor, $request, $tenantId);
 
         if ($tenant->isClosed()) {
             throw new \InvalidArgumentException('That workspace is closed.');
@@ -80,35 +86,50 @@ class RegistrationService
             throw new \InvalidArgumentException('A user with this email already exists.');
         }
 
-        $memberRoleId = TenantRole::where('is_system', true)->where('name', 'Member')->value('id');
-        $username = $this->tenantUserService->generateUniqueTenantUsername(
-            $request->display_name ?? Str::before($request->email, '@'),
-            $tenant,
-        );
+        DB::transaction(function () use ($actor, $request, $tenant) {
+            $adminRoleId = TenantRole::where('is_system', true)->where('name', 'Admin')->value('id');
+            $memberRoleId = TenantRole::where('is_system', true)->where('name', 'Member')->value('id');
+            $username = $this->tenantUserService->generateUniqueTenantUsername(
+                $request->display_name ?? Str::before($request->email, '@'),
+                $tenant,
+            );
 
-        User::create([
-            'email' => $request->email,
-            'password' => $request->password,
-            'username' => $username,
-            'display_name' => $request->display_name,
-            'tenant_id' => $tenant->id,
-            'tenant_role_id' => $memberRoleId,
-        ]);
+            $roleId = $tenant->wasRecentlyCreated
+                ? $adminRoleId
+                : $memberRoleId;
 
-        $request->update([
-            'status' => 'approved',
-            'resolved_at' => now(),
-            'resolved_by_id' => $actor->id,
-        ]);
+            $user = User::create([
+                'email' => $request->email,
+                'password' => $request->password,
+                'username' => $username,
+                'display_name' => $request->display_name,
+                'tenant_id' => $tenant->id,
+                'tenant_role_id' => $roleId,
+            ]);
 
-        WorkspaceSync::bump($tenant->id, ['users', 'members']);
+            $request->update([
+                'tenant_id' => $tenant->id,
+                'status' => 'approved',
+                'resolved_at' => now(),
+                'resolved_by_id' => $actor->id,
+            ]);
+
+            if ($tenant->wasRecentlyCreated) {
+                $tenant->update(['admin_email' => $user->email]);
+            }
+
+            WorkspaceSync::bump($tenant->id, ['users', 'tenants', 'members']);
+        });
     }
 
     public function reject(User $actor, RegistrationRequest $request): void
     {
         abort_unless($request->isPending(), 404);
 
-        $this->authorize($actor, $request);
+        if (! $actor->isOwner()) {
+            abort_unless((int) $request->tenant_id === (int) $actor->tenant_id, 404);
+            abort_unless($this->tenantPermissionService->canManageWorkspaceMembers($actor), 403);
+        }
 
         $request->update([
             'status' => 'rejected',
@@ -121,23 +142,43 @@ class RegistrationService
         }
     }
 
-    private function authorize(User $actor, RegistrationRequest $request, ?int $tenantId = null): int
+    private function resolveTenant(User $actor, RegistrationRequest $request, ?int $tenantId = null): Tenant
     {
-        $isOwner = $actor->isOwner();
+        if ($request->tenant_id !== null) {
+            if ($actor->isOwner()) {
+                return Tenant::findOrFail((int) $request->tenant_id);
+            }
 
-        if ($request->tenant_id === null) {
-            abort_unless($isOwner && $tenantId !== null, 403);
+            abort_unless((int) $request->tenant_id === (int) $actor->tenant_id, 404);
+            abort_unless($this->tenantPermissionService->canManageWorkspaceMembers($actor), 403);
 
-            return $tenantId;
+            return Tenant::findOrFail((int) $request->tenant_id);
         }
 
-        if ($isOwner) {
-            return (int) $request->tenant_id;
+        abort_unless($actor->isOwner(), 403);
+
+        if ($tenantId !== null) {
+            return Tenant::findOrFail($tenantId);
         }
 
-        abort_unless((int) $request->tenant_id === (int) $actor->tenant_id, 404);
-        abort_unless($this->tenantPermissionService->canManageWorkspaceMembers($actor), 403);
+        $slug = $this->generateUniqueSlug($request->tenant_slug ?? Str::slug($request->tenant_name ?? 'workspace', '_'));
 
-        return (int) $request->tenant_id;
+        return Tenant::create([
+            'slug' => $slug,
+            'name' => $request->tenant_name ?? $request->tenant_slug ?? 'Workspace',
+            'admin_email' => $request->email,
+        ]);
+    }
+
+    private function generateUniqueSlug(string $base): string
+    {
+        $slug = $base;
+        $i = 2;
+
+        while (Tenant::where('slug', $slug)->exists()) {
+            $slug = $base.'_'.$i++;
+        }
+
+        return $slug;
     }
 }

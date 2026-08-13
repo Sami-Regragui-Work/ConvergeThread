@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
 use App\Models\RegistrationRequest;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\AuthService;
 use App\Support\Flash;
@@ -18,8 +19,7 @@ class AuthController extends Controller
 {
     public function __construct(
         private readonly AuthService $authService
-    ) {
-    }
+    ) {}
 
     public function showRegister()
     {
@@ -36,6 +36,7 @@ class AuthController extends Controller
                 $credentials['password'],
                 $credentials['display_name'] ?? null,
                 $credentials['tenant_slug'] ?? null,
+                $credentials['tenant_name'] ?? null,
             );
         } catch (\InvalidArgumentException $e) {
             return back()->withErrors(['email' => $e->getMessage()])->withInput();
@@ -55,6 +56,22 @@ class AuthController extends Controller
     public function showTrack()
     {
         return view('auth.track');
+    }
+
+    public function checkSlug(string $slug)
+    {
+        $slug = mb_strtolower(trim($slug));
+
+        if (! preg_match('/^[a-z0-9_-]+$/', $slug)) {
+            return response()->json(['exists' => false, 'name' => null]);
+        }
+
+        $tenant = Tenant::where('slug', $slug)->first();
+
+        return response()->json([
+            'exists' => $tenant !== null,
+            'name' => $tenant?->name,
+        ]);
     }
 
     public function track(Request $request)

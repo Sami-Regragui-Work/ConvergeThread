@@ -21,6 +21,7 @@ use App\Http\Controllers\RegistrationRequestController;
 use App\Http\Controllers\RoleHierarchyController;
 use App\Http\Controllers\TenantRoleController;
 use App\Http\Controllers\WorkspaceMemberController;
+use App\Http\Controllers\WorkspaceSettingsController;
 use App\Http\Controllers\WorkspaceSyncController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -36,6 +37,7 @@ Route::middleware('guest')->prefix('auth')->name('auth.')->group(function () {
     Route::post('login', [AuthController::class, 'login'])->name('login.store');
     Route::get('track', [AuthController::class, 'showTrack'])->name('track');
     Route::post('track', [AuthController::class, 'track'])->name('track.store');
+    Route::get('check-slug/{slug}', [AuthController::class, 'checkSlug'])->name('check-slug');
 });
 
 Route::middleware('guest')->prefix('auth')->group(function () {
@@ -76,6 +78,10 @@ Route::middleware(['auth', 'is.owner'])->prefix('owner')->name('owner.')->group(
 Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
     Route::post('auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
 
+    Route::get('workspace/settings', [WorkspaceSettingsController::class, 'index'])->name('workspace.settings.index');
+    Route::patch('workspace/settings/name', [WorkspaceSettingsController::class, 'updateName'])->name('workspace.settings.name');
+    Route::patch('workspace/settings/slug', [WorkspaceSettingsController::class, 'regenerateSlug'])->name('workspace.settings.slug');
+
     Route::get('workspace/members', [WorkspaceMemberController::class, 'index'])->name('workspace.members.index');
     Route::patch('workspace/members/{member}/role', [WorkspaceMemberController::class, 'updateRole'])->name('workspace.members.role');
     Route::delete('workspace/members/{member}', [WorkspaceMemberController::class, 'destroy'])->name('workspace.members.destroy');
@@ -96,6 +102,7 @@ Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
     Route::prefix('hierarchies')->name('hierarchies.')->group(function () {
         Route::get('', [RoleHierarchyController::class, 'index'])->name('index');
         Route::post('', [RoleHierarchyController::class, 'store'])->name('store');
+        Route::get('{hierarchy}/map', [RoleHierarchyController::class, 'map'])->name('map');
         Route::post('{hierarchy}/levels', [RoleHierarchyController::class, 'addNode'])->name('levels.store');
         Route::patch('levels/{level}/parent', [RoleHierarchyController::class, 'link'])->name('levels.link');
         Route::patch('levels/{level}/add-parent', [RoleHierarchyController::class, 'addParent'])->name('levels.add-parent');
@@ -202,6 +209,7 @@ Route::middleware(['auth', 'ban.check', 'identify.tenant'])->group(function () {
         Route::post('{message}/thread/mute', [MessageController::class, 'toggleThreadMute'])->name('thread.mute');
         Route::get('{message}/thread', [MessageController::class, 'thread'])->name('thread');
         Route::post('{chatType}/{chatId}/mute', [MessageController::class, 'toggleMute'])->name('mute');
+        Route::post('{chatType}/{chatId}/user-mutes', [MessageController::class, 'saveUserMute'])->name('user-mutes.save');
         Route::get('{chatType}/{chatId}', [MessageController::class, 'index'])->name('index');
         Route::post('{chatType}/{chatId}', [MessageController::class, 'store'])->name('store');
         Route::patch('{message}', [MessageController::class, 'update'])->name('update');

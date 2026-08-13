@@ -269,4 +269,76 @@ class MemberRemovalTest extends TestCase
             ->post(route('groups.leave', $group))
             ->assertForbidden();
     }
+
+    public function test_group_manager_sees_disabled_remove_on_creator_row(): void
+    {
+        $tenant = Tenant::create(['slug' => 'acme', 'admin_email' => 'founder@acme.com']);
+
+        $creator = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'tenant_role_id' => $this->role('Member'),
+        ]);
+
+        $admin = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'tenant_role_id' => $this->role('Admin'),
+        ]);
+
+        $admin2 = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'tenant_role_id' => $this->role('Admin'),
+        ]);
+
+        $group = Group::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Engineering',
+            'creator_id' => $creator->id,
+        ]);
+
+        app(GroupMemberService::class)->add($group, $creator);
+        app(GroupMemberService::class)->add($group, $admin);
+        app(GroupMemberService::class)->add($group, $admin2);
+
+        $response = $this->actingAs($admin)
+            ->get(route('groups.members.index', $group))
+            ->assertOk();
+
+        $content = $response->getContent();
+        $response->assertSee('The group creator cannot be removed');
+        $response->assertSee('You cannot remove yourself.');
+        $response->assertSee('You cannot remove someone at your own level or above.');
+        $this->assertSame(3, preg_match_all('/Remove\s*<\/button>/', $content));
+    }
+
+    public function test_workspace_admin_sees_disabled_remove_on_founder_row(): void
+    {
+        $tenant = Tenant::create(['slug' => 'acme', 'admin_email' => 'founder@acme.com']);
+
+        $founder = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'tenant_role_id' => $this->role('Member'),
+            'email' => 'founder@acme.com',
+        ]);
+
+        $admin = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'tenant_role_id' => $this->role('Admin'),
+        ]);
+
+        $admin2 = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'tenant_role_id' => $this->role('Admin'),
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->get(route('workspace.members.index'))
+            ->assertOk();
+
+        $content = $response->getContent();
+        $response->assertSee('The workspace founder cannot be removed');
+        $response->assertSee('You cannot remove yourself from the workspace.');
+        $response->assertSee('You cannot remove someone at your own level or above.');
+        $this->assertSame(3, preg_match_all('/Remove\s*<\/button>/', $content));
+        $response->assertSeeInOrder([$founder->displayLabel(), 'The workspace founder cannot be removed']);
+    }
 }

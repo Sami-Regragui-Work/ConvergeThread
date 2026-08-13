@@ -16,8 +16,7 @@ class ChatMessageNotification extends Notification
         public readonly string $chatType,
         public readonly string $chatLabel,
         public readonly int $stackCount = 1,
-    ) {
-    }
+    ) {}
 
     public function via(object $notifiable): array
     {
@@ -42,10 +41,12 @@ class ChatMessageNotification extends Notification
             'chat_label' => $this->chatLabel,
             'stack_count' => $this->stackCount,
             'author_name' => $author,
+            'author_id' => (int) $this->message->user_id,
             'preview' => $preview,
             'items' => [[
                 'message_id' => $this->message->id,
                 'author_name' => $author,
+                'author_id' => (int) $this->message->user_id,
                 'preview' => $preview,
                 'created_at' => $this->message->created_at?->toIso8601String(),
             ]],

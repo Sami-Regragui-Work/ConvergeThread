@@ -20,10 +20,12 @@
         </svg>
     </button>
     <button type="button" x-show="canMeet && participants.length >= 3" @click="openCall('meet')" title="Start a meeting"
-        class="p-2 rounded-lg border border-white/10 text-slate-400 hover:bg-white/5 hover:text-white transition">
+        class="p-2 rounded-lg border border-white/10 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 transition">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M16 9.5V7a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h11a1 1 0 001-1v-2.5l4.5 4.5V5L16 9.5z" />
+                d="M4 3h16a1 1 0 011 1v11a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20h6M12 16v4"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7.5 12.5l2.5-3 2 2 3-3.5"/>
         </svg>
     </button>
 @endif
@@ -98,19 +100,33 @@
             </div>
             <template x-for="peer in peers" :key="peer.userId">
                 <div class="contents">
-                    <div class="relative rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center">
+                    <div class="relative group rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center">
                         <video x-show="peerShowsVideo(peer)" :id="'remote-video-' + peer.userId" autoplay playsinline
                             class="absolute inset-0 h-full w-full object-contain bg-black"
-                            x-effect="if ($el && peer.stream) { $el.srcObject = peer.stream; $el.muted = localDeafened; $el.play?.().catch(() => {}); }"></video>
+                            x-effect="if ($el && peer.stream) { $el.srcObject = peer.stream; $el.muted = localDeafened || !!deafenPeerIds[peer.userId]; $el.play?.().catch(() => {}); }"></video>
                         {{-- Keep audio in DOM (not display:none) or browsers mute it --}}
                         <audio :id="'remote-audio-' + peer.userId" autoplay playsinline class="sr-only"
-                            x-effect="if ($el && peer.stream) { $el.srcObject = peer.stream; $el.muted = peerShowsVideo(peer) || localDeafened; if (!peerShowsVideo(peer)) $el.play?.().catch(() => {}); }"></audio>
+                            x-effect="if ($el && peer.stream) { $el.srcObject = peer.stream; $el.muted = peerShowsVideo(peer) || localDeafened || !!deafenPeerIds[peer.userId]; if (!peerShowsVideo(peer)) $el.play?.().catch(() => {}); }"></audio>
                         <div x-show="!peerShowsVideo(peer) || !peer.stream" class="relative z-10 text-center p-4">
                             <div class="w-14 h-14 mx-auto rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center text-lg font-bold"
                                 x-text="(peer.name || '?').slice(0, 1).toUpperCase()"></div>
                             <p class="text-xs text-slate-400 mt-2" x-text="peer.name"></p>
                         </div>
                         <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white" x-text="peer.name"></span>
+                        <div class="absolute top-2 right-2 hidden group-hover:flex gap-1.5">
+                            <button type="button" @click="toggleDeafenPeer(peer.userId)"
+                                class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center transition"
+                                :class="deafenPeerIds[peer.userId] ? 'bg-amber-500/70' : ''"
+                                :title="(deafenPeerIds[peer.userId] ? 'Unmute ' : 'Mute ') + (peer.name || 'this person') + ' for me'">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M6 8.5a6.5 6.5 0 1113 0c0 6-6 6-6 10a3.5 3.5 0 11-7 0"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M15 8.5a2.5 2.5 0 00-5 0v1a2 2 0 101 0"/>
+                                    <path x-show="deafenPeerIds[peer.userId]" stroke-linecap="round" stroke-width="2" d="M3 3l18 18"/>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                     <div x-show="peer.screenSharing && peer.screenStream" x-cloak
                         class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center">
@@ -144,13 +160,15 @@
                 :title="localMuted ? 'Unmute your microphone' : 'Mute your microphone'">
                 <svg x-show="!localMuted" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M12 4a4 4 0 100 8 4 4 0 000-8zM12 14c-4.4 0-6 2.9-6 5v1h12v-1c0-2.1-1.6-5-6-5z"/>
+                        d="M12 14.5a3.5 3.5 0 003.5-3.5V7a3.5 3.5 0 10-7 0v4a3.5 3.5 0 003.5 3.5z"/>
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M12 2v3"/>
+                        d="M18.5 11a6.5 6.5 0 01-13 0M12 18v3"/>
                 </svg>
                 <svg x-show="localMuted" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M12 2v3M12 4a4 4 0 100 8M12 14c-4.4 0-6 2.9-6 5v1h12v-1c0-2.1-1.6-5-6-5zM3 3l18 18"/>
+                        d="M12 14.5a3.5 3.5 0 003.5-3.5V7a3.5 3.5 0 10-7 0v4a3.5 3.5 0 003.5 3.5z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M18.5 11a6.5 6.5 0 01-.75 3M5.5 11a6.5 6.5 0 006.5 6M12 18v3M4 4l16 16"/>
                 </svg>
             </button>
             <button type="button" @click="toggleDeafen()"
@@ -196,9 +214,8 @@
             </button>
             <button type="button" @click="endCall()"
                 class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-500/20 text-red-400 hover:bg-red-500/30 text-sm font-semibold transition">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M5 12h14M12 5l7 7-7 7"/>
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.7l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.1-.7-.28-.79-.73-1.68-1.36-2.66-1.85-.33-.16-.56-.51-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/>
                 </svg>
                 End call
             </button>
@@ -231,21 +248,14 @@
 
     <div class="flex-1 min-h-0 overflow-y-auto p-4">
         <div class="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 content-start">
-            <div class="relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40">
-                <video x-ref="meetLocalVideo" autoplay muted playsinline
-                    class="absolute inset-0 h-full w-full object-cover bg-black"
-                    x-show="!localVideoOff && !localShowsScreen()"></video>
-                <video x-ref="meetLocalScreenVideo" x-show="localShowsScreen()" x-cloak autoplay muted playsinline
-                    class="ct-screen-tile absolute inset-0 h-full w-full object-cover bg-black transition-transform"
-                    :style="'transform: scale(' + (screenZooms['local'] || 1) + ')'"></video>
-                <div x-show="localVideoOff && !localShowsScreen()" class="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                    <div class="w-14 h-14 rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center text-lg font-bold"
-                        x-text="(currentUserName || 'Y').slice(0, 1).toUpperCase()"></div>
-                </div>
-                <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white">
-                    You <span x-show="localMuted">· muted</span>
-                </span>
-                <div class="absolute top-2 right-2 flex gap-1.5" x-show="localShowsScreen()" x-cloak>
+            {{-- Local: shared screen as its own tile (only while sharing) --}}
+            <div x-show="localShowsScreen()" x-cloak
+                class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40 sm:col-span-2 lg:col-span-2 xl:col-span-2">
+                <video x-ref="meetLocalScreenVideo" autoplay muted playsinline
+                    class="h-full w-full object-contain bg-black transition-transform"
+                    :style="'transform: scale(' + (screenZooms['local'] || 1) + '); transform-origin: center center;'"></video>
+                <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white">Your screen</span>
+                <div class="absolute top-2 right-2 flex gap-1.5">
                     <button type="button" @click="cycleScreenZoom('local')" title="Zoom in/out"
                         class="w-7 h-7 rounded-md bg-black/60 text-white text-xs font-bold hover:bg-black/80">＋</button>
                     <button type="button" @click="toggleScreenFullscreen($event, 'local')" title="Fullscreen"
@@ -257,47 +267,78 @@
                 </div>
             </div>
 
-            <template x-for="uid in meetPeerIds()" :key="'meet-tile-' + uid">
-                <div class="relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40 group">
-                    <video x-show="meetPeer(uid)?.stream && !(meetPeer(uid)?.screenSharing && meetPeer(uid)?.screenStream)"
-                        :id="'meet-remote-' + uid" autoplay playsinline
-                        class="absolute inset-0 h-full w-full object-cover bg-black"
-                        x-effect="if ($el && meetPeer(uid)?.stream) { $el.srcObject = meetPeer(uid).stream; $el.muted = localDeafened || !!hostMutedIds[uid]; $el.play?.().catch(() => {}); }"></video>
-                    <video x-show="meetPeer(uid)?.screenSharing && meetPeer(uid)?.screenStream" x-cloak
-                        :id="'meet-remote-screen-' + uid" autoplay playsinline
-                        class="ct-screen-tile absolute inset-0 h-full w-full object-cover bg-black transition-transform"
-                        :style="'transform: scale(' + (screenZooms['peer:' + uid] || 1) + ')'"
-                        x-effect="if ($el && meetPeer(uid)?.screenStream) { $el.srcObject = meetPeer(uid).screenStream; $el.play?.().catch(() => {}); }"></video>
-                    <audio :id="'meet-audio-' + uid" autoplay playsinline class="sr-only"
-                        x-effect="if ($el && meetPeer(uid)?.stream) { $el.srcObject = meetPeer(uid).stream; $el.muted = localDeafened || !!hostMutedIds[uid] || !!meetPeer(uid)?.screenStream; $el.play?.().catch(() => {}); }"></audio>
-                    <div x-show="!meetPeer(uid)?.stream" class="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                        <div class="w-14 h-14 rounded-full bg-surface-300/40 text-slate-300 flex items-center justify-center text-lg font-bold"
-                            x-text="(meetName(uid) || '?').slice(0, 1).toUpperCase()"></div>
-                        <p class="text-xs text-slate-400" x-text="meetName(uid)"></p>
+            {{-- Local camera: its own tile, stays visible while sharing --}}
+            <div class="relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40">
+                <video x-ref="meetLocalVideo" autoplay muted playsinline
+                    class="absolute inset-0 h-full w-full object-cover bg-black"
+                    x-show="!localVideoOff"></video>
+                <div x-show="localVideoOff" class="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                    <div class="w-14 h-14 rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center text-lg font-bold"
+                        x-text="(currentUserName || 'Y').slice(0, 1).toUpperCase()"></div>
+                </div>
+                <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white">
+                    You <span x-show="localMuted">· muted</span>
+                </span>
+            </div>
+
+            <template x-for="uid in meetPeerIds()" :key="'meet-participant-' + uid">
+                <div class="contents">
+                    {{-- Remote shared screen as its own tile (only while sharing) --}}
+                    <div x-show="meetPeer(uid)?.screenSharing && meetPeer(uid)?.screenStream" x-cloak
+                        class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40 sm:col-span-2 lg:col-span-2 xl:col-span-2">
+                        <video :id="'meet-remote-screen-' + uid" autoplay playsinline
+                            class="h-full w-full object-contain bg-black transition-transform"
+                            :style="'transform: scale(' + (screenZooms['peer:' + uid] || 1) + '); transform-origin: center center;'"
+                            x-effect="if ($el && meetPeer(uid)?.screenStream) { $el.srcObject = meetPeer(uid).screenStream; $el.muted = true; $el.play?.().catch(() => {}); }"></video>
+                        <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white"
+                            x-text="meetName(uid) + ' · screen'"></span>
+                        <div class="absolute top-2 right-2 flex gap-1.5">
+                            <button type="button" @click="cycleScreenZoom('peer:' + uid)" title="Zoom in/out"
+                                class="w-7 h-7 rounded-md bg-black/60 text-white text-xs font-bold hover:bg-black/80">＋</button>
+                            <button type="button" @click="toggleScreenFullscreen($event, 'peer:' + uid)" title="Fullscreen"
+                                class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
-                    <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white"
-                        x-text="meetName(uid)"></span>
-                    <div class="absolute top-2 right-2 hidden group-hover:flex gap-1.5" x-show="isCallHost()" x-cloak>
-                        <button type="button" @click="muteForEveryone(uid)"
-                            class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center transition"
-                            :class="hostMutedIds[uid] ? 'bg-amber-500/70' : ''"
-                            :title="(hostMutedIds[uid] ? 'Unmute ' : 'Mute ') + meetName(uid) + ' for everyone'">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M12 4a4 4 0 100 8 4 4 0 000-8zM12 14c-4.4 0-6 2.9-6 5v1h12v-1c0-2.1-1.6-5-6-5zM3 3l18 18"/>
-                            </svg>
-                        </button>
-                    </div>
-                    <div class="absolute top-2 right-2 hidden group-hover:flex gap-1.5"
-                        x-show="meetPeer(uid)?.screenSharing && meetPeer(uid)?.screenStream" x-cloak>
-                        <button type="button" @click="cycleScreenZoom('peer:' + uid)" title="Zoom in/out"
-                            class="w-7 h-7 rounded-md bg-black/60 text-white text-xs font-bold hover:bg-black/80">＋</button>
-                        <button type="button" @click="toggleScreenFullscreen($event, 'peer:' + uid)" title="Fullscreen"
-                            class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/>
-                            </svg>
-                        </button>
+
+                    {{-- Remote camera: its own tile, stays visible while they share --}}
+                    <div class="relative group rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40">
+                        <video x-show="meetPeer(uid)?.stream" :id="'meet-remote-' + uid" autoplay playsinline
+                            class="absolute inset-0 h-full w-full object-cover bg-black"
+                            x-effect="if ($el && meetPeer(uid)?.stream) { $el.srcObject = meetPeer(uid).stream; $el.muted = localDeafened || !!hostMutedIds[uid] || !!deafenPeerIds[uid]; $el.play?.().catch(() => {}); }"></video>
+                        <div x-show="!meetPeer(uid)?.stream" class="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                            <div class="w-14 h-14 rounded-full bg-surface-300/40 text-slate-300 flex items-center justify-center text-lg font-bold"
+                                x-text="(meetName(uid) || '?').slice(0, 1).toUpperCase()"></div>
+                            <p class="text-xs text-slate-400" x-text="meetName(uid)"></p>
+                        </div>
+                        <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white"
+                            x-text="meetName(uid)"></span>
+                        <div class="absolute top-2 right-2 hidden group-hover:flex gap-1.5">
+                            <button type="button" @click="toggleDeafenPeer(uid)"
+                                class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center transition"
+                                :class="deafenPeerIds[uid] ? 'bg-amber-500/70' : ''"
+                                :title="(deafenPeerIds[uid] ? 'Unmute ' : 'Mute ') + meetName(uid) + ' for me'">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M6 8.5a6.5 6.5 0 1113 0c0 6-6 6-6 10a3.5 3.5 0 11-7 0"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M15 8.5a2.5 2.5 0 00-5 0v1a2 2 0 101 0"/>
+                                    <path x-show="deafenPeerIds[uid]" stroke-linecap="round" stroke-width="2" d="M3 3l18 18"/>
+                                </svg>
+                            </button>
+                            <button type="button" @click="muteForEveryone(uid)" x-show="isCallHost()" x-cloak
+                                class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center transition"
+                                :class="hostMutedIds[uid] ? 'bg-amber-500/70' : ''"
+                                :title="(hostMutedIds[uid] ? 'Unmute ' : 'Mute ') + meetName(uid) + ' for everyone'">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 14.5a3.5 3.5 0 003.5-3.5V7a3.5 3.5 0 10-7 0v4a3.5 3.5 0 003.5 3.5zM18.5 11a6.5 6.5 0 01-.75 3M12 18v3M4 4l16 16"/>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </template>
@@ -311,12 +352,15 @@
             :title="localMuted ? 'Unmute your microphone' : 'Mute your microphone'">
             <svg x-show="!localMuted" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M12 4a4 4 0 100 8 4 4 0 000-8zM12 14c-4.4 0-6 2.9-6 5v1h12v-1c0-2.1-1.6-5-6-5z"/>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2v3"/>
+                    d="M12 14.5a3.5 3.5 0 003.5-3.5V7a3.5 3.5 0 10-7 0v4a3.5 3.5 0 003.5 3.5z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M18.5 11a6.5 6.5 0 01-13 0M12 18v3"/>
             </svg>
             <svg x-show="localMuted" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M12 2v3M12 4a4 4 0 100 8M12 14c-4.4 0-6 2.9-6 5v1h12v-1c0-2.1-1.6-5-6-5zM3 3l18 18"/>
+                    d="M12 14.5a3.5 3.5 0 003.5-3.5V7a3.5 3.5 0 10-7 0v4a3.5 3.5 0 003.5 3.5z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M18.5 11a6.5 6.5 0 01-.75 3M5.5 11a6.5 6.5 0 006.5 6M12 18v3M4 4l16 16"/>
             </svg>
         </button>
         <button type="button" @click="toggleDeafen()"
@@ -360,8 +404,8 @@
         </button>
         <button type="button" @click="isCallHost() ? endMeeting() : endCall()"
             class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-500/20 text-red-400 hover:bg-red-500/30 text-sm font-semibold transition">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"/>
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.7l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.1-.7-.28-.79-.73-1.68-1.36-2.66-1.85-.33-.16-.56-.51-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/>
             </svg>
             <span x-text="isCallHost() ? 'End meeting' : 'Leave'"></span>
         </button>

@@ -4,7 +4,10 @@
 @section('content')
     <div class="max-w-3xl mx-auto" data-sync="roles">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
-            <h1 class="text-xl font-bold text-white">Tenant Roles</h1>
+            <div class="flex items-center gap-2">
+                <h1 class="text-xl font-bold text-white">Tenant Roles</h1>
+                @include('partials.help-icon', ['hint' => 'What each member of this workspace can do.', 'position' => 'bottom'])
+            </div>
             <div class="flex items-center gap-2">
                 @include('partials.sort-control', [
                     'options' => [
@@ -22,6 +25,10 @@
                 @endcan
             </div>
         </div>
+
+        <p class="text-sm text-slate-400 max-w-3xl -mt-4 mb-6">
+            Roles define what members of this workspace can do. System roles (Admin, Moderator, Member) are fixed templates; custom roles are yours to shape. Each role carries its own permissions and color.
+        </p>
 
         <div class="bg-surface-200 border border-white/5 rounded-2xl overflow-hidden">
             <div class="divide-y divide-white/5">
@@ -60,21 +67,27 @@
                         @endcan
                         </div>
                         <div class="flex sm:justify-center">
-                        @if(!$role->is_system)
-                                @can('delete', $role)
-                                    <form method="POST" action="{{ route('tenant-roles.destroy', $role) }}" class="shrink-0">
-                                        @csrf @method('DELETE')
-                                        <button type="button" @click="$dispatch('confirm-action', { message: 'Delete this role?', form: $el.closest('form') })"
-                                            class="inline-flex items-center gap-1.5 text-xs font-medium text-red-500/80 hover:text-red-400 hover:bg-red-500/10 px-2.5 py-1.5 rounded-lg transition">
-                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                            </svg>
-                                            Remove
-                                        </button>
-                                    </form>
-                                @endcan
-                        @endif
+                        @can('deleteAny', App\Models\TenantRole::class)
+                            <form method="POST" action="{{ route('tenant-roles.destroy', $role) }}" class="shrink-0">
+                                @csrf @method('DELETE')
+                                <button
+                                    type="button"
+                                    @if($role->is_system)
+                                        disabled
+                                        title="System roles cannot be removed"
+                                        class="inline-flex items-center gap-1.5 text-xs font-medium text-red-500/80 px-2.5 py-1.5 rounded-lg opacity-50 cursor-not-allowed transition"
+                                    @else
+                                        @click="$dispatch('confirm-action', { message: 'Delete this role?', form: $el.closest('form') })"
+                                        class="inline-flex items-center gap-1.5 text-xs font-medium text-red-500/80 hover:text-red-400 hover:bg-red-500/10 px-2.5 py-1.5 rounded-lg transition"
+                                    @endif>
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                    Remove
+                                </button>
+                            </form>
+                        @endcan
                         </div>
                     </div>
                 @empty

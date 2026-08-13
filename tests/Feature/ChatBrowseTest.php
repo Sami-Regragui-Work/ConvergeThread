@@ -32,6 +32,40 @@ class ChatBrowseTest extends TestCase
         ]);
     }
 
+    public function test_thread_page_renders_with_user_mute_data(): void
+    {
+        $tenant = Tenant::create(['slug' => 'acme_corp', 'admin_email' => 'admin@acme.com']);
+        $adminRoleId = TenantRole::where('is_system', true)->where('name', 'Admin')->value('id');
+        $author = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'tenant_role_id' => $adminRoleId,
+        ]);
+
+        $this->actingAs($author);
+        $group = app(GroupService::class)->create('General', $author);
+
+        $root = Message::create([
+            'chatable_type' => $group->getMorphClass(),
+            'chatable_id' => $group->id,
+            'user_id' => $author->id,
+            'content' => 'Root question',
+        ]);
+
+        Message::create([
+            'chatable_type' => $group->getMorphClass(),
+            'chatable_id' => $group->id,
+            'user_id' => $author->id,
+            'content' => 'A reply',
+            'parent_id' => $root->id,
+        ]);
+
+        $this->get(route('messages.thread', $root))
+            ->assertOk()
+            ->assertViewIs('messages.thread')
+            ->assertSee('Root question')
+            ->assertSee('A reply');
+    }
+
     public function test_lists_member_chats_and_search_feed_includes_ciphertext(): void
     {
         $tenant = Tenant::create(['slug' => 'acme_corp', 'admin_email' => 'admin@acme.com']);

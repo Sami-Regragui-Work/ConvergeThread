@@ -18,12 +18,11 @@ class InvitationService
 {
     public function __construct(
         private readonly TenantUserService $tenantUserService,
-    ) {
-    }
+    ) {}
 
     public function createAdminInvitation(string $email, User $owner): Invitation
     {
-        if (!$owner->isOwner()) {
+        if (! $owner->isOwner()) {
             throw ValidationException::withMessages([
                 'email' => 'Only the owner can create admin invitations.',
             ]);
@@ -43,6 +42,7 @@ class InvitationService
             'email' => $email,
             'token' => Str::random(60),
             'expires_at' => now()->addDays(7),
+            'created_at' => now(),
         ]);
     }
 
@@ -65,7 +65,7 @@ class InvitationService
             ]);
         }
 
-        if ($tenantRole && !$tenantRole->isUsableByTenant($tenant->id)) {
+        if ($tenantRole && ! $tenantRole->isUsableByTenant($tenant->id)) {
             throw ValidationException::withMessages([
                 'email' => 'Selected tenant role does not belong to this tenant.',
             ]);
@@ -89,6 +89,7 @@ class InvitationService
             'email' => $email,
             'token' => Str::random(60),
             'expires_at' => now()->addDays(7),
+            'created_at' => now(),
         ]);
 
         WorkspaceSync::bump($tenant->id, ['invitations']);
@@ -120,6 +121,7 @@ class InvitationService
 
             $tenant = Tenant::create([
                 'slug' => $slug,
+                'name' => $tenantName,
                 'admin_email' => $invitation->email,
             ]);
 
@@ -220,7 +222,7 @@ class InvitationService
         $i = 2;
 
         while (Tenant::where('slug', $slug)->exists()) {
-            $slug = $base . '_' . $i++;
+            $slug = $base.'_'.$i++;
         }
 
         return $slug;
@@ -240,7 +242,7 @@ class InvitationService
 
     private function checkInvite(Invitation $invitation): void
     {
-        if (!$invitation->tenant) {
+        if (! $invitation->tenant) {
             throw ValidationException::withMessages([
                 'token' => 'Invitation tenant was not found.',
             ]);
@@ -252,7 +254,7 @@ class InvitationService
             ]);
         }
 
-        if ($invitation->tenantRole && !$invitation->tenantRole->isUsableByTenant($invitation->tenant_id)) {
+        if ($invitation->tenantRole && ! $invitation->tenantRole->isUsableByTenant($invitation->tenant_id)) {
             throw ValidationException::withMessages([
                 'token' => 'Invitation role does not belong to the invitation tenant.',
             ]);

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Events\CallSignal;
+use App\Events\UserIncomingCall;
 use App\Models\Duo;
 use App\Models\GroupMember;
 use App\Models\Tenant;
@@ -205,9 +206,9 @@ class CallSignalTest extends TestCase
             ->assertJsonStructure(['ok', 'url', 'token', 'room']);
     }
 
-    public function test_meet_invite_creates_session_without_ringing_or_notifications(): void
+    public function test_meet_invite_notifies_without_ringing(): void
     {
-        Event::fake([CallSignal::class]);
+        Event::fake([CallSignal::class, UserIncomingCall::class]);
 
         $tenant = Tenant::create(['slug' => 'acme_corp', 'admin_email' => 'admin@acme.com']);
         $adminRoleId = TenantRole::where('is_system', true)->where('name', 'Admin')->value('id');
@@ -237,13 +238,14 @@ class CallSignalTest extends TestCase
             ->assertJsonPath('active.call_type', 'meet')
             ->assertJsonPath('active.host_user_id', $user->id);
 
-        Event::assertDispatched(CallSignal::class, fn (CallSignal $event) =>
-            $event->payload['action'] === 'invite' && $event->payload['call_type'] === 'meet'
+        Event::assertDispatched(CallSignal::class, fn (CallSignal $event) => $event->payload['action'] === 'invite' && $event->payload['call_type'] === 'meet'
         );
 
-        $this->assertFalse(
+        $this->assertTrue(
             $peer->fresh()->notifications()->where('type', IncomingCallNotification::class)->exists()
         );
+
+        Event::assertNotDispatched(UserIncomingCall::class);
     }
 
     public function test_meet_cannot_be_started_in_a_duo(): void

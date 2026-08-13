@@ -17,6 +17,10 @@
             threadUrlTemplate: @js(preg_replace('/\/0(\/thread)$/', '/__ID__$1', route('messages.thread', 0))),
             currentUserId: @js(auth()->id()),
             canSend: @js(auth()->user()->can('create', [App\Models\Message::class, $chatable])),
+            userMutes: @js($userMutes),
+            userMutesUrl: @js(route('messages.user-mutes.save', [$chatType, $chatId])),
+            chatMuted: @js((bool) $chatMuted),
+            chatMuteUrl: @js(route('messages.mute', [$chatType, $chatId])),
             mentionIds: @js($mentionIds),
             showThreadLink: true,
             chatType: @js($chatType),
@@ -71,20 +75,19 @@
                     class="hidden sm:inline-flex max-w-56 items-center px-2 py-1 rounded-lg border border-amber-500/30 bg-amber-500/10 text-[10px] text-amber-300 truncate"
                     :title="e2eeError"
                     x-text="e2eeError"></span>
-                <form method="POST" action="{{ route('messages.mute', [$chatType, $chatId]) }}">
-                    @csrf
-                    <button type="submit"
-                        class="inline-flex items-center justify-center p-2 rounded-lg border transition {{ $chatMuted ? 'border-amber-500/40 text-amber-400 bg-amber-500/10' : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white' }}"
-                        title="{{ $chatMuted ? 'Unmute notifications' : 'Mute notifications' }}">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M6 8.5a6.5 6.5 0 1 1 13 0c0 6-6 6-6 10a3.5 3.5 0 1 1-7 0"/>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M15 8.5a2.5 2.5 0 0 0-5 0v1a2 2 0 1 1 0 4"/>
-                            @if($chatMuted)<path stroke-linecap="round" stroke-width="2" d="M3 3l18 18"/>@endif
-                        </svg>
-                    </button>
-                </form>
+                <button type="button" @click="toggleChatMute()" :disabled="chatMuteBusy"
+                    class="inline-flex items-center justify-center p-2 rounded-lg border border-white/10 transition disabled:opacity-40"
+                    :class="chatMuted ? 'border-amber-500/40 text-amber-400 bg-amber-500/10' : 'text-slate-400 hover:bg-white/5 hover:text-white'"
+                    :title="chatMuted ? 'Unmute notifications' : 'Mute notifications'">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 8.5a6.5 6.5 0 1 1 13 0c0 6-6 6-6 10a3.5 3.5 0 1 1-7 0"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 8.5a2.5 2.5 0 0 0-5 0v1a2 2 0 1 1 0 4"/>
+                        <path x-show="chatMuted" stroke-linecap="round" stroke-width="2" d="M3 3l18 18"/>
+                    </svg>
+                </button>
+                @include('partials.chat-participants-menu')
                 <button type="button" @click="openCall('voice')" title="Voice call"
                     class="p-2 rounded-lg border border-white/10 text-slate-400 hover:bg-white/5 hover:text-white transition">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -100,10 +103,12 @@
                     </svg>
                 </button>
                 <button type="button" x-show="canMeet && participants.length >= 3" @click="openCall('meet')" title="Start a meeting"
-                    class="p-2 rounded-lg border border-white/10 text-slate-400 hover:bg-white/5 hover:text-white transition">
+                    class="p-2 rounded-lg border border-white/10 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 transition">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M16 9.5V7a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h11a1 1 0 001-1v-2.5l4.5 4.5V5L16 9.5z" />
+                            d="M4 3h16a1 1 0 011 1v11a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20h6M12 16v4"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7.5 12.5l2.5-3 2 2 3-3.5"/>
                     </svg>
                 </button>
             </div>
@@ -161,7 +166,14 @@
                                     class="px-4 py-2.5 rounded-2xl text-sm italic border border-white/10 bg-surface-200/80 text-slate-400">
                                     <span x-text="'Deleted by ' + (message.deleted_by_name || 'someone')"></span>
                                 </div>
-                                <div x-show="editingId !== message.id && !message.is_deleted" class="px-4 py-2.5 rounded-2xl text-sm break-words transition-shadow"
+                                <template x-if="editingId !== message.id && !message.is_deleted && isMessageShrunk(message)">
+                                    <button type="button" @click="expandMessage(message)"
+                                        class="w-full text-left px-4 py-2.5 rounded-2xl text-sm italic border border-dashed border-white/15 bg-surface-200/80 text-slate-400 transition hover:border-brand-500/40 hover:text-slate-300"
+                                        :class="message.user_id === currentUserId ? 'rounded-tr-sm' : 'rounded-tl-sm'">
+                                        Sent a message — tap to view
+                                    </button>
+                                </template>
+                                <div x-show="editingId !== message.id && !message.is_deleted && !isMessageShrunk(message)" class="px-4 py-2.5 rounded-2xl text-sm break-words transition-shadow"
                                     :class="message.user_id === currentUserId ? 'bg-brand-500 text-white rounded-tr-sm' : 'bg-surface-100 text-slate-200 rounded-tl-sm'">
                                     @include('partials.chat-attachments')
                                     <template x-if="message.content_html">
@@ -173,7 +185,9 @@
                                 </div>
                                 <div class="absolute -top-2 flex gap-1 opacity-0 group-hover/msg:opacity-100 transition"
                                     :class="message.user_id === currentUserId ? '-left-2' : '-right-2'"
-                                    x-show="editingId !== message.id && !message.is_deleted && (message.can_edit || message.can_delete)" x-cloak>
+                                    x-show="editingId !== message.id && !message.is_deleted && (message.can_edit || message.can_delete || message.user_id !== currentUserId)" x-cloak>
+                                    <button type="button" x-show="message.user_id !== currentUserId" @click="openMuteOptions([message.user_id])"
+                                        class="text-[10px] px-1.5 py-0.5 rounded bg-surface-300 border border-white/10 text-slate-400 hover:text-white">Mute</button>
                                     <button type="button" x-show="message.can_edit" @click="startEdit(message)"
                                         class="text-[10px] px-1.5 py-0.5 rounded bg-surface-300 border border-white/10 text-slate-400 hover:text-white">Edit</button>
                                     <button type="button" x-show="message.can_delete" @click="askDelete(message)"

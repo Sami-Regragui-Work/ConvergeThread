@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Events\OwnerDashboardUpdated;
+use App\Events\WorkspaceUpdated;
 use App\Models\RegistrationRequest;
 use App\Models\Tenant;
 use App\Models\TenantRole;
@@ -11,6 +13,7 @@ use Database\Seeders\Permanents\SystemTenantRoleSeeder;
 use Database\Seeders\Permanents\SystemTenantSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
 class AuthFlowTest extends TestCase
@@ -82,6 +85,26 @@ class AuthFlowTest extends TestCase
         $this->assertNotNull($notification);
         $this->assertSame('registration_pending', $notification->data['type'] ?? null);
         $this->assertSame('newuser@example.com', $notification->data['email'] ?? null);
+    }
+
+    public function test_registration_submit_bumps_workspace_and_owner_sync(): void
+    {
+        Event::fake([WorkspaceUpdated::class, OwnerDashboardUpdated::class]);
+
+        $tenant = Tenant::create(['slug' => 'acme_corp', 'admin_email' => 'admin@acme.com']);
+
+        $this->post(route('auth.register.store'), [
+            'email' => 'newuser@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+            'tenant_slug' => 'acme_corp',
+            'display_name' => 'New User',
+        ])->assertRedirect(route('auth.login'));
+
+        Event::assertDispatched(WorkspaceUpdated::class, fn ($event) => $event->tenantId === $tenant->id
+            && in_array('registrations', $event->scopes, true));
+
+        Event::assertDispatched(OwnerDashboardUpdated::class, fn ($event) => in_array('users', $event->scopes, true));
     }
 
     public function test_register_with_unknown_slug_notifies_owner(): void
@@ -234,6 +257,102 @@ class AuthFlowTest extends TestCase
         $this->assertDatabaseHas('registration_requests', [
             'id' => $registration->id,
             'status' => 'approved',
+        ]);
+    }
+
+    public function test_owner_approve_without_choice_creates_new_workspace_with_chosen_title(): void
+    {
+        $adminRoleId = TenantRole::where('is_system', true)->where('name', 'Admin')->value('id');
+        $owner = User::where('tenant_id', 1)->first();
+
+        $registration = RegistrationRequest::create([
+            'email' => 'founder@example.com',
+            'password' => bcrypt('password123'),
+            'tenant_slug' => 'blue_team',
+            'tenant_name' => 'Blue Team',
+            'tenant_id' => null,
+            'display_name' => 'Founder',
+            'status' => 'pending',
+        ]);
+
+        $response = $this->actingAs($owner)->post(
+            route('owner.registrations.approve', $registration),
+        );
+
+        $response->assertRedirect();
+
+        $tenant = Tenant::where('slug', 'blue_team')->first();
+        $this->assertNotNull($tenant);
+        $this->assertSame('Blue Team', $tenant->name);
+        $this->assertSame('founder@example.com', $tenant->admin_email);
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'founder@example.com',
+            'tenant_id' => $tenant->id,
+            'tenant_role_id' => $adminRoleId,
+        ]);
+
+        $this->assertDatabaseHas('registration_requests', [
+            'id' => $registration->id,
+            'tenant_id' => $tenant->id,
+            'status' => 'approved',
+        ]);
+    }
+
+    public function test_owner_approve_without_choice_slug_collision_suffixes_new_workspace(): void
+    {
+        $existing = Tenant::create(['slug' => 'blue_team', 'admin_email' => 'old@example.com']);
+        $owner = User::where('tenant_id', 1)->first();
+
+        $registration = RegistrationRequest::create([
+            'email' => 'founder@example.com',
+            'password' => bcrypt('password123'),
+            'tenant_slug' => 'blue_team',
+            'tenant_name' => 'Blue Team',
+            'tenant_id' => null,
+            'display_name' => 'Founder',
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($owner)->post(route('owner.registrations.approve', $registration));
+
+        $created = Tenant::where('admin_email', 'founder@example.com')->first();
+        $this->assertNotNull($created);
+        $this->assertNotSame($existing->id, $created->id);
+        $this->assertSame('blue_team_2', $created->slug);
+    }
+
+    public function test_check_slug_reports_existing_and_missing_workspaces(): void
+    {
+        Tenant::create(['slug' => 'acme_corp', 'admin_email' => 'admin@acme.com']);
+
+        $this->getJson(route('auth.check-slug', 'acme_corp'))
+            ->assertOk()
+            ->assertJson(['exists' => true, 'name' => 'Acme corp']);
+
+        $this->getJson(route('auth.check-slug', 'ghost_workspace'))
+            ->assertOk()
+            ->assertJson(['exists' => false]);
+    }
+
+    public function test_workspace_admin_can_update_workspace_title(): void
+    {
+        $tenant = Tenant::create(['slug' => 'acme_corp', 'admin_email' => 'admin@acme.com']);
+        $adminRoleId = TenantRole::where('is_system', true)->where('name', 'Admin')->value('id');
+        $admin = User::factory()->create([
+            'email' => 'admin@acme.com',
+            'tenant_id' => $tenant->id,
+            'tenant_role_id' => $adminRoleId,
+        ]);
+
+        $response = $this->actingAs($admin)->patch(route('workspace.settings.name'), [
+            'name' => 'Acme Corporation',
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('tenants', [
+            'id' => $tenant->id,
+            'name' => 'Acme Corporation',
         ]);
     }
 

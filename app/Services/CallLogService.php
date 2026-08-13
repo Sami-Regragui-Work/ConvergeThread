@@ -195,6 +195,12 @@ class CallLogService
             return 'declined';
         }
 
+        $caller = $log->participants()->where('role', 'caller')->first();
+
+        if ($caller && $caller->status === 'left') {
+            return 'canceled';
+        }
+
         return 'missed';
     }
 }

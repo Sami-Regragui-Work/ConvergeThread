@@ -27,6 +27,7 @@ class RegisterRequest extends FormRequest
             'password' => 'required|string|min:8|confirmed',
             'display_name' => 'nullable|string|max:100',
             'tenant_slug' => 'nullable|string|max:100|regex:/^[a-z0-9_-]+$/',
+            'tenant_name' => 'nullable|string|max:255',
         ];
     }
 }

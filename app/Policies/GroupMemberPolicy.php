@@ -66,6 +66,20 @@ class GroupMemberPolicy
         return app(RoleHierarchyService::class)->canManageUser($deleter, $target);
     }
 
+    /**
+     * Whether the viewer may use the member-removal controls at all.
+     * Does not consider object-type or hierarchy restrictions, so the UI
+     * can render the control disabled rather than hide it.
+     */
+    public function deleteAny(User $deleter, Group $group): bool
+    {
+        if ((int) $group->creator_id === (int) $deleter->id) {
+            return true;
+        }
+
+        return $this->groupPermissionService->hasPermission($group, $deleter, Permissions::GROUP_MEMBERS_REMOVE);
+    }
+
     public function assignRole(User $editor, Group $group): bool
     {
         return $this->groupPermissionService->hasPermission($group, $editor, Permissions::GROUP_MEMBERS_ASSIGN_ROLE);

@@ -4,7 +4,10 @@
 @section('content')
     <div class="max-w-4xl mx-auto" data-sync="merges">
         <div class="flex items-center justify-between mb-6">
-            <h1 class="text-xl font-bold text-white">Merge Sessions</h1>
+            <div class="flex items-center gap-2">
+                <h1 class="text-xl font-bold text-white">Merge Sessions</h1>
+                @include('partials.help-icon', ['hint' => 'A temporary space where two groups work together.', 'position' => 'bottom'])
+            </div>
             @can('create', App\Models\MergeSession::class)
                 <button type="button" onclick="window.__openMergeCreate && window.__openMergeCreate()"
                     class="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold px-4 py-2 rounded-xl transition">
@@ -12,6 +15,10 @@
                 </button>
             @endcan
         </div>
+
+        <p class="text-sm text-slate-400 max-w-3xl -mt-3 mb-6">
+            Temporary rooms where two whole groups can work together for a while. A session starts both groups chatting in one space, then is destroyed when you are done — only the two chosen groups can see it.
+        </p>
 
         @if($sessions->isEmpty())
             <div class="bg-surface-200 border border-white/5 rounded-2xl p-12 text-center">

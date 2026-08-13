@@ -22,7 +22,11 @@
 @elseif(($data['type'] ?? '') === 'incoming_call')
     <p class="text-sm text-white">
         <span class="font-semibold">{{ $data['author_name'] ?? 'Someone' }}</span>
-        started a {{ ($data['call_type'] ?? '') === 'video' ? 'video' : 'voice' }} call
+        @if(($data['call_type'] ?? '') === 'meet')
+            started a meeting
+        @else
+            started a {{ ($data['call_type'] ?? '') === 'video' ? 'video' : 'voice' }} call
+        @endif
         in <span class="font-semibold">{{ $data['chat_label'] ?? 'chat' }}</span>
         @if(($data['stack_count'] ?? 1) > 1)
             <span class="ml-2 inline-flex min-w-5 h-5 px-1.5 rounded-full bg-brand-500 text-[11px] font-bold items-center justify-center">{{ $data['stack_count'] }}</span>

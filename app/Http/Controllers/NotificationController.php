@@ -2,6 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ChatUserMute;
+use App\Models\Duo;
+use App\Models\Group;
+use App\Models\MergeSession;
+use App\Models\User;
 use App\Support\SortsLists;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -12,7 +17,7 @@ class NotificationController extends Controller
 
     public function index(Request $request)
     {
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = Auth::user();
 
         [$sort, $dir] = $this->resolveSort(
@@ -27,11 +32,14 @@ class NotificationController extends Controller
             ->orderBy('created_at', $dir)
             ->paginate(30);
 
+        $notificationMutes = $this->authorMuteMap($user, $notifications->getCollection());
+
         if ($request->wantsJson()) {
             return response()->json([
                 'notifications' => $notifications->getCollection()->map(fn ($n) => [
                     'id' => $n->id,
                     'data' => $n->data,
+                    'muted' => $notificationMutes[$n->id] ?? false,
                     'read_at' => $n->read_at?->toIso8601String(),
                     'created_at' => $n->created_at?->toIso8601String(),
                     'created_human' => $n->created_at?->diffForHumans(),
@@ -42,12 +50,50 @@ class NotificationController extends Controller
             ]);
         }
 
-        return view('notifications.index', compact('notifications'));
+        return view('notifications.index', compact('notifications', 'notificationMutes'));
+    }
+
+    /**
+     * Map of notification id => whether the current user has already muted the
+     * notification's author (notifications flag) in the referenced chat.
+     */
+    private function authorMuteMap(User $user, iterable $notifications): array
+    {
+        $classMap = [
+            'group' => Group::class,
+            'duo' => Duo::class,
+            'merge' => MergeSession::class,
+        ];
+
+        $mutedKeys = ChatUserMute::query()
+            ->where('user_id', $user->id)
+            ->where('mute_notifications', true)
+            ->get()
+            ->mapWithKeys(fn (ChatUserMute $mute) => [
+                $mute->chatable_type.'|'.$mute->chatable_id.'|'.$mute->muted_user_id => true,
+            ]);
+
+        $map = [];
+        foreach ($notifications as $notification) {
+            $data = $notification->data;
+            $authorId = (int) ($data['author_id'] ?? 0);
+            $chatType = $data['chat_type'] ?? null;
+            $chatableId = (int) ($data['chatable_id'] ?? 0);
+            $class = $chatType ? ($classMap[$chatType] ?? null) : null;
+
+            $key = $class && $authorId && $chatableId
+                ? $chatType.'|'.$chatableId.'|'.$authorId
+                : null;
+
+            $map[$notification->id] = $key ? ($mutedKeys[$key] ?? false) : false;
+        }
+
+        return $map;
     }
 
     public function markRead(string $notification)
     {
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = Auth::user();
 
         $record = $user->notifications()->where('id', $notification)->firstOrFail();
@@ -55,7 +101,7 @@ class NotificationController extends Controller
 
         $data = $record->data;
 
-        if (!empty($data['url'])) {
+        if (! empty($data['url'])) {
             return redirect($data['url']);
         }
 
@@ -71,7 +117,7 @@ class NotificationController extends Controller
 
     public function markAllRead()
     {
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = Auth::user();
 
         $user->unreadNotifications->markAsRead();

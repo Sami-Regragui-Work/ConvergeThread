@@ -21,12 +21,6 @@
                         'active_members_count:desc' => 'Most members',
                     ],
                 ])
-                @can('createMember', App\Models\Invitation::class)
-                    <button type="button" onclick="document.getElementById('workspace-invite').classList.toggle('hidden')"
-                        class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-semibold px-4 py-2 rounded-xl transition">
-                        Invite to Workspace
-                    </button>
-                @endcan
                 @can('create', App\Models\Group::class)
                     <button type="button" onclick="window.__openGroupCreate && window.__openGroupCreate()"
                         class="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold px-4 py-2 rounded-xl transition">
@@ -38,30 +32,6 @@
                 @endcan
             </div>
         </div>
-
-        @can('createMember', App\Models\Invitation::class)
-            <div id="workspace-invite" class="hidden mb-6 bg-surface-200 border border-white/5 rounded-2xl px-6 py-5">
-                <h2 class="text-sm font-semibold text-white mb-1">Invite someone to your workspace</h2>
-                <p class="text-xs text-slate-500 mb-4">Defaults to Moderator if no role is selected.</p>
-                <form method="POST" action="{{ route('invitations.tenant.store') }}" class="flex flex-col sm:flex-row gap-3">
-                    @csrf
-                    <input type="hidden" name="tenant_id" value="{{ auth()->user()->tenant_id }}">
-                    <input type="email" name="email" placeholder="colleague@example.com" required
-                        class="flex-1 min-w-0 bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition">
-                    <select name="tenant_role_id"
-                        class="bg-surface-300 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm min-w-40 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition">
-                        <option value="">Moderator (default)</option>
-                        @foreach($tenantRoles as $role)
-                            <option value="{{ $role->id }}" @selected(old('tenant_role_id') == $role->id)>{{ $role->name }}</option>
-                        @endforeach
-                    </select>
-                    <button type="submit"
-                        class="bg-brand-500 hover:bg-brand-600 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition shrink-0">
-                        Send invite
-                    </button>
-                </form>
-            </div>
-        @endcan
 
         @if($groups->isEmpty())
             <div class="bg-surface-200 border border-white/5 rounded-2xl p-12 text-center">

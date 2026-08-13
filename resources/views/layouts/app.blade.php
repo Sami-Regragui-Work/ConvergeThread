@@ -320,6 +320,9 @@
                 this.sidebarOpen = e.matches ? desktopPref() : false;
             });
             try { this.soundsMuted = localStorage.getItem('ct_sounds_muted') === '1'; } catch (e) {}
+            window.addEventListener('ct-sounds-muted', (e) => {
+                if (typeof e.detail?.muted === 'boolean') this.soundsMuted = e.detail.muted;
+            });
             this.setupRealtime();
             this.pollWorkspace();
             setInterval(() => this.pollWorkspace(true), 4000);
@@ -508,6 +511,7 @@
                         @php
                             $tenantPermissions = app(\App\Services\TenantPermissionService::class);
                             $canViewWorkspaceMembers = $tenantPermissions->canViewWorkspaceMembers(auth()->user());
+                            $canManageWorkspaceMembers = $tenantPermissions->canManageWorkspaceMembers(auth()->user());
                         @endphp
                         @if($canViewWorkspaceMembers)
                             <a href="{{ route('workspace.members.index') }}"
@@ -527,6 +531,12 @@
                                 Hierarchies
                             </a>
                         @endcan
+                        @if($canManageWorkspaceMembers)
+                            <a href="{{ route('workspace.settings.index') }}"
+                                class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white text-sm transition {{ request()->is('workspace/settings*') ? 'bg-brand-500/10 text-brand-400' : '' }}">
+                                Workspace Settings
+                            </a>
+                        @endif
                     @endif
                 </nav>
 
@@ -633,19 +643,6 @@
                                 <span class="hidden sm:inline text-xs">Files</span>
                             </button>
                         @endif
-                        <button type="button" @click="toggleSoundsMuted()"
-                            class="inline-flex items-center justify-center p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition"
-                            :title="soundsMuted ? 'Unmute notification sounds' : 'Mute notification sounds'"
-                            :class="soundsMuted ? 'text-amber-400' : ''">
-                            <svg x-show="!soundsMuted" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M15.536 8.464a5 5 0 010 7.072M17.95 6.05a8 8 0 010 11.9M6 10v4h3l4 4V6l-4 4H6z" />
-                            </svg>
-                            <svg x-show="soundsMuted" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
-                            </svg>
-                        </button>
                         <a href="{{ route('notifications.index') }}"
                             class="relative inline-flex items-center justify-center p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition"
                             title="Notifications">

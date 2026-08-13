@@ -6,72 +6,12 @@
 ])
 
 @php
+    $payload = app(\App\Services\RoleHierarchyService::class)->mapPayload($hierarchy);
+    $payload['mapUrl'] = route('hierarchies.map', $hierarchy);
+
+    // Levels are loaded by mapPayload; the SVG below only needs them for the
+    // shared edge marker id, edges themselves are rendered client-side.
     $levels = $hierarchy->levels;
-
-    // Effective tag per node: the stored tag, or "(n)" numbering same-level
-    // nodes by id so otherwise-identical "Level N" cards can be told apart.
-    $effectiveTags = [];
-    $levels->groupBy('level')->each(function ($group) use (&$effectiveTags) {
-        foreach ($group->sortBy('id')->values() as $i => $level) {
-            $stored = $level->tag === null ? null : trim($level->tag);
-            $effectiveTags[(int) $level->id] = ($stored !== null && $stored !== '')
-                ? $stored
-                : '('.($i + 1).')';
-        }
-    });
-    $displayName = fn (\App\Models\RoleHierarchyLevel $level) => $level->label.' '.$effectiveTags[(int) $level->id];
-
-    // Candidate "add parent" targets per node: every node that is not the node
-    // itself and not inside its subtree (linking would create a cycle).
-    $linkTargets = $levels->mapWithKeys(function ($level) use ($levels, $displayName) {
-        $subtree = $level->subtreeIds($levels)->map(fn ($id) => (int) $id)->all();
-
-        return [(int) $level->id => $levels
-            ->reject(fn ($n) => in_array((int) $n->id, $subtree, true))
-            ->map(fn ($n) => ['id' => (int) $n->id, 'name' => $displayName($n)])
-            ->values()
-            ->all()];
-    });
-
-    $nodes = $levels->map(function ($level) use ($linkTargets, $effectiveTags, $displayName) {
-        return [
-            'id' => (int) $level->id,
-            'level' => (int) $level->level,
-            'kind' => $level->kind,
-            'parent_id' => $level->parent_id === null ? null : (int) $level->parent_id,
-            'label' => $level->label,
-            'tag' => $level->tag,
-            'tag_effective' => $effectiveTags[(int) $level->id],
-            'display' => $displayName($level),
-            'group_name' => $level->group?->name,
-            'group_member_count' => (int) $level->group?->active_members_count ?? 0,
-            'role_name' => $level->role?->name,
-            'members' => $level->members->map(fn ($m) => [
-                'id' => (int) $m->id,
-                'name' => $m->displayLabel(),
-                'initial' => $m->avatarInitial(),
-                'color' => $m->avatarColor(),
-            ])->values()->all(),
-            'link_targets' => $linkTargets[(int) $level->id],
-            'urls' => [
-                'link' => route('hierarchies.levels.link', $level),
-                'addParent' => route('hierarchies.levels.add-parent', $level),
-                'members' => route('hierarchies.levels.members', $level),
-                'group' => route('hierarchies.levels.group', $level),
-                'role' => route('hierarchies.levels.role', $level),
-                'member' => route('hierarchies.levels.member', $level),
-                'tag' => route('hierarchies.levels.tag', $level),
-                'destroy' => route('hierarchies.levels.destroy', $level),
-            ],
-        ];
-    })->values()->all();
-
-    $payload = [
-        'id' => (int) $hierarchy->id,
-        'name' => $hierarchy->name,
-        'kind' => $hierarchy->kind,
-        'nodes' => $nodes,
-    ];
 
     $options = [
         'members' => $members->map(fn ($m) => [
@@ -89,6 +29,7 @@
         'roles' => $tenantRoles->map(fn ($r) => ['id' => (int) $r->id, 'name' => $r->name])->values()->all(),
         'addNodeUrl' => route('hierarchies.levels.store', $hierarchy),
         'destroyUrl' => route('hierarchies.destroy', $hierarchy),
+        'mapUrl' => route('hierarchies.map', $hierarchy),
     ];
 @endphp
 
@@ -104,14 +45,9 @@
                 x-text="payload.kind === 'role' ? 'Role' : 'Member'"></span>
         </div>
         <div class="flex items-center gap-2">
-            <form method="POST" :action="options.addNodeUrl" class="shrink-0">
-                @csrf
-                <input type="hidden" name="parent_id" value="">
-                <input type="hidden" name="kind" value="{{ $hierarchy->kind }}">
-                <button type="submit"
-                    class="text-xs text-brand-400 hover:text-brand-300 font-medium"
-                    title="Add a new unlinked top-level node (level 0). Give it a parent from its actions.">+ Top-level node</button>
-            </form>
+            <button type="button" @click="addTopLevel()" :disabled="busy"
+                class="text-xs text-brand-400 hover:text-brand-300 font-medium disabled:opacity-40"
+                title="Add a new unlinked top-level node (level 0). Give it a parent from its actions.">+ Top-level node</button>
             <form method="POST" :action="options.destroyUrl" class="shrink-0"
                 @submit.prevent="$dispatch('confirm-action', { message: 'Delete this hierarchy and all its nodes?', form: $event.target })">
                 @csrf @method('DELETE')
@@ -140,7 +76,7 @@
             class="text-xs px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 transition">Fit</button>
         <button type="button" @click="resetLayout()"
             class="text-xs px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 transition">Reset layout</button>
-        <p class="ml-auto text-[11px] text-slate-500 hidden md:block">Drag empty space to move · scroll to zoom · drag a node to place it anywhere</p>
+        <p class="ml-auto text-[11px] text-slate-500 hidden md:block">Drag empty space to move · scroll to zoom · Shift+drag to select · Ctrl+click to multi-select · drag a node to place it anywhere</p>
     </div>
 
     {{-- Viewport --}}
@@ -168,7 +104,7 @@
                     </marker>
                 </defs>
                 <template x-for="node in nodes" :key="'edge-' + node.id">
-                    <path x-show="node.parent_id != null" :d="edgeD(node)"
+                    <path x-show="node.parent_id" :d="edgeD(node)"
                         fill="none" stroke="#94a3b8" stroke-opacity="1" stroke-width="2.5"
                         marker-end="url(#edge-arrow-{{ $hierarchy->id }})" />
                 </template>
@@ -177,13 +113,15 @@
             <template x-for="node in nodes" :key="node.id">
                 <div :data-node="node.id"
                     class="absolute rounded-xl border bg-surface-300 p-3 space-y-2 transition-shadow duration-150 cursor-move"
-                    :class="selectedId === node.id
-                        ? 'border-brand-400/70 shadow-[0_0_0_3px_rgba(59,130,246,0.25)]'
+                    :class="selectedIds.includes(node.id)
+                        ? (selectedId === node.id
+                            ? 'border-brand-400/70 shadow-[0_0_0_3px_rgba(59,130,246,0.25)]'
+                            : 'border-brand-400/40 shadow-[0_0_0_2px_rgba(59,130,246,0.18)]')
                         : (node.kind === 'group' ? 'border-indigo-400/30' : (node.kind === 'role' ? 'border-purple-400/30' : 'border-white/10'))"
                     :style="nodeStyle(node)"
                     @mousedown.stop.prevent="startNodeDrag(node, $event)"
                     @touchstart.stop="startNodeTouch(node, $event)"
-                    @click.stop="select(node)">
+                    @click.stop="select(node, $event)">
                     <div class="flex items-center gap-2">
                         <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-brand-500/20 text-brand-300 text-[11px] font-bold shrink-0"
                             x-text="node.level"></span>
@@ -234,6 +172,11 @@
             No nodes yet. Use “+ Top-level node” to start a tree.
         </div>
 
+        {{-- Marquee selection zone --}}
+        <div x-show="marquee" x-cloak
+            class="absolute z-20 pointer-events-none border border-brand-400/80 bg-brand-500/15"
+            :style="marqueeStyle()"></div>
+
         {{-- Selected node actions --}}
         <div x-show="selectedId && selected()" x-cloak
             class="absolute inset-x-3 bottom-3 z-10 bg-surface-300 border border-white/10 rounded-2xl shadow-2xl p-4 space-y-3 max-h-72 overflow-y-auto touch-pan-y"
@@ -248,6 +191,9 @@
                             ? 'bg-indigo-500/20 text-indigo-300'
                             : (selected().kind === 'role' ? 'bg-purple-500/20 text-purple-300' : 'bg-emerald-500/20 text-emerald-300')"
                         x-text="selected().kind === 'group' ? 'Group' : (selected().kind === 'role' ? 'Role' : 'Member')"></span>
+                    <span x-show="selectedIds.length > 1" x-cloak
+                        class="text-[10px] text-slate-400 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded shrink-0"
+                        x-text="selectedIds.length + ' selected'"></span>
                 </div>
                 <button type="button" @click="selectedId = null" class="text-slate-400 hover:text-white text-sm shrink-0">Close</button>
             </div>
@@ -355,6 +301,28 @@
                         class="text-[11px] text-slate-500">Attach specific members below.</p>
                 </div>
 
+                {{-- Role picker (role nodes) --}}
+                <div class="bg-surface-200 border border-white/5 rounded-xl p-3 space-y-2"
+                    x-show="selected().kind === 'role'">
+                    <p class="text-[11px] uppercase tracking-wide text-slate-500">Node role</p>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <select x-model="typeRoleId"
+                            class="flex-1 min-w-32 bg-surface-300 border border-white/10 text-slate-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500/50">
+                            <option value="" disabled>Pick a role…</option>
+                            <template x-for="r in options.roles" :key="r.id">
+                                <option :value="r.id" x-text="r.name"></option>
+                            </template>
+                        </select>
+                        <button type="button" @click="saveRole()" :disabled="busy || !typeRoleId"
+                            class="text-xs px-2.5 py-1.5 rounded-lg bg-brand-500/20 text-brand-300 hover:bg-brand-500/30 transition disabled:opacity-40">
+                            Save role
+                        </button>
+                    </div>
+                    <p x-show="selected().role_name" class="text-[11px] text-slate-500">
+                        Current: <span class="text-slate-200 font-medium" x-text="selected().role_name"></span>
+                    </p>
+                </div>
+
                 {{-- Members --}}
                 <div class="bg-surface-200 border border-white/5 rounded-xl p-3 space-y-2"
                     x-show="selected().kind === 'member'">
@@ -395,10 +363,10 @@
     function hierarchyMap(payload, options) {
         const NODE_W = 220;
         const MIN_H = 84;
-        const H_GAP = 28;
-        const V_GAP = 44;
-        const ROOT_GAP = 90;
-        const PAD = 60;
+        const H_GAP = 40;
+        const V_GAP = 56;
+        const ROOT_GAP = 120;
+        const PAD = 64;
 
         return {
             payload,
@@ -420,6 +388,9 @@
             typeGroupId: '',
             typeRoleId: '',
             tagDraft: '',
+            selectedIds: [],
+            marquee: null,
+            _justDragged: false,
 
             init() {
                 this.nodes = (payload.nodes || []).map(n => ({
@@ -471,15 +442,47 @@
                 return this.nodeById(this.selectedId);
             },
 
-            select(node) {
-                this.selectedId = node.id;
+            isSelected(id) {
+                return this.selectedIds.includes(id);
+            },
+
+            populatePanel(node) {
                 this.typeDraft = node.kind;
                 this.typeGroupId = '';
-                this.typeRoleId = '';
+                this.typeRoleId = node.role_id ? node.role_id : '';
                 this.parentTargetId = '';
                 this.error = '';
                 this.memberIds = (node.members || []).map(m => m.id);
                 this.tagDraft = node.tag || '';
+            },
+
+            selectOnly(node) {
+                this.selectedIds = [node.id];
+                this.selectedId = node.id;
+                this.populatePanel(node);
+            },
+
+            select(node, event) {
+                if (this._justDragged) {
+                    this._justDragged = false;
+                    return;
+                }
+                if (event && (event.ctrlKey || event.metaKey)) {
+                    if (this.isSelected(node.id)) {
+                        this.selectedIds = this.selectedIds.filter(id => id !== node.id);
+                        if (this.selectedId === node.id) {
+                            this.selectedId = this.selectedIds[this.selectedIds.length - 1] || null;
+                            const next = this.selectedId ? this.nodeById(this.selectedId) : null;
+                            if (next) this.populatePanel(next);
+                        }
+                    } else {
+                        this.selectedIds.push(node.id);
+                        this.selectedId = node.id;
+                        this.populatePanel(node);
+                    }
+                    return;
+                }
+                this.selectOnly(node);
             },
 
             kindOptions() {
@@ -652,19 +655,35 @@
             },
 
             startNodeDrag(node, e) {
-                this.select(node);
+                if (!(e.ctrlKey || e.metaKey) && !this.isSelected(node.id)) {
+                    this.selectOnly(node);
+                }
+                const ids = this.isSelected(node.id) ? [...this.selectedIds] : [node.id];
+                const startPos = {};
+                ids.forEach(id => {
+                    const n = this.nodeById(id);
+                    if (n) startPos[id] = { x: n.x, y: n.y };
+                });
                 this.drag = {
                     type: 'node',
-                    id: node.id,
+                    ids,
                     sx: e.clientX,
                     sy: e.clientY,
-                    startX: node.x,
-                    startY: node.y,
+                    startPos,
                 };
             },
 
             startPan(e) {
+                if (e.shiftKey) {
+                    const rect = this.$refs.viewport.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    this.marquee = { x1: x, y1: y, x2: x, y2: y, additive: e.ctrlKey || e.metaKey };
+                    this.drag = { type: 'marquee' };
+                    return;
+                }
                 this.selectedId = null;
+                this.selectedIds = [];
                 this.drag = {
                     type: 'pan',
                     sx: e.clientX,
@@ -679,20 +698,64 @@
                 if (this.drag.type === 'pan') {
                     this.pan.x = this.drag.startPanX + (e.clientX - this.drag.sx);
                     this.pan.y = this.drag.startPanY + (e.clientY - this.drag.sy);
+                } else if (this.drag.type === 'marquee') {
+                    const rect = this.$refs.viewport.getBoundingClientRect();
+                    this.marquee.x2 = e.clientX - rect.left;
+                    this.marquee.y2 = e.clientY - rect.top;
                 } else {
-                    const node = this.nodeById(this.drag.id);
-                    if (!node) return;
-                    node.x = this.drag.startX + (e.clientX - this.drag.sx) / this.zoom;
-                    node.y = this.drag.startY + (e.clientY - this.drag.sy) / this.zoom;
+                    const dx = (e.clientX - this.drag.sx) / this.zoom;
+                    const dy = (e.clientY - this.drag.sy) / this.zoom;
+                    this.drag.ids.forEach(id => {
+                        const node = this.nodeById(id);
+                        if (!node || !this.drag.startPos[id]) return;
+                        node.x = this.drag.startPos[id].x + dx;
+                        node.y = this.drag.startPos[id].y + dy;
+                    });
                 }
             },
 
             onUp() {
-                if (this.drag && this.drag.type === 'node') {
+                if (!this.drag) return;
+                if (this.drag.type === 'node') {
+                    this._justDragged = true;
                     this.savePositions();
                     this.resizeWorld();
+                } else if (this.drag.type === 'marquee') {
+                    this.commitMarquee();
                 }
                 this.drag = null;
+                this.marquee = null;
+            },
+
+            marqueeStyle() {
+                if (!this.marquee) return 'display:none;';
+                const x = Math.min(this.marquee.x1, this.marquee.x2);
+                const y = Math.min(this.marquee.y1, this.marquee.y2);
+                const w = Math.abs(this.marquee.x2 - this.marquee.x1);
+                const h = Math.abs(this.marquee.y2 - this.marquee.y1);
+                return 'left:' + x + 'px; top:' + y + 'px; width:' + w + 'px; height:' + h + 'px;';
+            },
+
+            commitMarquee() {
+                const m = this.marquee;
+                if (!m) return;
+                const wx1 = (Math.min(m.x1, m.x2) - this.pan.x) / this.zoom;
+                const wy1 = (Math.min(m.y1, m.y2) - this.pan.y) / this.zoom;
+                const wx2 = (Math.max(m.x1, m.x2) - this.pan.x) / this.zoom;
+                const wy2 = (Math.max(m.y1, m.y2) - this.pan.y) / this.zoom;
+                const hit = this.nodes
+                    .filter(n => n.x < wx2 && n.x + n.w > wx1 && n.y < wy2 && n.y + n.h > wy1)
+                    .sort((a, b) => a.id - b.id)
+                    .map(n => n.id);
+                this.selectedIds = m.additive
+                    ? [...new Set([...this.selectedIds, ...hit])]
+                    : hit;
+                if (hit.length) {
+                    this.selectedId = hit[0];
+                    this.populatePanel(this.nodeById(hit[0]));
+                } else if (!m.additive) {
+                    this.selectedId = null;
+                }
             },
 
             touchPoint(e) {
@@ -817,6 +880,7 @@
                         this.busy = false;
                         return false;
                     }
+                    this.busy = false;
                     return true;
                 } catch (e) {
                     this.error = 'Network error.';
@@ -827,7 +891,172 @@
 
             async run(method, url, body) {
                 const ok = await this.post(url, method, body);
+                if (ok) return await this.refresh();
+                return false;
+            },
+
+            async runReload(method, url, body) {
+                const ok = await this.post(url, method, body);
                 if (ok) window.location.reload();
+            },
+
+            async refresh() {
+                if (!this.options.mapUrl) return false;
+                try {
+                    const res = await fetch(this.options.mapUrl, {
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                        },
+                        credentials: 'same-origin',
+                    });
+                    const data = await res.json().catch(() => null);
+                    if (!res.ok || !data || !Array.isArray(data.nodes)) return false;
+                    this.applyServerNodes(data.nodes);
+                    return true;
+                } catch (e) {
+                    return false;
+                }
+            },
+
+            applyServerNodes(serverNodes) {
+                const old = new Map(this.nodes.map(n => [n.id, n]));
+                const saved = this.loadPositions();
+                const newIds = [];
+
+                const next = serverNodes.map(raw => {
+                    const prev = old.get(raw.id);
+                    const n = {
+                        ...raw,
+                        w: prev ? prev.w : NODE_W,
+                        h: prev ? prev.h : MIN_H,
+                        x: prev ? prev.x : 0,
+                        y: prev ? prev.y : 0,
+                        pinned: prev ? prev.pinned : false,
+                    };
+                    if (prev) return n;
+                    if (saved && saved[raw.id]) {
+                        n.x = saved[raw.id].x;
+                        n.y = saved[raw.id].y;
+                        n.pinned = true;
+                        return n;
+                    }
+                    newIds.push(raw.id);
+                    return n;
+                });
+
+                this.nodes = next;
+
+                if (newIds.length) {
+                    const pending = new Set(newIds);
+                    newIds.forEach(id => {
+                        const node = this.nodeById(id);
+                        if (!node) return;
+                        const intent = this.spawnIntent(node);
+                        this.placeWithoutOverlap(node, intent, pending);
+                        pending.delete(id);
+                    });
+                }
+
+                this.selectedIds = this.selectedIds.filter(id => this.nodeById(id));
+                if (this.selectedId && !this.nodeById(this.selectedId)) {
+                    this.selectedId = this.selectedIds[this.selectedIds.length - 1] || null;
+                    if (this.selectedId) this.populatePanel(this.nodeById(this.selectedId));
+                }
+
+                this.$nextTick(() => {
+                    this.measure();
+                    if (newIds.length) this.positionNewNodes(newIds);
+                    this.resizeWorld();
+                    if (newIds.length && newIds.some(id => this.outsideViewport(id))) this.fit();
+                    this.savePositions();
+                });
+            },
+
+            positionNewNodes(newIds) {
+                const pending = new Set(newIds);
+                newIds.forEach(id => {
+                    const node = this.nodeById(id);
+                    if (!node) return;
+                    const intent = this.spawnIntent(node);
+                    this.placeWithoutOverlap(node, intent, pending);
+                    pending.delete(id);
+                });
+            },
+
+            spawnIntent(node) {
+                const kids = this.nodes.filter(n => n.parent_id === node.id);
+                if (kids.length) {
+                    const ref = kids[0];
+                    return { x: ref.x + (ref.w - node.w) / 2, y: ref.y - node.h - V_GAP };
+                }
+                if (node.parent_id != null) {
+                    const parent = this.nodeById(node.parent_id);
+                    if (parent) {
+                        const sibs = this.nodes.filter(n => n.parent_id === parent.id && n.id !== node.id);
+                        const x = sibs.length
+                            ? Math.max(...sibs.map(s => s.x + s.w)) + H_GAP
+                            : parent.x + (parent.w - node.w) / 2;
+                        return { x, y: parent.y + parent.h + V_GAP };
+                    }
+                }
+                const roots = this.nodes.filter(n => n.parent_id == null && n.id !== node.id);
+                const x = roots.length ? Math.max(...roots.map(r => r.x + r.w)) + ROOT_GAP : 0;
+                return { x, y: 0 };
+            },
+
+            placeWithoutOverlap(node, intent, pending) {
+                const startX = Math.max(0, intent.x);
+                let x = startX;
+                let y = Math.max(0, intent.y);
+                let attempts = 0;
+                while (attempts < 100 && this.collides(x, y, node, pending)) {
+                    x += node.w + H_GAP;
+                    attempts++;
+                    if (attempts % 25 === 0) {
+                        x = startX;
+                        y += node.h + V_GAP;
+                    }
+                }
+                node.x = Math.round(x);
+                node.y = Math.round(y);
+            },
+
+            collides(x, y, node, pending) {
+                for (const o of this.nodes) {
+                    if (pending && pending.has(o.id)) continue;
+                    const pad = 6;
+                    if (x < o.x + o.w + pad && x + node.w + pad > o.x && y < o.y + o.h + pad && y + node.h + pad > o.y) {
+                        return true;
+                    }
+                }
+                return false;
+            },
+
+            outsideViewport(id) {
+                const n = this.nodeById(id);
+                if (!n) return false;
+                const viewport = this.$refs.viewport;
+                const vw = viewport ? viewport.clientWidth : 800;
+                const vh = viewport ? viewport.clientHeight : 540;
+                const sx = n.x * this.zoom + this.pan.x;
+                const sy = n.y * this.zoom + this.pan.y;
+                return sx > vw || sy > vh || sx + n.w * this.zoom < 0 || sy + n.h * this.zoom < 0;
+            },
+
+            addTopLevel() {
+                this.run('POST', this.options.addNodeUrl, { parent_id: '', kind: this.payload.kind });
+            },
+
+            async saveRole() {
+                const node = this.selected();
+                if (!node || !this.typeRoleId) return;
+                if (String(this.typeRoleId) === String(node.role_id)) {
+                    this.error = '';
+                    return;
+                }
+                const ok = await this.post(node.urls.role, 'PATCH', { role_id: this.typeRoleId });
+                if (ok) await this.refresh();
             },
 
             addChild() {
