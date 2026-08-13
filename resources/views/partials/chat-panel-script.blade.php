@@ -140,7 +140,9 @@
             cameraTrack: null,
             screenTrack: null,
             screenStream: null,
-            screenZooms: {},
+            screenViews: {},
+            screenDrag: null,
+            screenPins: {},
             peers: [],
             peerConnections: {},
             peerDisconnectTimers: {},
@@ -3937,6 +3939,7 @@
                 this.screenStream = null;
                 this.cameraTrack = null;
                 this.sharingScreen = false;
+                this.clearScreenViews();
                 if (this.localStream) {
                     this.localStream.getTracks().forEach((t) => t.stop());
                     this.localStream = null;
@@ -4103,10 +4106,119 @@
                 } catch (e) {}
             },
 
-            cycleScreenZoom(key) {
-                const levels = [1, 1.5, 2, 1];
-                const current = this.screenZooms[key] || 1;
-                this.screenZooms = { ...this.screenZooms, [key]: levels[(levels.indexOf(current) + 1) % levels.length] };
+            screenView(key) {
+                if (!this.screenViews[key]) this.screenViews[key] = { scale: 1, x: 0, y: 0 };
+                return this.screenViews[key];
+            },
+
+            screenTransform(key) {
+                const v = this.screenView(key);
+                // No transform at rest: forcing one on a <video> promotes it to a
+                // composited layer that can glitch in fullscreen. Apply zoom only
+                // via the wrapper div (never the video element itself).
+                if (v.scale === 1 && v.x === 0 && v.y === 0) return '';
+                return 'transform: translate(' + v.x + 'px,' + v.y + 'px) scale(' + v.scale
+                    + '); transform-origin: 0 0;';
+            },
+
+            screenDragging(key) {
+                return this.screenDrag?.key === key;
+            },
+
+            screenZoomed(key) {
+                return this.screenView(key).scale > 1;
+            },
+
+            onScreenWheel(e, key) {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const cx = e.clientX - rect.left;
+                const cy = e.clientY - rect.top;
+                const v = this.screenView(key);
+                const next = Math.max(1, Math.min(6, v.scale * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
+                const k = next / v.scale;
+                if (next <= 1) {
+                    v.x = 0;
+                    v.y = 0;
+                } else {
+                    v.x = cx - (cx - v.x) * k;
+                    v.y = cy - (cy - v.y) * k;
+                }
+                v.scale = next;
+                this.screenViews = { ...this.screenViews };
+            },
+
+            startScreenPan(e, key) {
+                if (e.button !== 0 || e.target.closest('button')) return;
+                const v = this.screenView(key);
+                if (v.scale <= 1) return;
+                this.screenDrag = { key, sx: e.clientX, sy: e.clientY, startX: v.x, startY: v.y };
+            },
+
+            onScreenMove(e) {
+                if (!this.screenDrag) return;
+                const v = this.screenView(this.screenDrag.key);
+                v.x = this.screenDrag.startX + (e.clientX - this.screenDrag.sx);
+                v.y = this.screenDrag.startY + (e.clientY - this.screenDrag.sy);
+                this.screenViews = { ...this.screenViews };
+            },
+
+            onScreenUp() {
+                this.screenDrag = null;
+            },
+
+            resetScreenZoom(key) {
+                this.screenViews = { ...this.screenViews, [key]: { scale: 1, x: 0, y: 0 } };
+            },
+
+            clearScreenViews() {
+                this.screenViews = {};
+                this.screenDrag = null;
+                this.screenPins = {};
+            },
+
+            screenTileKeys() {
+                const keys = [];
+                if (this.localShowsScreen()) keys.push('local');
+                (this.peers || []).forEach((p) => {
+                    if (p.screenSharing && p.screenStream) keys.push('peer:' + p.userId);
+                });
+                return keys;
+            },
+
+            screenTiles() {
+                return this.screenTileKeys().map((key) => ({
+                    key,
+                    local: key === 'local',
+                    peer: key === 'local' ? null : (this.peers || []).find((p) => 'peer:' + p.userId === key) || null,
+                }));
+            },
+
+            screenPinned(key) {
+                return !!this.screenPins[key];
+            },
+
+            screenTopTiles() {
+                const keys = this.screenTileKeys();
+                const pinned = keys.filter((key) => this.screenPinned(key));
+                const shown = pinned.length ? pinned : keys;
+                return this.screenTiles().filter((t) => shown.includes(t.key));
+            },
+
+            screenBottomTiles() {
+                const keys = this.screenTileKeys();
+                const pinned = keys.filter((key) => this.screenPinned(key));
+                if (!pinned.length) return [];
+                return this.screenTiles().filter((t) => !this.screenPinned(t.key));
+            },
+
+            toggleScreenPin(key) {
+                const next = { ...this.screenPins };
+                if (next[key]) {
+                    delete next[key];
+                } else {
+                    next[key] = true;
+                }
+                this.screenPins = next;
             },
 
             toggleScreenFullscreen(event, key) {
@@ -4274,6 +4386,7 @@
                     this.sharingScreen = false;
                     this.screenTrack = null;
                     this.screenStream = null;
+                    this.clearScreenViews();
                     this.bindLocalPreview();
                     this.peers = [...this.peers];
                     return;
@@ -4311,6 +4424,7 @@
                 for (const userId of needsRenegotiate) {
                     await this.renegotiateOffer(userId);
                 }
+                this.clearScreenViews();
                 this.bindLocalPreview();
                 this.peers = [...this.peers];
             },

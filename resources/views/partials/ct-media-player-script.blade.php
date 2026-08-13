@@ -352,13 +352,26 @@
                 this.emitChange();
             },
 
+            panelScope() {
+                // Nearest ancestor Alpine component (the composer/chat panel) owns the
+                // staged-file editing methods; $root would just resolve to this player.
+                let el = this.$el;
+                while (el && el.parentElement) {
+                    el = el.parentElement;
+                    const stack = el._x_dataStack;
+                    if (stack && stack.length) return stack[0];
+                }
+                return null;
+            },
+
             async applyEdit() {
                 if (!this.editable || this.previewIndex == null || this.applying) return;
-                if (typeof this.$root.applyStagedMediaEdit !== 'function') return;
+                const panel = this.panelScope();
+                if (!panel || typeof panel.applyStagedMediaEdit !== 'function') return;
                 this.applying = true;
                 this.applyError = '';
                 try {
-                    await this.$root.applyStagedMediaEdit({
+                    await panel.applyStagedMediaEdit({
                         index: this.previewIndex,
                         rate: this.rate,
                         trimStart: this.trimStart,

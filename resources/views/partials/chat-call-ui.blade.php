@@ -69,88 +69,234 @@
                 x-text="callState"></span>
         </div>
         <p x-show="callError" x-cloak class="text-sm text-amber-300" x-text="callError"></p>
-        <div class="grid gap-3" :class="(localShowsVideo() || localShowsScreen() || peers.some(p => peerShowsVideo(p) || (p.screenSharing && p.screenStream))) ? 'sm:grid-cols-2' : ''">
-            <div class="relative rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center">
-                <video x-ref="localVideo" x-show="localShowsVideo() && !localVideoOff" autoplay muted playsinline
-                    class="absolute inset-0 h-full w-full object-contain bg-black"></video>
-                <div x-show="!localShowsVideo() || localVideoOff" class="relative z-10 text-center p-4">
-                    <div class="w-14 h-14 mx-auto rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center text-lg font-bold"
-                        x-text="(currentUserName || 'Y').slice(0, 1).toUpperCase()"></div>
-                    <p class="text-xs text-slate-400 mt-2">You <span x-show="localMuted">(muted)</span></p>
-                </div>
-                <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white">You</span>
+        <div class="space-y-3">
+            {{-- Pinned screens showcase on top (all screens when none are pinned) --}}
+            <div x-show="screenTopTiles().length" x-cloak
+                class="grid gap-3 grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
+                :class="screenTopTiles().length === 1 ? 'max-w-4xl mx-auto w-full' : ''">
+                <template x-for="tile in screenTopTiles()" :key="'top-screen-' + tile.key">
+                    <div class="contents">
+                        <template x-if="tile.local">
+                            <div
+                                class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center select-none"
+                                :class="screenDragging('local') ? 'cursor-grabbing' : (screenZoomed('local') ? 'cursor-grab' : '')"
+                                @wheel.prevent="onScreenWheel($event, 'local')"
+                                @mousedown="startScreenPan($event, 'local')"
+                                @mousemove.window="onScreenMove($event)"
+                                @mouseup.window="onScreenUp($event)">
+                                <div class="absolute inset-0" :style="screenTransform('local')">
+                                    <video x-ref="localScreenVideo" autoplay muted playsinline
+                                        class="h-full w-full object-contain bg-black pointer-events-none"></video>
+                                </div>
+                                <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white">You · screen</span>
+                                <div class="absolute top-2 right-2 flex gap-1.5">
+                                    <button type="button" title="Move your mouse inside the screen and scroll to zoom in/out. Drag to pan."
+                                        class="w-7 h-7 rounded-md bg-black/60 text-white text-xs font-bold hover:bg-black/80">?</button>
+                                    <button type="button" @click="toggleScreenPin('local')"
+                                        class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center transition"
+                                        :class="screenPinned('local') ? 'bg-brand-500/80' : ''"
+                                        :title="screenPinned('local') ? 'Unpin this screen' : 'Pin this screen on top'">
+                                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
+                                        </svg>
+                                    </button>
+                                    <button type="button" @click="resetScreenZoom('local')" title="Reset zoom"
+                                        class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5"/>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 14a7 7 0 0 0 11.3 3M19 10a7 7 0 0 0-11.3-3"/>
+                                        </svg>
+                                    </button>
+                                    <button type="button" @click="toggleScreenFullscreen($event, 'local')" title="Fullscreen"
+                                        class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-else>
+                            <div
+                                class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center select-none"
+                                :class="screenDragging('peer:' + tile.peer.userId) ? 'cursor-grabbing' : (screenZoomed('peer:' + tile.peer.userId) ? 'cursor-grab' : '')"
+                                @wheel.prevent="onScreenWheel($event, 'peer:' + tile.peer.userId)"
+                                @mousedown="startScreenPan($event, 'peer:' + tile.peer.userId)"
+                                @mousemove.window="onScreenMove($event)"
+                                @mouseup.window="onScreenUp($event)">
+                                <div class="absolute inset-0" :style="screenTransform('peer:' + tile.peer.userId)">
+                                    <video :id="'remote-screen-' + tile.peer.userId" autoplay playsinline
+                                        class="h-full w-full object-contain bg-black pointer-events-none"
+                                        x-effect="if ($el && tile.peer.screenStream) { $el.srcObject = tile.peer.screenStream; $el.play?.().catch(() => {}); }"></video>
+                                </div>
+                                <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white" x-text="tile.peer.name + ' · screen'"></span>
+                                <div class="absolute top-2 right-2 flex gap-1.5">
+                                    <button type="button" title="Move your mouse inside the screen and scroll to zoom in/out. Drag to pan."
+                                        class="w-7 h-7 rounded-md bg-black/60 text-white text-xs font-bold hover:bg-black/80">?</button>
+                                    <button type="button" @click="toggleScreenPin('peer:' + tile.peer.userId)"
+                                        class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center transition"
+                                        :class="screenPinned('peer:' + tile.peer.userId) ? 'bg-brand-500/80' : ''"
+                                        :title="screenPinned('peer:' + tile.peer.userId) ? 'Unpin this screen' : 'Pin this screen on top'">
+                                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
+                                        </svg>
+                                    </button>
+                                    <button type="button" @click="resetScreenZoom('peer:' + tile.peer.userId)" title="Reset zoom"
+                                        class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5"/>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 14a7 7 0 0 0 11.3 3M19 10a7 7 0 0 0-11.3-3"/>
+                                        </svg>
+                                    </button>
+                                    <button type="button" @click="toggleScreenFullscreen($event, 'peer:' + tile.peer.userId)" title="Fullscreen"
+                                        class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
             </div>
-            <div x-show="localShowsScreen()" x-cloak
-                class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center">
-                <video x-ref="localScreenVideo" autoplay muted playsinline
-                    class="absolute inset-0 h-full w-full object-contain bg-black transition-transform"
-                    :style="'transform: scale(' + (screenZooms['local'] || 1) + ')'"></video>
-                <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white">You · screen</span>
-                <div class="absolute top-2 right-2 flex gap-1.5">
-                    <button type="button" @click="cycleScreenZoom('local')" title="Zoom in/out"
-                        class="w-7 h-7 rounded-md bg-black/60 text-white text-xs font-bold hover:bg-black/80">＋</button>
-                    <button type="button" @click="toggleScreenFullscreen($event, 'local')" title="Fullscreen"
-                        class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/>
-                        </svg>
-                    </button>
+
+            <div class="grid gap-3" :class="(localShowsVideo() || peers.some(p => peerShowsVideo(p)) || screenBottomTiles().length) ? 'sm:grid-cols-2' : ''">
+                <div class="relative rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center">
+                    <video x-ref="localVideo" x-show="localShowsVideo() && !localVideoOff" autoplay muted playsinline
+                        class="absolute inset-0 h-full w-full object-contain bg-black"></video>
+                    <div x-show="!localShowsVideo() || localVideoOff" class="relative z-10 text-center p-4">
+                        <div class="w-14 h-14 mx-auto rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center text-lg font-bold"
+                            x-text="(currentUserName || 'Y').slice(0, 1).toUpperCase()"></div>
+                        <p class="text-xs text-slate-400 mt-2">You <span x-show="localMuted">(muted)</span></p>
+                    </div>
+                    <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white">You</span>
                 </div>
-            </div>
-            <template x-for="peer in peers" :key="peer.userId">
-                <div class="contents">
-                    <div class="relative group rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center">
-                        <video x-show="peerShowsVideo(peer)" :id="'remote-video-' + peer.userId" autoplay playsinline
-                            class="absolute inset-0 h-full w-full object-contain bg-black"
-                            x-effect="if ($el && peer.stream) { $el.srcObject = peer.stream; $el.muted = localDeafened || !!deafenPeerIds[peer.userId]; $el.play?.().catch(() => {}); }"></video>
-                        {{-- Keep audio in DOM (not display:none) or browsers mute it --}}
-                        <audio :id="'remote-audio-' + peer.userId" autoplay playsinline class="sr-only"
-                            x-effect="if ($el && peer.stream) { $el.srcObject = peer.stream; $el.muted = peerShowsVideo(peer) || localDeafened || !!deafenPeerIds[peer.userId]; if (!peerShowsVideo(peer)) $el.play?.().catch(() => {}); }"></audio>
-                        <div x-show="!peerShowsVideo(peer) || !peer.stream" class="relative z-10 text-center p-4">
-                            <div class="w-14 h-14 mx-auto rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center text-lg font-bold"
-                                x-text="(peer.name || '?').slice(0, 1).toUpperCase()"></div>
-                            <p class="text-xs text-slate-400 mt-2" x-text="peer.name"></p>
-                        </div>
-                        <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white" x-text="peer.name"></span>
-                        <div class="absolute top-2 right-2 hidden group-hover:flex gap-1.5">
-                            <button type="button" @click="toggleDeafenPeer(peer.userId)"
-                                class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center transition"
-                                :class="deafenPeerIds[peer.userId] ? 'bg-amber-500/70' : ''"
-                                :title="(deafenPeerIds[peer.userId] ? 'Unmute ' : 'Mute ') + (peer.name || 'this person') + ' for me'">
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M6 8.5a6.5 6.5 0 1113 0c0 6-6 6-6 10a3.5 3.5 0 11-7 0"/>
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M15 8.5a2.5 2.5 0 00-5 0v1a2 2 0 101 0"/>
-                                    <path x-show="deafenPeerIds[peer.userId]" stroke-linecap="round" stroke-width="2" d="M3 3l18 18"/>
-                                </svg>
-                            </button>
+                <template x-for="peer in peers" :key="peer.userId">
+                    <div class="contents">
+                        <div class="relative group rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center">
+                            <video x-show="peerShowsVideo(peer)" :id="'remote-video-' + peer.userId" autoplay playsinline
+                                class="absolute inset-0 h-full w-full object-contain bg-black"
+                                x-effect="if ($el && peer.stream) { $el.srcObject = peer.stream; $el.muted = localDeafened || !!deafenPeerIds[peer.userId]; $el.play?.().catch(() => {}); }"></video>
+                            {{-- Keep audio in DOM (not display:none) or browsers mute it --}}
+                            <audio :id="'remote-audio-' + peer.userId" autoplay playsinline class="sr-only"
+                                x-effect="if ($el && peer.stream) { $el.srcObject = peer.stream; $el.muted = peerShowsVideo(peer) || localDeafened || !!deafenPeerIds[peer.userId]; if (!peerShowsVideo(peer)) $el.play?.().catch(() => {}); }"></audio>
+                            <div x-show="!peerShowsVideo(peer) || !peer.stream" class="relative z-10 text-center p-4">
+                                <div class="w-14 h-14 mx-auto rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center text-lg font-bold"
+                                    x-text="(peer.name || '?').slice(0, 1).toUpperCase()"></div>
+                                <p class="text-xs text-slate-400 mt-2" x-text="peer.name"></p>
+                            </div>
+                            <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white" x-text="peer.name"></span>
+                            <div class="absolute top-2 right-2 hidden group-hover:flex gap-1.5">
+                                <button type="button" @click="toggleDeafenPeer(peer.userId)"
+                                    class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center transition"
+                                    :class="deafenPeerIds[peer.userId] ? 'bg-amber-500/70' : ''"
+                                    :title="(deafenPeerIds[peer.userId] ? 'Unmute ' : 'Mute ') + (peer.name || 'this person') + ' for me'">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M6 8.5a6.5 6.5 0 1113 0c0 6-6 6-6 10a3.5 3.5 0 11-7 0"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M15 8.5a2.5 2.5 0 00-5 0v1a2 2 0 101 0"/>
+                                        <path x-show="deafenPeerIds[peer.userId]" stroke-linecap="round" stroke-width="2" d="M3 3l18 18"/>
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
                     </div>
-                    <div x-show="peer.screenSharing && peer.screenStream" x-cloak
-                        class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center">
-                        <video :id="'remote-screen-' + peer.userId" autoplay playsinline
-                            class="absolute inset-0 h-full w-full object-contain bg-black transition-transform"
-                            :style="'transform: scale(' + (screenZooms['peer:' + peer.userId] || 1) + ')'"
-                            x-effect="if ($el && peer.screenStream) { $el.srcObject = peer.screenStream; $el.play?.().catch(() => {}); }"></video>
-                        <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white" x-text="peer.name + ' · screen'"></span>
-                        <div class="absolute top-2 right-2 flex gap-1.5">
-                            <button type="button" @click="cycleScreenZoom('peer:' + peer.userId)" title="Zoom in/out"
-                                class="w-7 h-7 rounded-md bg-black/60 text-white text-xs font-bold hover:bg-black/80">＋</button>
-                            <button type="button" @click="toggleScreenFullscreen($event, 'peer:' + peer.userId)" title="Fullscreen"
-                                class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center">
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/>
-                                </svg>
-                            </button>
-                        </div>
+                </template>
+                {{-- Non-pinned screens go below like the other tiles --}}
+                <template x-for="tile in screenBottomTiles()" :key="'bottom-screen-' + tile.key">
+                    <div class="contents">
+                        <template x-if="tile.local">
+                            <div
+                                class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center select-none"
+                                :class="screenDragging('local') ? 'cursor-grabbing' : (screenZoomed('local') ? 'cursor-grab' : '')"
+                                @wheel.prevent="onScreenWheel($event, 'local')"
+                                @mousedown="startScreenPan($event, 'local')"
+                                @mousemove.window="onScreenMove($event)"
+                                @mouseup.window="onScreenUp($event)">
+                                <div class="absolute inset-0" :style="screenTransform('local')">
+                                    <video x-ref="localScreenVideo" autoplay muted playsinline
+                                        class="h-full w-full object-contain bg-black pointer-events-none"></video>
+                                </div>
+                                <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white">You · screen</span>
+                                <div class="absolute top-2 right-2 flex gap-1.5">
+                                    <button type="button" title="Move your mouse inside the screen and scroll to zoom in/out. Drag to pan."
+                                        class="w-7 h-7 rounded-md bg-black/60 text-white text-xs font-bold hover:bg-black/80">?</button>
+                                    <button type="button" @click="toggleScreenPin('local')"
+                                        class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center transition"
+                                        :class="screenPinned('local') ? 'bg-brand-500/80' : ''"
+                                        :title="screenPinned('local') ? 'Unpin this screen' : 'Pin this screen on top'">
+                                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
+                                        </svg>
+                                    </button>
+                                    <button type="button" @click="resetScreenZoom('local')" title="Reset zoom"
+                                        class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5"/>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 14a7 7 0 0 0 11.3 3M19 10a7 7 0 0 0-11.3-3"/>
+                                        </svg>
+                                    </button>
+                                    <button type="button" @click="toggleScreenFullscreen($event, 'local')" title="Fullscreen"
+                                        class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-else>
+                            <div
+                                class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center select-none"
+                                :class="screenDragging('peer:' + tile.peer.userId) ? 'cursor-grabbing' : (screenZoomed('peer:' + tile.peer.userId) ? 'cursor-grab' : '')"
+                                @wheel.prevent="onScreenWheel($event, 'peer:' + tile.peer.userId)"
+                                @mousedown="startScreenPan($event, 'peer:' + tile.peer.userId)"
+                                @mousemove.window="onScreenMove($event)"
+                                @mouseup.window="onScreenUp($event)">
+                                <div class="absolute inset-0" :style="screenTransform('peer:' + tile.peer.userId)">
+                                    <video :id="'remote-screen-' + tile.peer.userId" autoplay playsinline
+                                        class="h-full w-full object-contain bg-black pointer-events-none"
+                                        x-effect="if ($el && tile.peer.screenStream) { $el.srcObject = tile.peer.screenStream; $el.play?.().catch(() => {}); }"></video>
+                                </div>
+                                <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white" x-text="tile.peer.name + ' · screen'"></span>
+                                <div class="absolute top-2 right-2 flex gap-1.5">
+                                    <button type="button" title="Move your mouse inside the screen and scroll to zoom in/out. Drag to pan."
+                                        class="w-7 h-7 rounded-md bg-black/60 text-white text-xs font-bold hover:bg-black/80">?</button>
+                                    <button type="button" @click="toggleScreenPin('peer:' + tile.peer.userId)"
+                                        class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center transition"
+                                        :class="screenPinned('peer:' + tile.peer.userId) ? 'bg-brand-500/80' : ''"
+                                        :title="screenPinned('peer:' + tile.peer.userId) ? 'Unpin this screen' : 'Pin this screen on top'">
+                                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
+                                        </svg>
+                                    </button>
+                                    <button type="button" @click="resetScreenZoom('peer:' + tile.peer.userId)" title="Reset zoom"
+                                        class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5"/>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 14a7 7 0 0 0 11.3 3M19 10a7 7 0 0 0-11.3-3"/>
+                                        </svg>
+                                    </button>
+                                    <button type="button" @click="toggleScreenFullscreen($event, 'peer:' + tile.peer.userId)" title="Fullscreen"
+                                        class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
                     </div>
+                </template>
+                <div x-show="callState === 'outgoing' && peers.length === 0" class="rounded-xl border border-dashed border-white/10 min-h-40 flex items-center justify-center text-sm text-slate-500">
+                    Waiting for someone to join…
                 </div>
-            </template>
-            <div x-show="callState === 'outgoing' && peers.length === 0" class="rounded-xl border border-dashed border-white/10 min-h-40 flex items-center justify-center text-sm text-slate-500">
-                Waiting for someone to join…
             </div>
         </div>
         <div class="flex flex-wrap items-center justify-center gap-2 pt-1">
@@ -247,25 +393,100 @@
     <p x-show="callError" x-cloak class="text-sm text-amber-300 text-center px-4 pt-3" x-text="callError"></p>
 
     <div class="flex-1 min-h-0 overflow-y-auto p-4">
-        <div class="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 content-start">
-            {{-- Local: shared screen as its own tile (only while sharing) --}}
-            <div x-show="localShowsScreen()" x-cloak
-                class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40 sm:col-span-2 lg:col-span-2 xl:col-span-2">
-                <video x-ref="meetLocalScreenVideo" autoplay muted playsinline
-                    class="h-full w-full object-contain bg-black transition-transform"
-                    :style="'transform: scale(' + (screenZooms['local'] || 1) + '); transform-origin: center center;'"></video>
-                <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white">Your screen</span>
-                <div class="absolute top-2 right-2 flex gap-1.5">
-                    <button type="button" @click="cycleScreenZoom('local')" title="Zoom in/out"
-                        class="w-7 h-7 rounded-md bg-black/60 text-white text-xs font-bold hover:bg-black/80">＋</button>
-                    <button type="button" @click="toggleScreenFullscreen($event, 'local')" title="Fullscreen"
-                        class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/>
-                        </svg>
-                    </button>
-                </div>
+        <div class="space-y-3">
+            {{-- Pinned screens showcase on top (all screens when none are pinned) --}}
+            <div x-show="screenTopTiles().length" x-cloak
+                class="grid gap-3 grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
+                :class="screenTopTiles().length === 1 ? 'max-w-4xl mx-auto w-full' : ''">
+                <template x-for="tile in screenTopTiles()" :key="'top-screen-' + tile.key">
+                    <div class="contents">
+                        <template x-if="tile.local">
+                            <div
+                                class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40 select-none"
+                                :class="screenDragging('local') ? 'cursor-grabbing' : (screenZoomed('local') ? 'cursor-grab' : '')"
+                                @wheel.prevent="onScreenWheel($event, 'local')"
+                                @mousedown="startScreenPan($event, 'local')"
+                                @mousemove.window="onScreenMove($event)"
+                                @mouseup.window="onScreenUp($event)">
+                                <div class="absolute inset-0" :style="screenTransform('local')">
+                                    <video x-ref="meetLocalScreenVideo" autoplay muted playsinline
+                                        class="h-full w-full object-contain bg-black pointer-events-none"></video>
+                                </div>
+                                <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white">Your screen</span>
+                                <div class="absolute top-2 right-2 flex gap-1.5">
+                                    <button type="button" title="Move your mouse inside the screen and scroll to zoom in/out. Drag to pan."
+                                        class="w-7 h-7 rounded-md bg-black/60 text-white text-xs font-bold hover:bg-black/80">?</button>
+                                    <button type="button" @click="toggleScreenPin('local')"
+                                        class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center transition"
+                                        :class="screenPinned('local') ? 'bg-brand-500/80' : ''"
+                                        :title="screenPinned('local') ? 'Unpin this screen' : 'Pin this screen on top'">
+                                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
+                                        </svg>
+                                    </button>
+                                    <button type="button" @click="resetScreenZoom('local')" title="Reset zoom"
+                                        class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5"/>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 14a7 7 0 0 0 11.3 3M19 10a7 7 0 0 0-11.3-3"/>
+                                        </svg>
+                                    </button>
+                                    <button type="button" @click="toggleScreenFullscreen($event, 'local')" title="Fullscreen"
+                                        class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-else>
+                            <div
+                                class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40 select-none"
+                                :class="screenDragging('peer:' + tile.peer.userId) ? 'cursor-grabbing' : (screenZoomed('peer:' + tile.peer.userId) ? 'cursor-grab' : '')"
+                                @wheel.prevent="onScreenWheel($event, 'peer:' + tile.peer.userId)"
+                                @mousedown="startScreenPan($event, 'peer:' + tile.peer.userId)"
+                                @mousemove.window="onScreenMove($event)"
+                                @mouseup.window="onScreenUp($event)">
+                                <div class="absolute inset-0" :style="screenTransform('peer:' + tile.peer.userId)">
+                                    <video :id="'meet-remote-screen-' + tile.peer.userId" autoplay playsinline
+                                        class="h-full w-full object-contain bg-black pointer-events-none"
+                                        x-effect="if ($el && tile.peer.screenStream) { $el.srcObject = tile.peer.screenStream; $el.muted = true; $el.play?.().catch(() => {}); }"></video>
+                                </div>
+                                <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white"
+                                    x-text="tile.peer.name + ' · screen'"></span>
+                                <div class="absolute top-2 right-2 flex gap-1.5">
+                                    <button type="button" title="Move your mouse inside the screen and scroll to zoom in/out. Drag to pan."
+                                        class="w-7 h-7 rounded-md bg-black/60 text-white text-xs font-bold hover:bg-black/80">?</button>
+                                    <button type="button" @click="toggleScreenPin('peer:' + tile.peer.userId)"
+                                        class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center transition"
+                                        :class="screenPinned('peer:' + tile.peer.userId) ? 'bg-brand-500/80' : ''"
+                                        :title="screenPinned('peer:' + tile.peer.userId) ? 'Unpin this screen' : 'Pin this screen on top'">
+                                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
+                                        </svg>
+                                    </button>
+                                    <button type="button" @click="resetScreenZoom('peer:' + tile.peer.userId)" title="Reset zoom"
+                                        class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5"/>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 14a7 7 0 0 0 11.3 3M19 10a7 7 0 0 0-11.3-3"/>
+                                        </svg>
+                                    </button>
+                                    <button type="button" @click="toggleScreenFullscreen($event, 'peer:' + tile.peer.userId)" title="Fullscreen"
+                                        class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
             </div>
+
+            <div class="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 content-start">
 
             {{-- Local camera: its own tile, stays visible while sharing --}}
             <div class="relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40">
@@ -283,27 +504,6 @@
 
             <template x-for="uid in meetPeerIds()" :key="'meet-participant-' + uid">
                 <div class="contents">
-                    {{-- Remote shared screen as its own tile (only while sharing) --}}
-                    <div x-show="meetPeer(uid)?.screenSharing && meetPeer(uid)?.screenStream" x-cloak
-                        class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40 sm:col-span-2 lg:col-span-2 xl:col-span-2">
-                        <video :id="'meet-remote-screen-' + uid" autoplay playsinline
-                            class="h-full w-full object-contain bg-black transition-transform"
-                            :style="'transform: scale(' + (screenZooms['peer:' + uid] || 1) + '); transform-origin: center center;'"
-                            x-effect="if ($el && meetPeer(uid)?.screenStream) { $el.srcObject = meetPeer(uid).screenStream; $el.muted = true; $el.play?.().catch(() => {}); }"></video>
-                        <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white"
-                            x-text="meetName(uid) + ' · screen'"></span>
-                        <div class="absolute top-2 right-2 flex gap-1.5">
-                            <button type="button" @click="cycleScreenZoom('peer:' + uid)" title="Zoom in/out"
-                                class="w-7 h-7 rounded-md bg-black/60 text-white text-xs font-bold hover:bg-black/80">＋</button>
-                            <button type="button" @click="toggleScreenFullscreen($event, 'peer:' + uid)" title="Fullscreen"
-                                class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center">
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/>
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-
                     {{-- Remote camera: its own tile, stays visible while they share --}}
                     <div class="relative group rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40">
                         <video x-show="meetPeer(uid)?.stream" :id="'meet-remote-' + uid" autoplay playsinline
@@ -342,6 +542,95 @@
                     </div>
                 </div>
             </template>
+
+            {{-- Non-pinned screens go below like the other tiles --}}
+            <template x-for="tile in screenBottomTiles()" :key="'bottom-screen-' + tile.key">
+                <div class="contents">
+                    <template x-if="tile.local">
+                        <div
+                            class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40 sm:col-span-2 lg:col-span-2 xl:col-span-2 select-none"
+                            :class="screenDragging('local') ? 'cursor-grabbing' : (screenZoomed('local') ? 'cursor-grab' : '')"
+                            @wheel.prevent="onScreenWheel($event, 'local')"
+                            @mousedown="startScreenPan($event, 'local')"
+                            @mousemove.window="onScreenMove($event)"
+                            @mouseup.window="onScreenUp($event)">
+                            <div class="absolute inset-0" :style="screenTransform('local')">
+                                <video x-ref="meetLocalScreenVideo" autoplay muted playsinline
+                                    class="h-full w-full object-contain bg-black pointer-events-none"></video>
+                            </div>
+                            <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white">Your screen</span>
+                            <div class="absolute top-2 right-2 flex gap-1.5">
+                                <button type="button" title="Move your mouse inside the screen and scroll to zoom in/out. Drag to pan."
+                                    class="w-7 h-7 rounded-md bg-black/60 text-white text-xs font-bold hover:bg-black/80">?</button>
+                                <button type="button" @click="toggleScreenPin('local')"
+                                    class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center transition"
+                                    :class="screenPinned('local') ? 'bg-brand-500/80' : ''"
+                                    :title="screenPinned('local') ? 'Unpin this screen' : 'Pin this screen on top'">
+                                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
+                                    </svg>
+                                </button>
+                                <button type="button" @click="resetScreenZoom('local')" title="Reset zoom"
+                                    class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 14a7 7 0 0 0 11.3 3M19 10a7 7 0 0 0-11.3-3"/>
+                                    </svg>
+                                </button>
+                                <button type="button" @click="toggleScreenFullscreen($event, 'local')" title="Fullscreen"
+                                    class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                    <template x-else>
+                        <div
+                            class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40 sm:col-span-2 lg:col-span-2 xl:col-span-2 select-none"
+                            :class="screenDragging('peer:' + tile.peer.userId) ? 'cursor-grabbing' : (screenZoomed('peer:' + tile.peer.userId) ? 'cursor-grab' : '')"
+                            @wheel.prevent="onScreenWheel($event, 'peer:' + tile.peer.userId)"
+                            @mousedown="startScreenPan($event, 'peer:' + tile.peer.userId)"
+                            @mousemove.window="onScreenMove($event)"
+                            @mouseup.window="onScreenUp($event)">
+                            <div class="absolute inset-0" :style="screenTransform('peer:' + tile.peer.userId)">
+                                <video :id="'meet-remote-screen-' + tile.peer.userId" autoplay playsinline
+                                    class="h-full w-full object-contain bg-black pointer-events-none"
+                                    x-effect="if ($el && tile.peer.screenStream) { $el.srcObject = tile.peer.screenStream; $el.muted = true; $el.play?.().catch(() => {}); }"></video>
+                            </div>
+                            <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white"
+                                x-text="tile.peer.name + ' · screen'"></span>
+                            <div class="absolute top-2 right-2 flex gap-1.5">
+                                <button type="button" title="Move your mouse inside the screen and scroll to zoom in/out. Drag to pan."
+                                    class="w-7 h-7 rounded-md bg-black/60 text-white text-xs font-bold hover:bg-black/80">?</button>
+                                <button type="button" @click="toggleScreenPin('peer:' + tile.peer.userId)"
+                                    class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center transition"
+                                    :class="screenPinned('peer:' + tile.peer.userId) ? 'bg-brand-500/80' : ''"
+                                    :title="screenPinned('peer:' + tile.peer.userId) ? 'Unpin this screen' : 'Pin this screen on top'">
+                                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
+                                    </svg>
+                                </button>
+                                <button type="button" @click="resetScreenZoom('peer:' + tile.peer.userId)" title="Reset zoom"
+                                    class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 14a7 7 0 0 0 11.3 3M19 10a7 7 0 0 0-11.3-3"/>
+                                    </svg>
+                                </button>
+                                <button type="button" @click="toggleScreenFullscreen($event, 'peer:' + tile.peer.userId)" title="Fullscreen"
+                                    class="w-7 h-7 rounded-md bg-black/60 text-white hover:bg-black/80 flex items-center justify-center">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </template>
+            </div>
         </div>
     </div>
 
