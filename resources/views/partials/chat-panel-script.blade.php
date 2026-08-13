@@ -143,6 +143,7 @@
             screenViews: {},
             screenDrag: null,
             screenPins: {},
+            maximizedScreenKey: null,
             peers: [],
             peerConnections: {},
             peerDisconnectTimers: {},
@@ -171,6 +172,7 @@
                 this.scrollToBottom();
                 this.$nextTick(() => this.focusDraft());
                 document.addEventListener('keydown', this._onChatKeydown);
+                document.addEventListener('keydown', this._onScreenMaximizeKeydown);
                 try {
                     const raw = localStorage.getItem('ct_muted_peers');
                     const parsed = raw ? JSON.parse(raw) : null;
@@ -199,6 +201,7 @@
             destroy() {
                 if (window.__ctSuppressGlobalCall) window.__ctSuppressGlobalCall = null;
                 document.removeEventListener('keydown', this._onChatKeydown);
+                document.removeEventListener('keydown', this._onScreenMaximizeKeydown);
                 if (this.pollTimer) clearInterval(this.pollTimer);
                 if (this.callPollTimer) clearInterval(this.callPollTimer);
                 if (this.callHeartbeatTimer) clearInterval(this.callHeartbeatTimer);
@@ -3191,6 +3194,12 @@
                 if (this.$refs.editFileInput) this.$refs.editFileInput.value = '';
             },
 
+            _onScreenMaximizeKeydown: (e) => {
+                if (e.key === 'Escape' && this.maximizedScreenKey) {
+                    this.closeScreenMaximize();
+                }
+            },
+
             _onChatKeydown: (e) => {
                 const t = e.target;
                 const inEditField = t && t.matches && t.matches('[x-model="editDraft"]');
@@ -3940,6 +3949,7 @@
                 this.cameraTrack = null;
                 this.sharingScreen = false;
                 this.clearScreenViews();
+                this.maximizedScreenKey = null;
                 if (this.localStream) {
                     this.localStream.getTracks().forEach((t) => t.stop());
                     this.localStream = null;
@@ -4222,13 +4232,15 @@
             },
 
             toggleScreenFullscreen(event, key) {
-                const tile = event?.currentTarget?.closest('.ct-screen-tile');
-                if (!tile) return;
-                if (document.fullscreenElement === tile) {
-                    document.exitFullscreen().catch(() => {});
-                } else {
-                    tile.requestFullscreen?.().catch(() => {});
-                }
+                this.maximizedScreenKey = (this.maximizedScreenKey === key) ? null : key;
+            },
+
+            isScreenMaximized(key) {
+                return this.maximizedScreenKey === key;
+            },
+
+            closeScreenMaximize() {
+                this.maximizedScreenKey = null;
             },
 
             localShowsVideo() {

@@ -79,12 +79,13 @@
                         <template x-if="tile.local">
                             <div
                                 class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center select-none"
-                                :class="screenDragging('local') ? 'cursor-grabbing' : (screenZoomed('local') ? 'cursor-grab' : '')"
+                                :class="[isScreenMaximized('local') ? 'fixed inset-0 z-[300] rounded-none border-0' : '', screenDragging('local') ? 'cursor-grabbing' : (screenZoomed('local') ? 'cursor-grab' : '')]"
+                                @click.self="isScreenMaximized('local') && closeScreenMaximize()"
                                 @wheel.prevent="onScreenWheel($event, 'local')"
                                 @mousedown="startScreenPan($event, 'local')"
                                 @mousemove.window="onScreenMove($event)"
                                 @mouseup.window="onScreenUp($event)">
-                                <div class="absolute inset-0" :style="screenTransform('local')">
+                                <div class="absolute inset-0 pointer-events-none" :style="screenTransform('local')">
                                     <video x-ref="localScreenVideo" autoplay muted playsinline
                                         class="h-full w-full object-contain bg-black pointer-events-none"></video>
                                 </div>
@@ -120,12 +121,13 @@
                         <template x-else>
                             <div
                                 class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center select-none"
-                                :class="screenDragging('peer:' + tile.peer.userId) ? 'cursor-grabbing' : (screenZoomed('peer:' + tile.peer.userId) ? 'cursor-grab' : '')"
+                                :class="[isScreenMaximized('peer:' + tile.peer.userId) ? 'fixed inset-0 z-[300] rounded-none border-0' : '', screenDragging('peer:' + tile.peer.userId) ? 'cursor-grabbing' : (screenZoomed('peer:' + tile.peer.userId) ? 'cursor-grab' : '')]"
+                                @click.self="isScreenMaximized('peer:' + tile.peer.userId) && closeScreenMaximize()"
                                 @wheel.prevent="onScreenWheel($event, 'peer:' + tile.peer.userId)"
                                 @mousedown="startScreenPan($event, 'peer:' + tile.peer.userId)"
                                 @mousemove.window="onScreenMove($event)"
                                 @mouseup.window="onScreenUp($event)">
-                                <div class="absolute inset-0" :style="screenTransform('peer:' + tile.peer.userId)">
+                                <div class="absolute inset-0 pointer-events-none" :style="screenTransform('peer:' + tile.peer.userId)">
                                     <video :id="'remote-screen-' + tile.peer.userId" autoplay playsinline
                                         class="h-full w-full object-contain bg-black pointer-events-none"
                                         x-effect="if ($el && tile.peer.screenStream) { $el.srcObject = tile.peer.screenStream; $el.play?.().catch(() => {}); }"></video>
@@ -212,12 +214,13 @@
                         <template x-if="tile.local">
                             <div
                                 class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center select-none"
-                                :class="screenDragging('local') ? 'cursor-grabbing' : (screenZoomed('local') ? 'cursor-grab' : '')"
+                                :class="[isScreenMaximized('local') ? 'fixed inset-0 z-[300] rounded-none border-0' : '', screenDragging('local') ? 'cursor-grabbing' : (screenZoomed('local') ? 'cursor-grab' : '')]"
+                                @click.self="isScreenMaximized('local') && closeScreenMaximize()"
                                 @wheel.prevent="onScreenWheel($event, 'local')"
                                 @mousedown="startScreenPan($event, 'local')"
                                 @mousemove.window="onScreenMove($event)"
                                 @mouseup.window="onScreenUp($event)">
-                                <div class="absolute inset-0" :style="screenTransform('local')">
+                                <div class="absolute inset-0 pointer-events-none" :style="screenTransform('local')">
                                     <video x-ref="localScreenVideo" autoplay muted playsinline
                                         class="h-full w-full object-contain bg-black pointer-events-none"></video>
                                 </div>
@@ -253,12 +256,13 @@
                         <template x-else>
                             <div
                                 class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center select-none"
-                                :class="screenDragging('peer:' + tile.peer.userId) ? 'cursor-grabbing' : (screenZoomed('peer:' + tile.peer.userId) ? 'cursor-grab' : '')"
+                                :class="[isScreenMaximized('peer:' + tile.peer.userId) ? 'fixed inset-0 z-[300] rounded-none border-0' : '', screenDragging('peer:' + tile.peer.userId) ? 'cursor-grabbing' : (screenZoomed('peer:' + tile.peer.userId) ? 'cursor-grab' : '')]"
+                                @click.self="isScreenMaximized('peer:' + tile.peer.userId) && closeScreenMaximize()"
                                 @wheel.prevent="onScreenWheel($event, 'peer:' + tile.peer.userId)"
                                 @mousedown="startScreenPan($event, 'peer:' + tile.peer.userId)"
                                 @mousemove.window="onScreenMove($event)"
                                 @mouseup.window="onScreenUp($event)">
-                                <div class="absolute inset-0" :style="screenTransform('peer:' + tile.peer.userId)">
+                                <div class="absolute inset-0 pointer-events-none" :style="screenTransform('peer:' + tile.peer.userId)">
                                     <video :id="'remote-screen-' + tile.peer.userId" autoplay playsinline
                                         class="h-full w-full object-contain bg-black pointer-events-none"
                                         x-effect="if ($el && tile.peer.screenStream) { $el.srcObject = tile.peer.screenStream; $el.play?.().catch(() => {}); }"></video>
@@ -403,12 +407,13 @@
                         <template x-if="tile.local">
                             <div
                                 class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40 select-none"
-                                :class="screenDragging('local') ? 'cursor-grabbing' : (screenZoomed('local') ? 'cursor-grab' : '')"
+                                :class="[isScreenMaximized('local') ? 'fixed inset-0 z-[300] rounded-none border-0' : '', screenDragging('local') ? 'cursor-grabbing' : (screenZoomed('local') ? 'cursor-grab' : '')]"
+                                @click.self="isScreenMaximized('local') && closeScreenMaximize()"
                                 @wheel.prevent="onScreenWheel($event, 'local')"
                                 @mousedown="startScreenPan($event, 'local')"
                                 @mousemove.window="onScreenMove($event)"
                                 @mouseup.window="onScreenUp($event)">
-                                <div class="absolute inset-0" :style="screenTransform('local')">
+                                <div class="absolute inset-0 pointer-events-none" :style="screenTransform('local')">
                                     <video x-ref="meetLocalScreenVideo" autoplay muted playsinline
                                         class="h-full w-full object-contain bg-black pointer-events-none"></video>
                                 </div>
@@ -443,12 +448,13 @@
                         <template x-else>
                             <div
                                 class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40 select-none"
-                                :class="screenDragging('peer:' + tile.peer.userId) ? 'cursor-grabbing' : (screenZoomed('peer:' + tile.peer.userId) ? 'cursor-grab' : '')"
+                                :class="[isScreenMaximized('peer:' + tile.peer.userId) ? 'fixed inset-0 z-[300] rounded-none border-0' : '', screenDragging('peer:' + tile.peer.userId) ? 'cursor-grabbing' : (screenZoomed('peer:' + tile.peer.userId) ? 'cursor-grab' : '')]"
+                                @click.self="isScreenMaximized('peer:' + tile.peer.userId) && closeScreenMaximize()"
                                 @wheel.prevent="onScreenWheel($event, 'peer:' + tile.peer.userId)"
                                 @mousedown="startScreenPan($event, 'peer:' + tile.peer.userId)"
                                 @mousemove.window="onScreenMove($event)"
                                 @mouseup.window="onScreenUp($event)">
-                                <div class="absolute inset-0" :style="screenTransform('peer:' + tile.peer.userId)">
+                                <div class="absolute inset-0 pointer-events-none" :style="screenTransform('peer:' + tile.peer.userId)">
                                     <video :id="'meet-remote-screen-' + tile.peer.userId" autoplay playsinline
                                         class="h-full w-full object-contain bg-black pointer-events-none"
                                         x-effect="if ($el && tile.peer.screenStream) { $el.srcObject = tile.peer.screenStream; $el.muted = true; $el.play?.().catch(() => {}); }"></video>
@@ -549,12 +555,13 @@
                     <template x-if="tile.local">
                         <div
                             class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40 sm:col-span-2 lg:col-span-2 xl:col-span-2 select-none"
-                            :class="screenDragging('local') ? 'cursor-grabbing' : (screenZoomed('local') ? 'cursor-grab' : '')"
+                            :class="[isScreenMaximized('local') ? 'fixed inset-0 z-[300] rounded-none border-0' : '', screenDragging('local') ? 'cursor-grabbing' : (screenZoomed('local') ? 'cursor-grab' : '')]"
+                            @click.self="isScreenMaximized('local') && closeScreenMaximize()"
                             @wheel.prevent="onScreenWheel($event, 'local')"
                             @mousedown="startScreenPan($event, 'local')"
                             @mousemove.window="onScreenMove($event)"
                             @mouseup.window="onScreenUp($event)">
-                            <div class="absolute inset-0" :style="screenTransform('local')">
+                            <div class="absolute inset-0 pointer-events-none" :style="screenTransform('local')">
                                 <video x-ref="meetLocalScreenVideo" autoplay muted playsinline
                                     class="h-full w-full object-contain bg-black pointer-events-none"></video>
                             </div>
@@ -589,12 +596,13 @@
                     <template x-else>
                         <div
                             class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40 sm:col-span-2 lg:col-span-2 xl:col-span-2 select-none"
-                            :class="screenDragging('peer:' + tile.peer.userId) ? 'cursor-grabbing' : (screenZoomed('peer:' + tile.peer.userId) ? 'cursor-grab' : '')"
+                            :class="[isScreenMaximized('peer:' + tile.peer.userId) ? 'fixed inset-0 z-[300] rounded-none border-0' : '', screenDragging('peer:' + tile.peer.userId) ? 'cursor-grabbing' : (screenZoomed('peer:' + tile.peer.userId) ? 'cursor-grab' : '')]"
+                            @click.self="isScreenMaximized('peer:' + tile.peer.userId) && closeScreenMaximize()"
                             @wheel.prevent="onScreenWheel($event, 'peer:' + tile.peer.userId)"
                             @mousedown="startScreenPan($event, 'peer:' + tile.peer.userId)"
                             @mousemove.window="onScreenMove($event)"
                             @mouseup.window="onScreenUp($event)">
-                            <div class="absolute inset-0" :style="screenTransform('peer:' + tile.peer.userId)">
+                            <div class="absolute inset-0 pointer-events-none" :style="screenTransform('peer:' + tile.peer.userId)">
                                 <video :id="'meet-remote-screen-' + tile.peer.userId" autoplay playsinline
                                     class="h-full w-full object-contain bg-black pointer-events-none"
                                     x-effect="if ($el && tile.peer.screenStream) { $el.srcObject = tile.peer.screenStream; $el.muted = true; $el.play?.().catch(() => {}); }"></video>
