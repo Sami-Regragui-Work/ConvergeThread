@@ -4375,16 +4375,16 @@
             bindLocalPreview() {
                 this.$nextTick(() => {
                     if (this.$refs.localVideo) {
-                        this.$refs.localVideo.srcObject = this.localStream;
+                        this.$refs.localVideo.srcObject = Alpine.raw(this.localStream) || this.localStream;
                     }
                     if (this.$refs.localScreenVideo) {
-                        this.$refs.localScreenVideo.srcObject = this.localShowsScreen() ? this.screenStream : null;
+                        this.$refs.localScreenVideo.srcObject = this.localShowsScreen() ? (Alpine.raw(this.screenStream) || this.screenStream) : null;
                     }
                     if (this.$refs.meetLocalVideo) {
-                        this.$refs.meetLocalVideo.srcObject = this.localStream;
+                        this.$refs.meetLocalVideo.srcObject = Alpine.raw(this.localStream) || this.localStream;
                     }
                     if (this.$refs.meetLocalScreenVideo) {
-                        this.$refs.meetLocalScreenVideo.srcObject = this.localShowsScreen() ? this.screenStream : null;
+                        this.$refs.meetLocalScreenVideo.srcObject = this.localShowsScreen() ? (Alpine.raw(this.screenStream) || this.screenStream) : null;
                     }
                 });
             },
@@ -4582,7 +4582,7 @@
                 }
                 this.peers = [...this.peers];
                 const peer = this.peers.find((p) => Number(p.userId) === Number(userId));
-                if (peer?.stream) this.attachRemoteMedia(userId, peer.stream);
+                if (peer?.stream) this.attachRemoteMedia(userId, Alpine.raw(peer.stream) || peer.stream);
             },
 
             removePeer(userId) {

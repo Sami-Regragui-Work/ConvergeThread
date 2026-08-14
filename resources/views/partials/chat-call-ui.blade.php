@@ -138,7 +138,7 @@
                                 <div class="absolute inset-0 pointer-events-none" :style="screenTransform('peer:' + tile.peer.userId)">
                                     <video :id="'remote-screen-' + tile.peer.userId" autoplay muted playsinline
                                         class="h-full w-full object-contain bg-black pointer-events-none"
-                                        x-effect="const t = tile.peer; try { if (t?.screenVideoTrack?.attach) { t.screenVideoTrack.attach($el); } else if (t?.screenStream) { $el.srcObject = t.screenStream; } } catch (err) { if (t?.screenStream) $el.srcObject = t.screenStream; } $el.muted = true; $el.play?.().catch(() => {});"></video>
+                                        x-effect="$el.srcObject = Alpine.raw(tile.peer?.screenStream) || tile.peer?.screenStream || null; $el.muted = true; $el.play?.().catch(() => {});"></video>
                                 </div>
                                 <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white" x-text="tile.peer.name + ' · screen'"></span>
                                 <div class="absolute top-2 right-2 flex gap-1.5">
@@ -191,10 +191,10 @@
                         <div class="relative group rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center">
                             <video x-show="peerShowsVideo(peer)" :id="'remote-video-' + peer.userId" autoplay playsinline
                                 class="absolute inset-0 h-full w-full object-contain bg-black -scale-x-100"
-                                x-effect="if ($el && peer.stream) { $el.srcObject = peer.stream; $el.muted = localDeafened || !!deafenPeerIds[peer.userId]; $el.play?.().catch(() => {}); }"></video>
+                                x-effect="if ($el && peer.stream) { $el.srcObject = Alpine.raw(peer.stream) || peer.stream; $el.muted = localDeafened || !!deafenPeerIds[peer.userId]; $el.play?.().catch(() => {}); }"></video>
                             {{-- Keep audio in DOM (not display:none) or browsers mute it --}}
                             <audio :id="'remote-audio-' + peer.userId" autoplay playsinline class="sr-only"
-                                x-effect="if ($el && peer.stream) { $el.srcObject = peer.stream; $el.muted = peerShowsVideo(peer) || localDeafened || !!deafenPeerIds[peer.userId]; if (!peerShowsVideo(peer)) $el.play?.().catch(() => {}); }"></audio>
+                                x-effect="if ($el && peer.stream) { $el.srcObject = Alpine.raw(peer.stream) || peer.stream; $el.muted = peerShowsVideo(peer) || localDeafened || !!deafenPeerIds[peer.userId]; if (!peerShowsVideo(peer)) $el.play?.().catch(() => {}); }"></audio>
                             <div x-show="!peerShowsVideo(peer) || !peer.stream" class="relative z-10 text-center p-4">
                                 <div class="w-14 h-14 mx-auto rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center text-lg font-bold"
                                     x-text="(peer.name || '?').slice(0, 1).toUpperCase()"></div>
@@ -273,7 +273,7 @@
                                 <div class="absolute inset-0 pointer-events-none" :style="screenTransform('peer:' + tile.peer.userId)">
                                     <video :id="'remote-screen-' + tile.peer.userId" autoplay muted playsinline
                                         class="h-full w-full object-contain bg-black pointer-events-none"
-                                        x-effect="const t = tile.peer; try { if (t?.screenVideoTrack?.attach) { t.screenVideoTrack.attach($el); } else if (t?.screenStream) { $el.srcObject = t.screenStream; } } catch (err) { if (t?.screenStream) $el.srcObject = t.screenStream; } $el.muted = true; $el.play?.().catch(() => {});"></video>
+                                        x-effect="$el.srcObject = Alpine.raw(tile.peer?.screenStream) || tile.peer?.screenStream || null; $el.muted = true; $el.play?.().catch(() => {});"></video>
                                 </div>
                                 <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white" x-text="tile.peer.name + ' · screen'"></span>
                                 <div class="absolute top-2 right-2 flex gap-1.5">
@@ -469,7 +469,7 @@
                                 <div class="absolute inset-0 pointer-events-none" :style="screenTransform('peer:' + tile.peer.userId)">
                                     <video :id="'meet-remote-screen-' + tile.peer.userId" autoplay muted playsinline
                                         class="h-full w-full object-contain bg-black pointer-events-none"
-                                        x-effect="const t = tile.peer; try { if (t?.screenVideoTrack?.attach) { t.screenVideoTrack.attach($el); } else if (t?.screenStream) { $el.srcObject = t.screenStream; } } catch (err) { if (t?.screenStream) $el.srcObject = t.screenStream; } $el.muted = true; $el.play?.().catch(() => {});"></video>
+                                        x-effect="$el.srcObject = Alpine.raw(tile.peer?.screenStream) || tile.peer?.screenStream || null; $el.muted = true; $el.play?.().catch(() => {});"></video>
                                 </div>
                                 <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white"
                                     x-text="tile.peer.name + ' · screen'"></span>
@@ -528,7 +528,7 @@
                     <div class="relative group rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40">
                         <video x-show="meetPeer(uid)?.stream" :id="'meet-remote-' + uid" autoplay playsinline
                             class="absolute inset-0 h-full w-full object-cover bg-black -scale-x-100"
-                            x-effect="if ($el && meetPeer(uid)?.stream) { $el.srcObject = meetPeer(uid).stream; $el.muted = localDeafened || !!hostMutedIds[uid] || !!deafenPeerIds[uid]; $el.play?.().catch(() => {}); }"></video>
+                            x-effect="if ($el && meetPeer(uid)?.stream) { $el.srcObject = Alpine.raw(meetPeer(uid).stream) || meetPeer(uid).stream; $el.muted = localDeafened || !!hostMutedIds[uid] || !!deafenPeerIds[uid]; $el.play?.().catch(() => {}); }"></video>
                         <div x-show="!meetPeer(uid)?.stream" class="absolute inset-0 flex flex-col items-center justify-center gap-2">
                             <div class="w-14 h-14 rounded-full bg-surface-300/40 text-slate-300 flex items-center justify-center text-lg font-bold"
                                 x-text="(meetName(uid) || '?').slice(0, 1).toUpperCase()"></div>
@@ -617,7 +617,7 @@
                             <div class="absolute inset-0 pointer-events-none" :style="screenTransform('peer:' + tile.peer.userId)">
                                 <video :id="'meet-remote-screen-' + tile.peer.userId" autoplay muted playsinline
                                     class="h-full w-full object-contain bg-black pointer-events-none"
-                                    x-effect="const t = tile.peer; try { if (t?.screenVideoTrack?.attach) { t.screenVideoTrack.attach($el); } else if (t?.screenStream) { $el.srcObject = t.screenStream; } } catch (err) { if (t?.screenStream) $el.srcObject = t.screenStream; } $el.muted = true; $el.play?.().catch(() => {});"></video>
+                                    x-effect="$el.srcObject = Alpine.raw(tile.peer?.screenStream) || tile.peer?.screenStream || null; $el.muted = true; $el.play?.().catch(() => {});"></video>
                             </div>
                             <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white"
                                 x-text="tile.peer.name + ' · screen'"></span>
@@ -819,7 +819,7 @@
         <div class="absolute inset-0 pointer-events-none" :style="screenTransform(maximizedScreenKey)">
             <video autoplay muted playsinline
                 class="h-full w-full object-contain bg-black"
-                x-effect="const tile = screenMaxTile(); try { if (tile && !tile.local && tile.peer?.screenVideoTrack?.attach) { tile.peer.screenVideoTrack.attach($el); } else { $el.srcObject = tile ? (tile.local ? screenStream : (tile.peer?.screenStream || null)) : null; } } catch (err) { $el.srcObject = tile ? (tile.local ? screenStream : (tile.peer?.screenStream || null)) : null; } $el.muted = true; $el.play?.().catch(() => {});"></video>
+                x-effect="const tile = screenMaxTile(); $el.srcObject = tile ? (tile.local ? (Alpine.raw(screenStream) || screenStream) : (Alpine.raw(tile.peer?.screenStream) || tile.peer?.screenStream || null)) : null; $el.muted = true; $el.play?.().catch(() => {});"></video>
         </div>
         <span class="absolute bottom-4 left-4 text-xs px-2 py-1 rounded bg-black/60 text-white"
             x-text="(screenMaxTile()?.local ? 'You' : (screenMaxTile()?.peer?.name || '')) + ' · screen'"></span>
