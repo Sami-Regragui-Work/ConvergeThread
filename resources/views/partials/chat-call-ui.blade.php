@@ -82,13 +82,13 @@
         <div class="flex-1 min-h-0 flex flex-col gap-4 p-5">
             {{-- Hero region: shared screens are dominant when present --}}
             <div x-show="screenTopTiles().length" x-cloak class="flex-1 min-h-0">
-                <div class="h-full grid gap-3 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 content-center"
-                    :class="screenTopTiles().length === 1 ? 'max-w-4xl mx-auto w-full' : ''">
+                <div class="h-full grid gap-3 content-center"
+                    :style="screenTopGridStyle()">
                 <template x-for="tile in screenTopTiles()" :key="'top-screen-' + tile.key">
                     <div class="contents">
                         <template x-if="tile.local">
                             <div
-                                class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40 flex items-center justify-center select-none"
+                                class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black h-full w-full min-h-0 flex items-center justify-center select-none"
                                 :class="screenDragging('local') ? 'cursor-grabbing' : (screenZoomed('local') ? 'cursor-grab' : '')"
                                 @wheel.prevent="onScreenWheel($event, 'local')"
                                 @mousedown="startScreenPan($event, 'local')"
@@ -129,16 +129,16 @@
                         </template>
                         <template x-else>
                             <div
-                                class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40 flex items-center justify-center select-none"
+                                class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black h-full w-full min-h-0 flex items-center justify-center select-none"
                                 :class="screenDragging('peer:' + tile.peer.userId) ? 'cursor-grabbing' : (screenZoomed('peer:' + tile.peer.userId) ? 'cursor-grab' : '')"
                                 @wheel.prevent="onScreenWheel($event, 'peer:' + tile.peer.userId)"
                                 @mousedown="startScreenPan($event, 'peer:' + tile.peer.userId)"
                                 @mousemove.window="onScreenMove($event)"
                                 @mouseup.window="onScreenUp($event)">
                                 <div class="absolute inset-0 pointer-events-none" :style="screenTransform('peer:' + tile.peer.userId)">
-                                    <video :id="'remote-screen-' + tile.peer.userId" autoplay playsinline
+                                    <video :id="'remote-screen-' + tile.peer.userId" autoplay muted playsinline
                                         class="h-full w-full object-contain bg-black pointer-events-none"
-                                        x-effect="if ($el && tile.peer.screenStream) { $el.srcObject = tile.peer.screenStream; $el.play?.().catch(() => {}); }"></video>
+                                        x-effect="const t = tile.peer; try { if (t?.screenVideoTrack?.attach) { t.screenVideoTrack.attach($el); } else if (t?.screenStream) { $el.srcObject = t.screenStream; } } catch (err) { if (t?.screenStream) $el.srcObject = t.screenStream; } $el.muted = true; $el.play?.().catch(() => {});"></video>
                                 </div>
                                 <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white" x-text="tile.peer.name + ' · screen'"></span>
                                 <div class="absolute top-2 right-2 flex gap-1.5">
@@ -175,10 +175,10 @@
             </div>
 
             <div class="min-h-0 grid gap-3 content-start overflow-y-auto"
-                :class="screenTopTiles().length ? 'shrink-0 max-h-64 grid-cols-2 md:grid-cols-3 xl:grid-cols-4' : 'flex-1 grid-cols-1 lg:grid-cols-2'">
+                :class="screenTopTiles().length ? 'shrink-0 h-48 grid-cols-2 md:grid-cols-3 xl:grid-cols-4 auto-rows-fr' : 'flex-1 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'">
                 <div class="relative rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center">
                     <video x-ref="localVideo" x-show="localShowsVideo() && !localVideoOff" autoplay muted playsinline
-                        class="absolute inset-0 h-full w-full object-contain bg-black"></video>
+                        class="absolute inset-0 h-full w-full object-contain bg-black -scale-x-100"></video>
                     <div x-show="!localShowsVideo() || localVideoOff" class="relative z-10 text-center p-4">
                         <div class="w-14 h-14 mx-auto rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center text-lg font-bold"
                             x-text="(currentUserName || 'Y').slice(0, 1).toUpperCase()"></div>
@@ -190,7 +190,7 @@
                     <div class="contents">
                         <div class="relative group rounded-xl overflow-hidden border border-white/10 bg-black min-h-40 flex items-center justify-center">
                             <video x-show="peerShowsVideo(peer)" :id="'remote-video-' + peer.userId" autoplay playsinline
-                                class="absolute inset-0 h-full w-full object-contain bg-black"
+                                class="absolute inset-0 h-full w-full object-contain bg-black -scale-x-100"
                                 x-effect="if ($el && peer.stream) { $el.srcObject = peer.stream; $el.muted = localDeafened || !!deafenPeerIds[peer.userId]; $el.play?.().catch(() => {}); }"></video>
                             {{-- Keep audio in DOM (not display:none) or browsers mute it --}}
                             <audio :id="'remote-audio-' + peer.userId" autoplay playsinline class="sr-only"
@@ -271,9 +271,9 @@
                                 @mousemove.window="onScreenMove($event)"
                                 @mouseup.window="onScreenUp($event)">
                                 <div class="absolute inset-0 pointer-events-none" :style="screenTransform('peer:' + tile.peer.userId)">
-                                    <video :id="'remote-screen-' + tile.peer.userId" autoplay playsinline
+                                    <video :id="'remote-screen-' + tile.peer.userId" autoplay muted playsinline
                                         class="h-full w-full object-contain bg-black pointer-events-none"
-                                        x-effect="if ($el && tile.peer.screenStream) { $el.srcObject = tile.peer.screenStream; $el.play?.().catch(() => {}); }"></video>
+                                        x-effect="const t = tile.peer; try { if (t?.screenVideoTrack?.attach) { t.screenVideoTrack.attach($el); } else if (t?.screenStream) { $el.srcObject = t.screenStream; } } catch (err) { if (t?.screenStream) $el.srcObject = t.screenStream; } $el.muted = true; $el.play?.().catch(() => {});"></video>
                                 </div>
                                 <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white" x-text="tile.peer.name + ' · screen'"></span>
                                 <div class="absolute top-2 right-2 flex gap-1.5">
@@ -414,13 +414,13 @@
     <div class="flex-1 min-h-0 flex flex-col gap-4 p-4">
         {{-- Hero region: shared screens are dominant when present --}}
         <div x-show="screenTopTiles().length" x-cloak class="flex-1 min-h-0">
-            <div class="h-full grid gap-3 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 content-center"
-                :class="screenTopTiles().length === 1 ? 'max-w-4xl mx-auto w-full' : ''">
+            <div class="h-full grid gap-3 content-center"
+                :style="screenTopGridStyle()">
                 <template x-for="tile in screenTopTiles()" :key="'top-screen-' + tile.key">
                     <div class="contents">
                         <template x-if="tile.local">
                             <div
-                                class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40 select-none"
+                                class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black h-full w-full min-h-0 select-none"
                                 :class="screenDragging('local') ? 'cursor-grabbing' : (screenZoomed('local') ? 'cursor-grab' : '')"
                                 @wheel.prevent="onScreenWheel($event, 'local')"
                                 @mousedown="startScreenPan($event, 'local')"
@@ -460,16 +460,16 @@
                         </template>
                         <template x-else>
                             <div
-                                class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40 select-none"
+                                class="ct-screen-tile relative rounded-xl overflow-hidden border border-white/10 bg-black h-full w-full min-h-0 select-none"
                                 :class="screenDragging('peer:' + tile.peer.userId) ? 'cursor-grabbing' : (screenZoomed('peer:' + tile.peer.userId) ? 'cursor-grab' : '')"
                                 @wheel.prevent="onScreenWheel($event, 'peer:' + tile.peer.userId)"
                                 @mousedown="startScreenPan($event, 'peer:' + tile.peer.userId)"
                                 @mousemove.window="onScreenMove($event)"
                                 @mouseup.window="onScreenUp($event)">
                                 <div class="absolute inset-0 pointer-events-none" :style="screenTransform('peer:' + tile.peer.userId)">
-                                    <video :id="'meet-remote-screen-' + tile.peer.userId" autoplay playsinline
+                                    <video :id="'meet-remote-screen-' + tile.peer.userId" autoplay muted playsinline
                                         class="h-full w-full object-contain bg-black pointer-events-none"
-                                        x-effect="if ($el && tile.peer.screenStream) { $el.srcObject = tile.peer.screenStream; $el.muted = true; $el.play?.().catch(() => {}); }"></video>
+                                        x-effect="const t = tile.peer; try { if (t?.screenVideoTrack?.attach) { t.screenVideoTrack.attach($el); } else if (t?.screenStream) { $el.srcObject = t.screenStream; } } catch (err) { if (t?.screenStream) $el.srcObject = t.screenStream; } $el.muted = true; $el.play?.().catch(() => {});"></video>
                                 </div>
                                 <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white"
                                     x-text="tile.peer.name + ' · screen'"></span>
@@ -506,12 +506,12 @@
             </div>
 
             <div class="min-h-0 grid gap-3 content-start overflow-y-auto"
-                :class="screenTopTiles().length ? 'shrink-0 max-h-64 grid-cols-2 md:grid-cols-3 xl:grid-cols-4' : 'flex-1 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'">
+                :class="screenTopTiles().length ? 'shrink-0 h-48 grid-cols-2 md:grid-cols-3 xl:grid-cols-4 auto-rows-fr' : 'flex-1 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'">
 
             {{-- Local camera: its own tile, stays visible while sharing --}}
             <div class="relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40">
                 <video x-ref="meetLocalVideo" autoplay muted playsinline
-                    class="absolute inset-0 h-full w-full object-cover bg-black"
+                    class="absolute inset-0 h-full w-full object-cover bg-black -scale-x-100"
                     x-show="!localVideoOff"></video>
                 <div x-show="localVideoOff" class="absolute inset-0 flex flex-col items-center justify-center gap-2">
                     <div class="w-14 h-14 rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center text-lg font-bold"
@@ -527,7 +527,7 @@
                     {{-- Remote camera: its own tile, stays visible while they share --}}
                     <div class="relative group rounded-xl overflow-hidden border border-white/10 bg-black aspect-video min-h-40">
                         <video x-show="meetPeer(uid)?.stream" :id="'meet-remote-' + uid" autoplay playsinline
-                            class="absolute inset-0 h-full w-full object-cover bg-black"
+                            class="absolute inset-0 h-full w-full object-cover bg-black -scale-x-100"
                             x-effect="if ($el && meetPeer(uid)?.stream) { $el.srcObject = meetPeer(uid).stream; $el.muted = localDeafened || !!hostMutedIds[uid] || !!deafenPeerIds[uid]; $el.play?.().catch(() => {}); }"></video>
                         <div x-show="!meetPeer(uid)?.stream" class="absolute inset-0 flex flex-col items-center justify-center gap-2">
                             <div class="w-14 h-14 rounded-full bg-surface-300/40 text-slate-300 flex items-center justify-center text-lg font-bold"
@@ -615,9 +615,9 @@
                             @mousemove.window="onScreenMove($event)"
                             @mouseup.window="onScreenUp($event)">
                             <div class="absolute inset-0 pointer-events-none" :style="screenTransform('peer:' + tile.peer.userId)">
-                                <video :id="'meet-remote-screen-' + tile.peer.userId" autoplay playsinline
+                                <video :id="'meet-remote-screen-' + tile.peer.userId" autoplay muted playsinline
                                     class="h-full w-full object-contain bg-black pointer-events-none"
-                                    x-effect="if ($el && tile.peer.screenStream) { $el.srcObject = tile.peer.screenStream; $el.muted = true; $el.play?.().catch(() => {}); }"></video>
+                                    x-effect="const t = tile.peer; try { if (t?.screenVideoTrack?.attach) { t.screenVideoTrack.attach($el); } else if (t?.screenStream) { $el.srcObject = t.screenStream; } } catch (err) { if (t?.screenStream) $el.srcObject = t.screenStream; } $el.muted = true; $el.play?.().catch(() => {});"></video>
                             </div>
                             <span class="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white"
                                 x-text="tile.peer.name + ' · screen'"></span>
@@ -817,9 +817,9 @@
         @mousemove.window="onScreenMove($event)"
         @mouseup.window="onScreenUp($event)">
         <div class="absolute inset-0 pointer-events-none" :style="screenTransform(maximizedScreenKey)">
-            <video autoplay playsinline
+            <video autoplay muted playsinline
                 class="h-full w-full object-contain bg-black"
-                x-effect="const tile = screenMaxTile(); $el.srcObject = tile ? (tile.local ? screenStream : (tile.peer?.screenStream || null)) : null; $el.play?.().catch(() => {});"></video>
+                x-effect="const tile = screenMaxTile(); try { if (tile && !tile.local && tile.peer?.screenVideoTrack?.attach) { tile.peer.screenVideoTrack.attach($el); } else { $el.srcObject = tile ? (tile.local ? screenStream : (tile.peer?.screenStream || null)) : null; } } catch (err) { $el.srcObject = tile ? (tile.local ? screenStream : (tile.peer?.screenStream || null)) : null; } $el.muted = true; $el.play?.().catch(() => {});"></video>
         </div>
         <span class="absolute bottom-4 left-4 text-xs px-2 py-1 rounded bg-black/60 text-white"
             x-text="(screenMaxTile()?.local ? 'You' : (screenMaxTile()?.peer?.name || '')) + ' · screen'"></span>

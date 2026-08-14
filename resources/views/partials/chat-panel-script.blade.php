@@ -3553,7 +3553,7 @@
                         return;
                     }
                     const s = document.createElement('script');
-                    s.src = 'https://cdn.jsdelivr.net/npm/livekit-client@2.9.8/dist/livekit-client.umd.min.js';
+                    s.src = 'https://cdn.jsdelivr.net/npm/livekit-client@2.21.0/dist/livekit-client.umd.min.js';
                     s.async = true;
                     s.dataset.ctLivekit = '1';
                     s.onload = () => resolve(window.LivekitClient);
@@ -3578,7 +3578,7 @@
             },
 
             async createLiveKitE2eeWorker() {
-                const url = 'https://cdn.jsdelivr.net/npm/livekit-client@2.9.8/dist/livekit-client.e2ee.worker.mjs';
+                const url = 'https://cdn.jsdelivr.net/npm/livekit-client@2.21.0/dist/livekit-client.e2ee.worker.mjs';
                 const res = await fetch(url);
                 if (!res.ok) throw new Error('Could not load E2EE worker.');
                 const blob = await res.blob();
@@ -3644,7 +3644,7 @@
                 if (generation !== this._sfuGeneration || this.callState === 'idle') return;
 
                 const roomOpts = {
-                    adaptiveStream: true,
+                    adaptiveStream: false,
                     dynacast: true,
                 };
                 if (e2ee.enabled) {
@@ -3663,10 +3663,12 @@
                     if (!userId || userId === Number(this.currentUserId)) return;
                     const stream = new MediaStream();
                     let screenSharing = false;
+                    let screenTrackObj = null;
                     participant.trackPublications.forEach((pub) => {
                         if (pub?.source === LK.Track?.Source?.ScreenShare
                             || String(pub?.source || '').includes('screen')) {
                             screenSharing = true;
+                            if (pub.track) screenTrackObj = pub.track;
                             return;
                         }
                         if (pub.track) stream.addTrack(pub.track.mediaStreamTrack);
@@ -3676,7 +3678,14 @@
                         const peer = this.peers.find((p) => Number(p.userId) === userId);
                         if (peer) {
                             this.peers = this.peers.map((p) =>
-                                Number(p.userId) === userId ? { ...p, screenSharing: true } : p
+                                Number(p.userId) === userId
+                                    ? {
+                                        ...p,
+                                        screenSharing: true,
+                                        screenStream: screenTrackObj ? new MediaStream([screenTrackObj.mediaStreamTrack]) : p.screenStream,
+                                        screenVideoTrack: screenTrackObj || p.screenVideoTrack,
+                                    }
+                                    : p
                             );
                         }
                     }
@@ -3688,6 +3697,9 @@
                     const isScreen = pub?.source === LK.Track?.Source?.ScreenShare
                         || String(pub?.source || '').includes('screen');
                     if (isScreen) {
+                        console.log('[ct-sfu] screen TrackSubscribed', userId,
+                            'readyState=', track?.mediaStreamTrack?.readyState,
+                            'streamState=', track?.streamState, 'id=', track?.sid || track?.mediaStreamTrack?.id);
                         let peer = this.peers.find((p) => Number(p.userId) === userId);
                         if (!peer) {
                             this.upsertPeer(userId, participant.name || ('User #' + userId));
@@ -3695,9 +3707,35 @@
                         }
                         this.peers = this.peers.map((p) =>
                             Number(p.userId) === userId
-                                ? { ...p, screenSharing: true, screenStream: new MediaStream([track.mediaStreamTrack]) }
+                                ? {
+                                    ...p,
+                                    screenSharing: true,
+                                    screenStream: new MediaStream([track.mediaStreamTrack]),
+                                    screenVideoTrack: track,
+                                }
                                 : p
                         );
+                        try {
+                            const probe = document.createElement('video');
+                            probe.muted = true;
+                            probe.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;';
+                            probe.srcObject = new MediaStream([track.mediaStreamTrack]);
+                            probe.play().catch(() => {});
+                            const check = (now, meta) => {
+                                console.log('[ct-sfu] screen frame probe',
+                                    meta?.width ? ('FRAMES=' + meta.width + 'x' + meta.height) : 'NO_FRAME_YET');
+                                if (meta?.width) { probe.remove(); return; }
+                                probe.requestVideoFrameCallback(check);
+                            };
+                            if (probe.requestVideoFrameCallback) {
+                                probe.requestVideoFrameCallback(check);
+                                setTimeout(() => {
+                                    console.log('[ct-sfu] screen frame probe 3s=',
+                                        probe.videoWidth + 'x' + probe.videoHeight);
+                                    probe.remove();
+                                }, 3000);
+                            }
+                        } catch (e) { console.warn('[ct-sfu] frame probe err', e); }
                         return;
                     }
                     let peer = this.peers.find((p) => Number(p.userId) === userId);
@@ -3711,9 +3749,10 @@
                         || String(pub?.source || '').includes('screen');
                     const peer = this.peers.find((p) => Number(p.userId) === userId);
                     if (isScreen) {
+                        try { peer?.screenVideoTrack?.detach(); } catch (e) {}
                         this.peers = this.peers.map((p) =>
                             Number(p.userId) === userId
-                                ? { ...p, screenSharing: false, screenStream: null }
+                                ? { ...p, screenSharing: false, screenStream: null, screenVideoTrack: null }
                                 : p
                         );
                         return;
@@ -3726,9 +3765,11 @@
                 });
                 room.on(LK.RoomEvent.TrackUnpublished, (_pub, participant) => {
                     const userId = Number(participant.identity);
+                    const peer = this.peers.find((p) => Number(p.userId) === userId);
+                    try { peer?.screenVideoTrack?.detach(); } catch (e) {}
                     this.peers = this.peers.map((p) =>
                         Number(p.userId) === userId
-                            ? { ...p, screenSharing: false, screenStream: null }
+                            ? { ...p, screenSharing: false, screenStream: null, screenVideoTrack: null }
                             : p
                     );
                 });
@@ -3742,6 +3783,10 @@
                         || String(publication?.source || '').includes('screen')) {
                         const track = publication?.track?.mediaStreamTrack;
                         if (track) {
+                            console.log('[ct-sfu] screen published locally',
+                                'readyState=', track.readyState,
+                                'kind=', track.kind,
+                                'codec=', publication?.track?.codec);
                             this.screenTrack = track;
                             this.screenStream = new MediaStream([track]);
                             track.onended = () => {
@@ -3814,17 +3859,29 @@
                     this.localStream = null;
                 }
 
-                this.localStream = await navigator.mediaDevices.getUserMedia({
+                const wantsVideo = type === 'video' || type === 'meet';
+                const audio = {
                     // Disable AEC: same-machine Firefox containers otherwise silence each other.
-                    audio: {
-                        echoCancellation: false,
-                        noiseSuppression: true,
-                        autoGainControl: true,
-                    },
-                    video: type === 'video' || type === 'meet',
-                });
+                    echoCancellation: false,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                };
+
+                try {
+                    this.localStream = await navigator.mediaDevices.getUserMedia({
+                        audio,
+                        video: wantsVideo,
+                    });
+                } catch (err) {
+                    if (!wantsVideo || !navigator.mediaDevices?.getUserMedia) throw err;
+                    // The camera may be held exclusively by another browser/app on this machine
+                    // (common on Linux). Join anyway with audio only so the call proceeds.
+                    this.localStream = await navigator.mediaDevices.getUserMedia({ audio });
+                    this.callError = this.callError || 'Camera unavailable (in use by another app/browser) — joined with audio only.';
+                }
+
                 this.localMuted = false;
-                this.localVideoOff = false;
+                this.localVideoOff = this.localStream.getVideoTracks().length === 0;
                 this.localDeafened = false;
                 this.sharingScreen = false;
                 this.screenTrack = null;
@@ -3933,6 +3990,7 @@
                     this.callError = e?.message || 'Could not access microphone/camera.';
                     this.incomingCall = null;
                     this.teardownCall();
+                    this.showCallModal = true;
                 }
             },
 
@@ -4260,6 +4318,17 @@
                 return this.screenTiles().filter((t) => shown.includes(t.key));
             },
 
+            screenTopGridStyle() {
+                const count = this.screenTopTiles().length;
+                if (!count) return {};
+                const cols = Math.min(count, 3);
+                const rows = Math.ceil(count / cols);
+                return {
+                    gridTemplateColumns: 'repeat(' + cols + ', minmax(0, 1fr))',
+                    gridTemplateRows: 'repeat(' + rows + ', minmax(0, 1fr))',
+                };
+            },
+
             screenBottomTiles() {
                 const keys = this.screenTileKeys();
                 const pinned = keys.filter((key) => this.screenPinned(key));
@@ -4338,6 +4407,7 @@
                         try {
                             pc.addTrack(track, this.screenStream || new MediaStream([track]));
                             needsRenegotiate.push(userId);
+                            console.log('[ct-mesh] adding screen sender for', userId, 'state=', pc.signalingState);
                         } catch (e) {
                             console.warn(e);
                         }
@@ -4350,7 +4420,11 @@
 
             async renegotiateOffer(userId) {
                 const pc = this.peerConnections[userId];
-                if (!pc || pc.signalingState !== 'stable' || !this.callId) return;
+                if (!pc || !this.callId) return;
+                if (pc.signalingState !== 'stable') {
+                    console.warn('[ct-mesh] renegotiate skipped for', userId, 'signalingState=', pc.signalingState);
+                    return;
+                }
                 try {
                     const offer = await pc.createOffer();
                     await pc.setLocalDescription(offer);
@@ -4382,7 +4456,8 @@
                 }
                 try {
                     if (this.callMediaMode === 'sfu' && this.livekitRoom?.localParticipant?.setScreenShareEnabled) {
-                        await this.livekitRoom.localParticipant.setScreenShareEnabled(true);
+                        console.log('[ct-sfu] publish screen share UA=', navigator.userAgent);
+                        await this.livekitRoom.localParticipant.setScreenShareEnabled(true, undefined, { simulcast: false });
                         this.sharingScreen = true;
                         this.localVideoOff = false;
                         try {
@@ -4405,7 +4480,7 @@
                     }
 
                     const displayStream = await navigator.mediaDevices.getDisplayMedia({
-                        video: { frameRate: 15 },
+                        video: true,
                         audio: false,
                     });
                     const track = displayStream.getVideoTracks()[0];
@@ -4414,6 +4489,9 @@
                         this.callError = 'No screen track available.';
                         return;
                     }
+                    console.log('[ct-mesh] got display track', track.readyState,
+                        'fps=', track.getSettings && track.getSettings().frameRate,
+                        'label=', track.label);
 
                     this.screenTrack = track;
                     this.screenStream = new MediaStream([track]);
@@ -4552,6 +4630,20 @@
                     const differentStream = existing?.stream && existing.stream !== stream;
                     // Any video track that is not the peer's camera counts as screen share.
                     if (existing && event.track.kind === 'video' && (mainHasVideo || differentStream)) {
+                        console.log('[ct-mesh] remote screen track', userId,
+                            'readyState=', event.track.readyState,
+                            'videoTracks=', stream.getVideoTracks().length,
+                            'muted=', event.track.muted,
+                            'existingStream=', !!existing.stream);
+                        const vid = document.getElementById('remote-screen-' + userId);
+                        if (vid) {
+                            setTimeout(() => {
+                                console.log('[ct-mesh] receiver screen frame check', userId,
+                                    'videoWidth=', vid.videoWidth,
+                                    'readyState=', event.track.readyState,
+                                    'muted=', event.track.muted);
+                            }, 2500);
+                        }
                         const updated = {
                             ...existing,
                             screenSharing: true,
