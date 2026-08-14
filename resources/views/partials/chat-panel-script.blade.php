@@ -3758,13 +3758,20 @@
                         return;
                     }
                     if (!peer?.stream) return;
-                    peer.stream.getTracks().forEach((t) => {
-                        if (t.id === track.mediaStreamTrack.id) peer.stream.removeTrack(t);
+                    const rawStream = Alpine.raw(peer.stream) || peer.stream;
+                    rawStream.getTracks().forEach((t) => {
+                        if (t.id === track.mediaStreamTrack.id) rawStream.removeTrack(t);
                     });
                     this.peers = [...this.peers];
                 });
-                room.on(LK.RoomEvent.TrackUnpublished, (_pub, participant) => {
+                room.on(LK.RoomEvent.TrackUnpublished, (publication, participant) => {
                     const userId = Number(participant.identity);
+                    const src = publication?.source || publication?.track?.source;
+                    const isScreen = src === LK.Track?.Source?.ScreenShare
+                        || publication?.track?.source === LK.Track?.Source?.ScreenShare
+                        || String(src || '').includes('screen');
+                    console.log('[ct-sfu] TrackUnpublished', userId, 'source=', src, 'isScreen=', isScreen);
+                    if (!isScreen) return;
                     const peer = this.peers.find((p) => Number(p.userId) === userId);
                     try { peer?.screenVideoTrack?.detach(); } catch (e) {}
                     this.peers = this.peers.map((p) =>
@@ -4286,6 +4293,13 @@
                 (this.peers || []).forEach((p) => {
                     if (p.screenSharing && p.screenStream) keys.push('peer:' + p.userId);
                 });
+                const now = Date.now();
+                if (now - (this._lastTileKeysLog || 0) > 2000) {
+                    this._lastTileKeysLog = now;
+                    console.log('[ct-sfu] tileKeys', JSON.stringify((this.peers || []).map((p) => ({
+                        u: p.userId, ss: !!p.screenSharing, sst: !!p.screenStream, st: !!p.stream,
+                    }))), 'keys=', keys);
+                }
                 return keys;
             },
 
