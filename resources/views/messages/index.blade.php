@@ -114,7 +114,7 @@
             </div>
         </div>
 
-        <div x-show="activeCall && callState === 'idle'" x-cloak
+        <div x-show="showJoinBanner()" x-cloak
             class="mb-3 shrink-0 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
             <div class="min-w-0">
                 <p class="text-sm text-emerald-200 font-medium"

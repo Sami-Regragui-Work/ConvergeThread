@@ -125,6 +125,8 @@
             callId: null,
             callState: 'idle',
             callError: '',
+            callMinimized: false,
+            leftCallId: null,
             callMediaMode: 'mesh',
             callMediaE2ee: false,
             livekitRoom: null,
@@ -357,10 +359,18 @@
                             );
                         } catch (unwrapErr) {
                             console.warn('E2EE unwrap failed (stale share or new identity)', unwrapErr);
+                            await this.requestChatKeyShare();
+                            if (cached) {
+                                this.roomKey = cached;
+                                this.e2eeReady = true;
+                                this.e2eeError = '';
+                                await this.redecryptVisibleMessages();
+                                this.scheduleE2eeRetry();
+                                return;
+                            }
                             if (this.chatType && this.chatId) {
                                 window.ChatCrypto.clearCachedRoomKey(this.currentUserId, this.chatType, this.chatId);
                             }
-                            await this.requestChatKeyShare();
                             this.e2eeReady = false;
                             this.e2eeError = 'Unlocking chat keys… another online member may need to be present briefly.';
                             this.scheduleE2eeRetry();
@@ -3479,6 +3489,27 @@
                 this.startCall(type);
             },
 
+            minimizeCall() {
+                if (this.callState !== 'idle') this.callMinimized = true;
+            },
+
+            restoreCall() {
+                this.callMinimized = false;
+            },
+
+            callLabel() {
+                const count = Number(this.activeCall?.participant_count ?? (this.peers?.length ?? 0) + 1);
+                const others = Math.max(0, count - 1);
+                if (others === 0) return 'Only you in the call';
+                return others === 1 ? 'You and 1 other' : 'You and ' + others + ' others';
+            },
+
+            showJoinBanner() {
+                return !!this.activeCall
+                    && this.callState === 'idle'
+                    && this.activeCall.call_id !== this.leftCallId;
+            },
+
             async signalCall(payload) {
                 if (!this.callSignalUrl) return null;
                 try {
@@ -3824,6 +3855,7 @@
 
                 try {
                     this.callType = type;
+                    this.leftCallId = null;
                     this.callId = 'call_' + this.currentUserId + '_' + Date.now();
                     this.callState = 'outgoing';
                     this.callMediaMode = this.resolveCallMediaMode(this.preferredMediaMode);
@@ -3869,6 +3901,7 @@
                 try {
                     this.callId = this.incomingCall.call_id;
                     this.callType = this.incomingCall.call_type;
+                    this.leftCallId = null;
                     this.callMediaMode = this.resolveCallMediaMode(this.incomingCall.media_mode);
                     this.callState = 'active';
                     this.callError = '';
@@ -3926,6 +3959,7 @@
                         if (res?.session_ended) this.activeCall = null;
                     } catch (e) {}
                 }
+                this.leftCallId = this.activeCall?.call_id || id || null;
                 this.teardownCall();
             },
 
@@ -3959,6 +3993,7 @@
                 this.callMediaMode = 'mesh';
                 this.callMediaE2ee = false;
                 this.showCallModal = false;
+                this.callMinimized = false;
                 this.incomingCall = null;
                 this.callError = '';
                 this.hostMutedIds = {};
@@ -4011,6 +4046,7 @@
                         if (res?.session_ended) this.activeCall = null;
                     } catch (e) {}
                 }
+                this.leftCallId = this.activeCall?.call_id || id || null;
                 this.teardownCall();
             },
 
@@ -4201,6 +4237,16 @@
                     local: key === 'local',
                     peer: key === 'local' ? null : (this.peers || []).find((p) => 'peer:' + p.userId === key) || null,
                 }));
+            },
+
+            screenMaxTile() {
+                if (!this.maximizedScreenKey) return null;
+                if (this.maximizedScreenKey === 'local') {
+                    return this.localShowsScreen() ? { key: 'local', local: true, peer: null } : null;
+                }
+                const peer = (this.peers || []).find((p) => 'peer:' + p.userId === this.maximizedScreenKey);
+                if (!peer || !peer.screenSharing || !peer.screenStream) return null;
+                return { key: 'peer:' + peer.userId, local: false, peer };
             },
 
             screenPinned(key) {
