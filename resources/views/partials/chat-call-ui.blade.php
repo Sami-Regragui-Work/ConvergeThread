@@ -399,7 +399,6 @@
                 class="text-[10px] uppercase tracking-wide px-2 py-1 rounded-lg border border-brand-500/30 bg-brand-500/10 text-brand-300">Host</span>
             <span x-show="callMediaMode === 'sfu' && callMediaE2ee" x-cloak class="text-[10px] text-emerald-400">E2EE</span>
             <span x-show="callMediaMode === 'sfu' && !callMediaE2ee" x-cloak class="text-[10px] text-amber-400">media not E2EE</span>
-            <span x-show="callState !== 'idle'" x-cloak class="text-[10px] font-mono text-cyan-400" x-text="ctDiagText()"></span>
             <button type="button" @click="minimizeCall()" title="Minimize — keep the meeting running while you chat"
                 class="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-white/10 text-slate-300 hover:bg-white/5 hover:text-white transition">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -415,10 +414,8 @@
     <div class="flex-1 min-h-0 flex flex-col gap-4 p-4">
         {{-- Hero region: shared screens are dominant when present --}}
         <div x-show="screenTopTiles().length" x-cloak class="flex-1 min-h-0">
-            <div class="relative h-full grid gap-3 content-center"
+            <div class="h-full grid gap-3 content-center"
                 :style="screenTopGridStyle()">
-                <span class="absolute top-0 left-0 z-20 text-[10px] font-mono text-yellow-400"
-                    x-text="'[diag] hero top=' + screenTopTiles().length + ' keys=' + screenTileKeys().join(',')"></span>
                 <template x-for="tile in screenTopTiles()" :key="'top-screen-' + tile.key">
                     <div class="contents">
                         <template x-if="tile.local">
@@ -429,7 +426,6 @@
                                 @mousedown="startScreenPan($event, 'local')"
                                 @mousemove.window="onScreenMove($event)"
                                 @mouseup.window="onScreenUp($event)">
-                                <span class="absolute top-2 left-2 z-10 text-[10px] font-mono text-red-400">[diag] local tile key=<span x-text="tile.key"></span></span>
                                 <div class="absolute inset-0 pointer-events-none" :style="screenTransform('local')">
                                     <video x-ref="meetLocalScreenVideo" autoplay muted playsinline
                                         class="h-full w-full object-contain bg-black pointer-events-none"></video>
@@ -470,7 +466,6 @@
                                 @mousedown="startScreenPan($event, 'peer:' + tile.peer.userId)"
                                 @mousemove.window="onScreenMove($event)"
                                 @mouseup.window="onScreenUp($event)">
-                                <span class="absolute top-2 left-2 z-10 text-[10px] font-mono text-red-400">[diag] remote tile key=<span x-text="tile.key"></span> uid=<span x-text="tile.peer?.userId"></span></span>
                                 <div class="absolute inset-0 pointer-events-none" :style="screenTransform('peer:' + tile.peer.userId)">
                                     <video :id="'meet-remote-screen-' + tile.peer.userId" autoplay muted playsinline
                                         class="h-full w-full object-contain bg-black pointer-events-none"

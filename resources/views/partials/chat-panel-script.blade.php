@@ -180,13 +180,6 @@
                     const parsed = raw ? JSON.parse(raw) : null;
                     if (parsed && typeof parsed === 'object') this.deafenPeerIds = parsed;
                 } catch (e) {}
-                this.$watch('peers', (peers) => {
-                    console.log('[ct-sfu] peers changed n=', (peers || []).length,
-                        'top=', this.screenTopTiles().length,
-                        'list=', JSON.stringify((peers || []).map((p) => ({
-                            u: p.userId, ss: !!p.screenSharing, sst: !!p.screenStream, st: !!p.stream,
-                        }))));
-                });
                 this.setupRealtime();
                 this.pollTimer = setInterval(() => this.poll(), this.echoBound ? 15000 : 3000);
                 this.callPollTimer = setInterval(() => this.refreshActiveCall(), 8000);
@@ -3704,9 +3697,6 @@
                     const isScreen = pub?.source === LK.Track?.Source?.ScreenShare
                         || String(pub?.source || '').includes('screen');
                     if (isScreen) {
-                        console.log('[ct-sfu] screen TrackSubscribed', userId,
-                            'readyState=', track?.mediaStreamTrack?.readyState,
-                            'streamState=', track?.streamState, 'id=', track?.sid || track?.mediaStreamTrack?.id);
                         let peer = this.peers.find((p) => Number(p.userId) === userId);
                         if (!peer) {
                             this.upsertPeer(userId, participant.name || ('User #' + userId));
@@ -3722,27 +3712,6 @@
                                 }
                                 : p
                         );
-                        try {
-                            const probe = document.createElement('video');
-                            probe.muted = true;
-                            probe.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;';
-                            probe.srcObject = new MediaStream([track.mediaStreamTrack]);
-                            probe.play().catch(() => {});
-                            const check = (now, meta) => {
-                                console.log('[ct-sfu] screen frame probe',
-                                    meta?.width ? ('FRAMES=' + meta.width + 'x' + meta.height) : 'NO_FRAME_YET');
-                                if (meta?.width) { probe.remove(); return; }
-                                probe.requestVideoFrameCallback(check);
-                            };
-                            if (probe.requestVideoFrameCallback) {
-                                probe.requestVideoFrameCallback(check);
-                                setTimeout(() => {
-                                    console.log('[ct-sfu] screen frame probe 3s=',
-                                        probe.videoWidth + 'x' + probe.videoHeight);
-                                    probe.remove();
-                                }, 3000);
-                            }
-                        } catch (e) { console.warn('[ct-sfu] frame probe err', e); }
                         return;
                     }
                     let peer = this.peers.find((p) => Number(p.userId) === userId);
@@ -3777,7 +3746,6 @@
                     const isScreen = src === LK.Track?.Source?.ScreenShare
                         || publication?.track?.source === LK.Track?.Source?.ScreenShare
                         || String(src || '').includes('screen');
-                    console.log('[ct-sfu] TrackUnpublished', userId, 'source=', src, 'isScreen=', isScreen);
                     if (!isScreen) return;
                     const peer = this.peers.find((p) => Number(p.userId) === userId);
                     try { peer?.screenVideoTrack?.detach(); } catch (e) {}
@@ -3797,10 +3765,6 @@
                         || String(publication?.source || '').includes('screen')) {
                         const track = publication?.track?.mediaStreamTrack;
                         if (track) {
-                            console.log('[ct-sfu] screen published locally',
-                                'readyState=', track.readyState,
-                                'kind=', track.kind,
-                                'codec=', publication?.track?.codec);
                             this.screenTrack = track;
                             this.screenStream = new MediaStream([track]);
                             track.onended = () => {
@@ -4294,26 +4258,12 @@
                 this.screenPins = {};
             },
 
-            ctDiagText() {
-                const list = (this.peers || []).map((x) =>
-                    x.userId + '[' + (x.screenSharing ? 'S' : 's') + (x.screenStream ? 'T' : 't') + (x.stream ? 'V' : 'v') + ']'
-                ).join(' ');
-                return 'diag peers=' + (list || 'none') + ' top=' + this.screenTopTiles().length;
-            },
-
             screenTileKeys() {
                 const keys = [];
                 if (this.localShowsScreen()) keys.push('local');
                 (this.peers || []).forEach((p) => {
                     if (p.screenSharing && p.screenStream) keys.push('peer:' + p.userId);
                 });
-                const now = Date.now();
-                if (now - (this._lastTileKeysLog || 0) > 2000) {
-                    this._lastTileKeysLog = now;
-                    console.log('[ct-sfu] tileKeys', JSON.stringify((this.peers || []).map((p) => ({
-                        u: p.userId, ss: !!p.screenSharing, sst: !!p.screenStream, st: !!p.stream,
-                    }))), 'keys=', keys);
-                }
                 return keys;
             },
 
@@ -4435,7 +4385,6 @@
                         try {
                             pc.addTrack(track, this.screenStream || new MediaStream([track]));
                             needsRenegotiate.push(userId);
-                            console.log('[ct-mesh] adding screen sender for', userId, 'state=', pc.signalingState);
                         } catch (e) {
                             console.warn(e);
                         }
@@ -4450,7 +4399,6 @@
                 const pc = this.peerConnections[userId];
                 if (!pc || !this.callId) return;
                 if (pc.signalingState !== 'stable') {
-                    console.warn('[ct-mesh] renegotiate skipped for', userId, 'signalingState=', pc.signalingState);
                     return;
                 }
                 try {
@@ -4484,7 +4432,6 @@
                 }
                 try {
                     if (this.callMediaMode === 'sfu' && this.livekitRoom?.localParticipant?.setScreenShareEnabled) {
-                        console.log('[ct-sfu] publish screen share UA=', navigator.userAgent);
                         await this.livekitRoom.localParticipant.setScreenShareEnabled(true, undefined, { simulcast: false });
                         this.sharingScreen = true;
                         this.localVideoOff = false;
@@ -4517,9 +4464,6 @@
                         this.callError = 'No screen track available.';
                         return;
                     }
-                    console.log('[ct-mesh] got display track', track.readyState,
-                        'fps=', track.getSettings && track.getSettings().frameRate,
-                        'label=', track.label);
 
                     this.screenTrack = track;
                     this.screenStream = new MediaStream([track]);
@@ -4658,20 +4602,6 @@
                     const differentStream = existing?.stream && existing.stream !== stream;
                     // Any video track that is not the peer's camera counts as screen share.
                     if (existing && event.track.kind === 'video' && (mainHasVideo || differentStream)) {
-                        console.log('[ct-mesh] remote screen track', userId,
-                            'readyState=', event.track.readyState,
-                            'videoTracks=', stream.getVideoTracks().length,
-                            'muted=', event.track.muted,
-                            'existingStream=', !!existing.stream);
-                        const vid = document.getElementById('remote-screen-' + userId);
-                        if (vid) {
-                            setTimeout(() => {
-                                console.log('[ct-mesh] receiver screen frame check', userId,
-                                    'videoWidth=', vid.videoWidth,
-                                    'readyState=', event.track.readyState,
-                                    'muted=', event.track.muted);
-                            }, 2500);
-                        }
                         const updated = {
                             ...existing,
                             screenSharing: true,
