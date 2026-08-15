@@ -180,6 +180,13 @@
                     const parsed = raw ? JSON.parse(raw) : null;
                     if (parsed && typeof parsed === 'object') this.deafenPeerIds = parsed;
                 } catch (e) {}
+                this.$watch('peers', (peers) => {
+                    console.log('[ct-sfu] peers changed n=', (peers || []).length,
+                        'top=', this.screenTopTiles().length,
+                        'list=', JSON.stringify((peers || []).map((p) => ({
+                            u: p.userId, ss: !!p.screenSharing, sst: !!p.screenStream, st: !!p.stream,
+                        }))));
+                });
                 this.setupRealtime();
                 this.pollTimer = setInterval(() => this.poll(), this.echoBound ? 15000 : 3000);
                 this.callPollTimer = setInterval(() => this.refreshActiveCall(), 8000);
@@ -4285,6 +4292,13 @@
                 this.screenViews = {};
                 this.screenDrag = null;
                 this.screenPins = {};
+            },
+
+            ctDiagText() {
+                const list = (this.peers || []).map((x) =>
+                    x.userId + '[' + (x.screenSharing ? 'S' : 's') + (x.screenStream ? 'T' : 't') + (x.stream ? 'V' : 'v') + ']'
+                ).join(' ');
+                return 'diag peers=' + (list || 'none') + ' top=' + this.screenTopTiles().length;
             },
 
             screenTileKeys() {
